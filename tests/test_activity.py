@@ -59,8 +59,9 @@ def test_shell_renders_checkbox_filters_page_size_and_modal():
     assert '<select id="page-size"' in html and 'value="10" selected' in html
     # delete + clear controls and the viewer modal
     assert 'id="del-btn"' in html and 'id="clear-btn"' in html and 'id="rec-modal"' in html
-    # the page opts into the wide container, and checkboxes are never full-width (left-aligned)
-    assert '<main class="wide">' in html
+    # the page uses the standard container width (matches the other list pages, not the extra-wide one),
+    # and checkboxes are never full-width (left-aligned)
+    assert '<main class="">' in html
     assert 'input[type="checkbox"], input[type="radio"]' in html
     # search bar + auto-refresh control
     assert 'id="q-input"' in html and 'id="refresh-rate"' in html

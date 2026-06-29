@@ -7,6 +7,18 @@ All notable changes to **PolicyPilot** are documented here. This project follows
 
 Post-1.0.0 hardening of the agent surface, ahead of broader live validation.
 
+### Application typo tolerance + Autonomous auto-correct
+- The application resolver now does a **typo-tolerant prefix fallback**: the SMS `filter` is substring-based,
+  so a misspelling that isn't a substring of any app name (e.g. `faccebook`) previously returned an empty
+  candidate list. It now retries with a short normalized prefix and fuzzy-ranks, so `faccebook` surfaces
+  **Facebook** as a "did you mean" candidate in every mode (and the form type-ahead improves too).
+- **Autonomous mode only**, a single high-confidence, unambiguous fuzzy match (score ≥ a configurable
+  floor **and** clearly ahead of the runner-up) is used automatically with the correction noted in the
+  result (`confidence: "corrected"`, e.g. `faccebook` → Facebook 0.94). New setting **Automation logic →
+  "Auto-correct an application typo"** (percent; 0 disables; default 90). Supervised / Read-only never
+  auto-correct — a typo routes to review with the suggestion. A wrong app = wrong access, so the bar is
+  strict and it never fires on a truncated or ambiguous candidate set.
+
 ### App-wide macOS + gradient restyle
 - The whole portal now matches the Settings page's macOS-System-Settings + pink→purple gradient
   language — every page, list, detail, form, partial, and the MCP guide was harmonised (style-only:

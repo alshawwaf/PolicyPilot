@@ -100,19 +100,45 @@ def _score(term: str, name: str) -> tuple[str, float]:
 _RESOLVE_LIMIT = 200      # the safety-critical query pulls a deep page so a duplicate can't hide past it
 
 
-def resolve(session, term: str) -> dict:
+_AUTOCORRECT_MARGIN = 0.08   # the top fuzzy candidate must lead the runner-up by this much to auto-correct
+
+
+def resolve(session, term: str, autocorrect_min: float | None = None) -> dict:
     """Map ``term`` to a Check Point application. Returns {term, match, confidence, candidates, note}.
-    ``match`` is set ONLY for a confident, UNIQUE exact / normalized-exact hit proven over a COMPLETE
-    result page; otherwise it's None and ``candidates`` holds the ranked alternatives for a human to
-    pick. A truncated (== limit) result is never auto-matched — if there could be a hidden twin, we
-    refuse to guess and route to a human (a wrong app = wrong access)."""
+    ``match`` is set for a confident, UNIQUE exact / normalized-exact hit proven over a COMPLETE result
+    page; otherwise it's None and ``candidates`` holds the ranked alternatives for a human to pick. A
+    truncated (== limit) result is never auto-matched — if there could be a hidden twin, we refuse to
+    guess and route to a human (a wrong app = wrong access).
+
+    Typo tolerance: the SMS ``filter`` is substring-based, so a misspelling that isn't a substring of any
+    app name (e.g. "faccebook") returns zero raw candidates and the fuzzy ranker has nothing to score. We
+    retry with a short normalized PREFIX to gather near-misses, then rank them against the full term — so
+    "faccebook" still surfaces Facebook as a candidate (for a "did you mean").
+
+    ``autocorrect_min`` (set ONLY by the autonomous path) opts into auto-using a single fuzzy candidate
+    whose score is >= this AND clearly ahead of the runner-up — e.g. "faccebook" -> Facebook (0.94),
+    surfaced via ``confidence='corrected'`` + a note. None (the default, used by Supervised/Read-only and
+    the type-ahead) never auto-corrects; it just surfaces candidates."""
     term = (term or "").strip()
     out = {"term": term, "match": None, "match_kind": "", "confidence": "", "candidates": [], "note": ""}
     if not term:
         return out
-    apps = _query(session, term, "application-site", _RESOLVE_LIMIT)
-    cats = _query(session, term, "application-site-category", 40)
-    truncated = len(apps) >= _RESOLVE_LIMIT or len(cats) >= 40   # page may be cut -> not provably complete
+    apps_limit, cats_limit = _RESOLVE_LIMIT, 40
+    apps = _query(session, term, "application-site", apps_limit)
+    cats = _query(session, term, "application-site-category", cats_limit)
+    via_prefix = False
+    if not apps and not cats:                       # exact-term filter found nothing -> typo-tolerant retry
+        for plen in (4, 3):
+            pre = _norm(term)[:plen]
+            if len(pre) < 3:
+                continue
+            apps_limit, cats_limit = 80, 24
+            apps = _query(session, pre, "application-site", apps_limit)
+            cats = _query(session, pre, "application-site-category", cats_limit)
+            if apps or cats:
+                via_prefix = True
+                break
+    truncated = len(apps) >= apps_limit or len(cats) >= cats_limit  # page may be cut -> not provably complete
     scored = sorted(((_score(term, c["name"]), c) for c in _candidates(apps + cats)),
                     key=lambda x: x[0][1], reverse=True)
     if not scored:
@@ -126,13 +152,25 @@ def resolve(session, term: str) -> dict:
     elif not truncated and not exacts and len(norms) == 1:
         out["match"], out["confidence"], out["match_kind"] = norms[0]["name"], "normalized", norms[0]["kind"]
 
+    # Autonomous typo auto-correct (opt-in via autocorrect_min): a SINGLE fuzzy candidate well above the
+    # bar AND clearly ahead of the runner-up may be used automatically. Never on a truncated/ambiguous set.
+    if (not out["match"] and autocorrect_min and not truncated):
+        (top_lvl, top_sc), top_c = scored[0]
+        second_sc = scored[1][0][1] if len(scored) > 1 else 0.0
+        if top_lvl == "fuzzy" and top_sc >= autocorrect_min and (top_sc - second_sc) >= _AUTOCORRECT_MARGIN:
+            out["match"], out["confidence"], out["match_kind"] = top_c["name"], "corrected", top_c["kind"]
+            out["note"] = f"interpreted “{term}” as application “{top_c['name']}” ({round(top_sc, 2)})"
+
     out["candidates"] = [{"name": c["name"], "kind": c["kind"], "category": c["category"],
                           "score": round(sc, 2)}
                          for (lvl, sc), c in scored if sc >= 0.4][:8]
     if not out["match"]:
+        top_name = out["candidates"][0]["name"] if out["candidates"] else ""
         out["note"] = (f"Too many matches for “{term}” — refine the name." if truncated
-                       else (f"“{term}” is ambiguous — choose the exact Check Point application."
-                             if out["candidates"] else f"No close match for “{term}”."))
+                       else (f"“{term}” isn’t an exact match — did you mean “{top_name}”? "
+                             "Pick the application." if via_prefix and top_name
+                             else (f"“{term}” is ambiguous — choose the exact Check Point application."
+                                   if out["candidates"] else f"No close match for “{term}”.")))
     return out
 
 

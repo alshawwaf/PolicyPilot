@@ -217,6 +217,14 @@ SETTINGS: list[Setting] = [
             "data/content, install-on) as if that condition weren't there — so a conditional Accept can "
             "count as covering and a conditional Drop as blocking.",
             group="Access automation logic"),
+    Setting("aa_app_autocorrect_min", "int", 90,
+            "Auto-correct an application typo (Autonomous only)",
+            "In Autonomous mode only, when a misspelled application name resolves to a SINGLE close match "
+            "at or above this confidence — and clearly ahead of the runner-up — use it automatically and "
+            "note the correction (e.g. “faccebook” → Facebook). 0 disables: a typo then always routes to "
+            "review with a “did you mean” suggestion. Supervised / Read-only never auto-correct. Keep this "
+            "high (≥ 80) — a wrong application means wrong access. Value is a percent (0 = off, 80–100).",
+            group="Access automation logic", min=0, max=100),
     Setting("aa_scope_overrides", "text", "",
             "Per-scope profile overrides",
             "Use a DIFFERENT profile for specific scopes — one per line, “scope = profile”. Scope is a "

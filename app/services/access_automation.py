@@ -3182,7 +3182,19 @@ def _resolve_app(session, req: AccessRequest):
     if not req.application:
         return None
     from . import applications
-    res = applications.resolve(session, req.application)
+    # Autonomous-only typo auto-correct: pass a confidence floor ONLY when the Autopilot gate is on and the
+    # admin set a threshold (Automation logic → aa_app_autocorrect_min). Supervised/Read-only pass None, so
+    # a misspelled app surfaces a "did you mean" candidate and routes to review instead of being guessed.
+    autocorrect_min = None
+    try:
+        from . import app_settings
+        if app_settings.get("aa_autopilot"):
+            pct = int(app_settings.get("aa_app_autocorrect_min") or 0)
+            if pct > 0:
+                autocorrect_min = max(0.0, min(1.0, pct / 100.0))
+    except Exception:  # noqa: BLE001 — settings best-effort; default = no auto-correct (safe)
+        autocorrect_min = None
+    res = applications.resolve(session, req.application, autocorrect_min=autocorrect_min)
     if res.get("match"):
         req.application = res["match"]
         # remember whether it resolved to a CATEGORY (vs a single application-site) so the engine reasons

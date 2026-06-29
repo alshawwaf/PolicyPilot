@@ -226,7 +226,7 @@ built-in demo target.
   correlate_service · correlate_application · coverage_lookup · decide_access · apply_access ·
   remove_access · amend_access_rule · list_changes · revert_change.
 - **Dynamic-layer tools:** list_gateways · list_dynamic_layers · get_dynamic_layer · fetch_dynamic_layer ·
-  add_dynamic_rule · remove_dynamic_rule · push_dynamic_layer.
+  import_dynamic_layer · add_dynamic_rule · remove_dynamic_rule · push_dynamic_layer.
 - **Outcomes:** no_op · widen · create (clean-floor / above-deny / app-Internet / typed-source / named-proto)
   · review.
 - **Action column:** Accept · Drop · Reject · Ask · Inform · Apply Layer · action-settings (captive/limit).

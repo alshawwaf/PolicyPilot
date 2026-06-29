@@ -595,8 +595,9 @@ def _resolve_layer(db, ref):
     if layer is None and isinstance(ref, str) and ref.strip():
         want = ref.strip().lower()
         rows = db.query(DynamicLayer).all()
-        layer = next((L for L in rows
-                      if want in ((L.name or "").lower(), (L.layer_name or "").lower())), None)
+        # Prefer an exact portal-NAME match; fall back to the gateway layer_name (which several layers can share).
+        layer = (next((L for L in rows if (L.name or "").lower() == want), None)
+                 or next((L for L in rows if (L.layer_name or "").lower() == want), None))
     if layer is None:
         avail = "; ".join(f"id {L.id} = {L.name}" for L in db.query(DynamicLayer).all())
         raise ValueError(f"could not resolve dynamic layer “{ref}”. Available — {avail or 'none configured'}. "
@@ -900,3 +901,78 @@ def fetch_dynamic_layer(gateway: str, layer_name: str = "") -> dict:
                        "object_types": list((L.get("objects") or {}).keys()),
                        "referenced": L.get("referenced") or []})
     return {"ok": True, "gateway": gw_name, "layers": layers}
+
+
+def import_dynamic_layer(gateway: str, layer_name: str = "", into_layer: str = "") -> dict:
+    """Fetch a gateway's LIVE dynamic layer and SAVE it into a portal dynamic layer (create or overwrite) — so
+    the next add_dynamic_rule + push_dynamic_layer operate on the REAL current state and the push (a REPLACE)
+    keeps the rules that were already there. Use this to safely APPEND to a layer that holds policy pushed
+    outside this portal: import → add_dynamic_rule → push (the push then replaces with the live rules PLUS your
+    additions, wiping nothing). Writes to the portal only — it does NOT change the gateway. ``gateway`` = a saved
+    gateway's name / id / host; ``layer_name`` = which live layer to import (required if the gateway has several);
+    ``into_layer`` = the portal layer name to write into (default: the live layer's name)."""
+    db = SessionLocal()
+    try:
+        try:
+            gw = _resolve_gateway(db, gateway)
+        except ValueError as exc:
+            return {"ok": False, "error": str(exc)}
+        if not gw.username:
+            return {"ok": False, "error": f"gateway “{gw.name}” has no username — set it on the gateway profile."}
+        from . import gateway_creds
+        pw = gateway_creds.get_password(db, gw)
+        if not pw:
+            return {"ok": False,
+                    "error": f"gateway “{gw.name}” has no stored password — set one on the gateway profile."}
+        try:
+            from .gaia_client import ensure_pinned
+            ensure_pinned(db, gw)
+        except Exception:  # noqa: BLE001
+            pass
+        from . import apply_runner
+        data = apply_runner.fetch_dynamic_content(target="gateway", db=db, owner_id=gw.owner_id,
+                                                  host=gw.host, port=gw.port, user=gw.username,
+                                                  password=pw, cert_pem=gw.cert_pem or None, gateway_id=gw.id)
+        if not data.get("ok"):
+            return {"ok": False, "gateway": gw.name, "error": data.get("error") or "fetch failed"}
+        live = data.get("layers") or []
+        want = (layer_name or "").strip().lower()
+        match = [L for L in live if (L.get("name") or "").lower() == want] if want else live
+        if not match:
+            names = ", ".join(L.get("name", "") for L in live)
+            return {"ok": False, "error": f"no dynamic layer “{layer_name or '(any)'}” on {gw.name}. "
+                                          f"On the gateway: {names or 'none'}."}
+        if len(match) > 1:
+            names = ", ".join(L.get("name", "") for L in match)
+            return {"ok": False, "error": f"the gateway has several dynamic layers ({names}); "
+                                          f"pass layer_name to choose which to import."}
+        src = match[0]
+        gw_layer_name = src.get("name") or "dynamic_layer"
+        portal_name = (into_layer or "").strip() or gw_layer_name
+        content = {"operation": "replace", "objects": src.get("objects") or {},
+                   "rulebase": src.get("rulebase") or []}
+        from ..schemas.dynamic_layer import validate_layer_content
+        validate_layer_content(content)                  # raises ValueError (e.g. a live layer with no rules)
+        existing = next((L for L in db.query(DynamicLayer).all()
+                         if (L.name or "").lower() == portal_name.lower()), None)
+        if existing is not None:
+            existing.content = content
+            existing.layer_name = gw_layer_name
+            created, lid, lname = False, existing.id, existing.name
+        else:
+            import secrets as _secrets
+            row = DynamicLayer(token=_secrets.token_urlsafe(24), name=portal_name,
+                               layer_name=gw_layer_name, owner_id=gw.owner_id, content=content)
+            db.add(row)
+            db.flush()
+            created, lid, lname = True, row.id, row.name
+        db.commit()
+        return {"ok": True, "gateway": gw.name, "layer": lname, "layer_id": lid, "created": created,
+                "rules": len(content["rulebase"]),
+                "note": "imported the gateway's live layer into the portal — add_dynamic_rule then "
+                        "push_dynamic_layer now replaces with these rules PLUS your edits (nothing wiped)."}
+    except ValueError as exc:
+        db.rollback()
+        return {"ok": False, "error": str(exc)}
+    finally:
+        db.close()

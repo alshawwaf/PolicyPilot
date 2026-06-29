@@ -169,6 +169,17 @@ def api_dynamic_fetch(gateway: str, layer_name: str = "", _=_API):
     return _respond(mcp_tools.fetch_dynamic_layer(gateway, layer_name))
 
 
+class DynImportBody(BaseModel):
+    gateway: str
+    layer_name: str = ""
+    into_layer: str = ""
+
+
+@router.post("/dynamic-layers/import", summary="Import a gateway's LIVE layer into a portal layer (then edit + push)")
+def api_dynamic_import(body: DynImportBody, _=_API):
+    return _respond(mcp_tools.import_dynamic_layer(body.gateway, body.layer_name, body.into_layer))
+
+
 @router.post("/dynamic-layers/rule", summary="Add a rule to a dynamic layer (edit only — push to apply)")
 def api_dynamic_rule_add(body: DynRuleBody, _=_API):
     return _respond(mcp_tools.add_dynamic_rule(**body.model_dump()))

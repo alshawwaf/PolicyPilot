@@ -31,7 +31,7 @@ _TOOLS = ("list_management_servers", "list_access_layers", "decide_access", "app
           "correlate_application", "summarize_layer", "analyze_policy", "coverage_lookup",
           # Dynamic Layers (Rail B) — author + push an access rulebase to a gateway via the Gaia API
           "list_gateways", "list_dynamic_layers", "get_dynamic_layer", "fetch_dynamic_layer",
-          "add_dynamic_rule", "remove_dynamic_rule", "push_dynamic_layer")
+          "import_dynamic_layer", "add_dynamic_rule", "remove_dynamic_rule", "push_dynamic_layer")
 
 
 def have_mcp() -> bool:

@@ -110,9 +110,10 @@
   <p class="mcp-note" style="margin:0 0 12px;">The tools cover two areas. <b>Management access policy</b> (the
     SMS, over the Management Web API): list servers and layers, decide and apply a change, remove access, amend a
     rule, list and revert changes, correlate a service or app, and analyze a layer. <b>Dynamic Layers</b> (pushed
-    to a gateway via the Gaia API): list gateways and layers, read a layer, fetch a gateway's LIVE layer (so the
-    agent sees policy pushed outside the portal), add or remove a rule, and push it. Each write is behind its own
-    admin gate — publishing to the SMS and pushing to a gateway are separate toggles.</p>
+    to a gateway via the Gaia API): list gateways and layers, read a layer, fetch a gateway's LIVE layer or import
+    it into the portal (to safely append without wiping policy pushed outside the portal), add or remove a rule,
+    and push it. Each write is behind its own admin gate — publishing to the SMS and pushing to a gateway are
+    separate toggles.</p>
   <div class="mcp-grid">
     {% for t in tools %}
     <div class="mcp-tool"><code>{{ t.name }}</code><p>{{ t.summary }}</p></div>

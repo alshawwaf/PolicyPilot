@@ -559,3 +559,18 @@ def test_fetch_dynamic_layer_reads_live(dldb, monkeypatch):
 def test_fetch_dynamic_layer_unknown_gateway(dldb):
     out = mcp_tools.fetch_dynamic_layer("nope")
     assert out["ok"] is False and "GW1" in out["error"]   # error lists the available gateways
+
+
+def test_import_dynamic_layer_creates_portal_copy_of_live(dldb, monkeypatch):
+    from app.services import apply_runner, gateway_creds, gaia_client
+    monkeypatch.setattr(gateway_creds, "get_password", lambda db, gw: "pw")
+    monkeypatch.setattr(gaia_client, "ensure_pinned", lambda db, gw: None)
+    monkeypatch.setattr(apply_runner, "fetch_dynamic_content", lambda **kw: {"ok": True, "trace": [], "error": None,
+        "layers": [{"name": "dynamic_layer", "objects": {"hosts": [{"name": "client", "ip-address": "10.0.0.5"}]},
+            "rulebase": [{"name": "live_rule", "action": "Accept", "source": ["client"],
+                          "destination": "any", "service": "any"}], "referenced": []}]})
+    out = mcp_tools.import_dynamic_layer("GW1")
+    assert out["ok"] and out["created"] is True and out["rules"] == 1
+    # the portal now has a layer mirroring the live gateway — so a later add+push won't wipe live rules
+    got = mcp_tools.get_dynamic_layer(str(out["layer_id"]))
+    assert got["ok"] and got["rules"][0]["name"] == "live_rule"

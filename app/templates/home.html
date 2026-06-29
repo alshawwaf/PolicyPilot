@@ -199,7 +199,7 @@
 
   function makeDraggable(w, handle) {
     handle.addEventListener('mousedown', function (e) {
-      if (e.target.closest('.os-lt')) return;
+      if (e.button !== 0 || e.target.closest('.os-lt')) return;
       focusWin(w);
       var dr = desktop.getBoundingClientRect(), r = w.getBoundingClientRect(), ox = e.clientX - r.left, oy = e.clientY - r.top;
       var ov = w.querySelector('.os-body'); if (ov) ov.style.pointerEvents = 'none';
@@ -322,6 +322,7 @@
       el.innerHTML = '<span class="os-tile" style="background:' + app.grad + '">' + svg(app.ic) + '</span><span class="os-lbl">' + app.label + '</span>';
       var moved = false, sx, sy;
       el.addEventListener('mousedown', function (e) {
+        if (e.button !== 0) return;        // right/middle click -> let the context menu handle it (don't open)
         moved = false; sx = e.clientX; sy = e.clientY;
         var dr = desktop.getBoundingClientRect(), r = el.getBoundingClientRect(), ox = e.clientX - r.left, oy = e.clientY - r.top;
         function mv(ev) {

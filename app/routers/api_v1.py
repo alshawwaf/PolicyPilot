@@ -159,9 +159,14 @@ def api_dynamic_layers(_=_API):
     return mcp_tools.list_dynamic_layers()
 
 
-@router.get("/dynamic-layers/get", summary="Read one dynamic layer's rulebase")
+@router.get("/dynamic-layers/get", summary="Read one dynamic layer's rulebase (portal copy)")
 def api_dynamic_layer(layer: str, _=_API):
     return _respond(mcp_tools.get_dynamic_layer(layer))
+
+
+@router.get("/dynamic-layers/fetch", summary="Fetch a gateway's LIVE dynamic-layer content via the Gaia API")
+def api_dynamic_fetch(gateway: str, layer_name: str = "", _=_API):
+    return _respond(mcp_tools.fetch_dynamic_layer(gateway, layer_name))
 
 
 @router.post("/dynamic-layers/rule", summary="Add a rule to a dynamic layer (edit only — push to apply)")

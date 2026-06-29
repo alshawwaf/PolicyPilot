@@ -782,7 +782,9 @@ def push_dynamic_layer(layer: str, gateway: str = "", dry_run: bool = False) -> 
     ``gateway``: the saved gateway's name / id / host; leave blank (or 'mock') to push to the built-in demo
     target. ``dry_run=True`` validates without applying (always allowed). A real-gateway push (dry_run=False)
     is an admin-gated COMMIT — it requires the 'Let the MCP agent push dynamic layers to gateways' setting
-    (mcp_allow_layer_push). Returns the change summary + task id."""
+    (mcp_allow_layer_push). NOTE: a push REPLACES the layer's entire rulebase on the gateway — if the layer may
+    already hold policy pushed outside this portal, call fetch_dynamic_layer first so you don't wipe it. Returns
+    the change summary + task id."""
     db = SessionLocal()
     try:
         try:
@@ -850,3 +852,51 @@ def push_dynamic_layer(layer: str, gateway: str = "", dry_run: bool = False) -> 
             "target": target_name, "layer": layer_name, "status": status,
             "summary": prog.get("summary"), "task_id": prog.get("task_id"),
             "error": None if ok else (prog.get("error") or "push failed"), "autopilot": _autopilot()}
+
+
+def fetch_dynamic_layer(gateway: str, layer_name: str = "") -> dict:
+    """Pull the dynamic-layer content CURRENTLY on a gateway — live, via the Gaia API (show-dynamic-layers +
+    show-dynamic-layer). Use this to see what's ACTUALLY deployed, including policy pushed to the layer over the
+    API outside this portal. Read-only (no gate). ``gateway`` = a saved gateway's name / id / host; ``layer_name``
+    optionally filters to one layer. IMPORTANT: push_dynamic_layer REPLACES a layer's whole rulebase, so fetch
+    first when a layer may hold rules you didn't author here — otherwise a push wipes them."""
+    db = SessionLocal()
+    try:
+        try:
+            gw = _resolve_gateway(db, gateway)
+        except ValueError as exc:
+            return {"ok": False, "error": str(exc)}
+        if not gw.username:
+            return {"ok": False, "error": f"gateway “{gw.name}” has no username — set it on the gateway profile."}
+        from . import gateway_creds
+        pw = gateway_creds.get_password(db, gw)
+        if not pw:
+            return {"ok": False,
+                    "error": f"gateway “{gw.name}” has no stored password — set one on the gateway profile."}
+        try:
+            from .gaia_client import ensure_pinned
+            ensure_pinned(db, gw)                        # trust-on-first-use before the TLS handshake
+        except Exception:  # noqa: BLE001
+            pass
+        from . import apply_runner
+        data = apply_runner.fetch_dynamic_content(target="gateway", db=db, owner_id=gw.owner_id,
+                                                  host=gw.host, port=gw.port, user=gw.username,
+                                                  password=pw, cert_pem=gw.cert_pem or None, gateway_id=gw.id)
+        gw_name = gw.name
+    finally:
+        db.close()
+    if not data.get("ok"):
+        return {"ok": False, "gateway": gateway, "error": data.get("error") or "fetch failed"}
+    want = (layer_name or "").strip().lower()
+    layers = []
+    for L in data.get("layers", []):
+        if want and (L.get("name") or "").lower() != want:
+            continue
+        rb = L.get("rulebase") or []
+        rules = [{"name": r.get("name"), "action": r.get("action"), "source": r.get("source"),
+                  "destination": r.get("destination"), "service": r.get("service")}
+                 for r in rb if isinstance(r, dict)]
+        layers.append({"name": L.get("name"), "rules": rules,
+                       "object_types": list((L.get("objects") or {}).keys()),
+                       "referenced": L.get("referenced") or []})
+    return {"ok": True, "gateway": gw_name, "layers": layers}

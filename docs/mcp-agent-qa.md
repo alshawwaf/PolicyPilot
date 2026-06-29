@@ -205,13 +205,14 @@ built-in demo target.
 |---|--------|-----------|--------|
 | 38 | "List the gateways I can push a dynamic layer to." | `list_gateways` | GW1 (+ any others), id/name/host/port |
 | 39 | "List my dynamic layers." | `list_dynamic_layers` | DMZ (+ any others), id/name/layer_name/rule count |
-| 40 | "Show me the rules in the DMZ layer." | `get_dynamic_layer` | each rule's name/action/source/destination/service + object types |
-| 41 | "Add a rule allowing 10.1.2.50 to reach 10.1.2.60 over SSH in the DMZ layer and push the changes." | `add_dynamic_rule` → `push_dynamic_layer` | rule added (inline host objects), then pushed to a gateway; change summary + task id |
-| 42 | "Block 10.1.9.9 from reaching anything in the DMZ layer, dry run." | `add_dynamic_rule` (action Drop) → `push_dynamic_layer` (`dry_run=true`) | Drop rule added; dry-run **validates without applying** (always allowed) — `pushed:false`, status succeeded |
-| 43 | "Remove the web-ssh rule from the DMZ layer and push the changes to GW1." | `remove_dynamic_rule` → `push_dynamic_layer` (named gateway) | rule removed (layer keeps ≥1 rule), then pushed to **GW1**; change summary + task id |
-| 44 | "Add a rule allowing 10.1.2.0/24 to reach win_server over HTTPS at the top of the DMZ layer and push the changes." | `add_dynamic_rule` (`position=top`, CIDR + named object) → `push_dynamic_layer` | rule placed at the top (inline network object); pushed; change summary |
-| 45 | "Remove the last remaining rule from the DMZ layer and push the changes." | `remove_dynamic_rule` guardrail | **refused** — a dynamic layer must keep at least one rule; nothing pushed; agent explains |
-| 46 | *(With the layer-push gate OFF)* "Add a rule allowing 10.1.2.50 to reach 10.1.2.60 over SSH in the DMZ layer and push the changes to GW1." | layer-push gate (`mcp_allow_layer_push`) | the real-gateway push is **refused**; agent falls back to a **dry-run** (or `gateway='mock'`) and reports the push is admin-gated — a separate gate from SMS publish |
+| 40 | "Show me the rules in the DMZ layer." | `get_dynamic_layer` | each rule's name/action/source/destination/service + object types (the **portal** copy) |
+| 41 | "What's actually on GW1's dynamic layer right now?" | `fetch_dynamic_layer` | the **live** rulebase pulled from the gateway via the Gaia API (incl. any policy pushed over the API outside the portal) — read-only |
+| 42 | "Add a rule allowing 10.1.2.50 to reach 10.1.2.60 over SSH in the DMZ layer and push the changes." | `add_dynamic_rule` → `push_dynamic_layer` | rule added (inline host objects), then pushed to a gateway; change summary + task id |
+| 43 | "Block 10.1.9.9 from reaching anything in the DMZ layer, dry run." | `add_dynamic_rule` (action Drop) → `push_dynamic_layer` (`dry_run=true`) | Drop rule added; dry-run **validates without applying** (always allowed) — `pushed:false`, status succeeded |
+| 44 | "Remove the web-ssh rule from the DMZ layer and push the changes to GW1." | `remove_dynamic_rule` → `push_dynamic_layer` (named gateway) | rule removed (layer keeps ≥1 rule), then pushed to **GW1**; change summary + task id |
+| 45 | "Add a rule allowing 10.1.2.0/24 to reach win_server over HTTPS at the top of the DMZ layer and push the changes." | `add_dynamic_rule` (`position=top`, CIDR + named object) → `push_dynamic_layer` | rule placed at the top (inline network object); pushed; change summary |
+| 46 | "Remove the last remaining rule from the DMZ layer and push the changes." | `remove_dynamic_rule` guardrail | **refused** — a dynamic layer must keep at least one rule; nothing pushed; agent explains |
+| 47 | *(With the layer-push gate OFF)* "Add a rule allowing 10.1.2.50 to reach 10.1.2.60 over SSH in the DMZ layer and push the changes to GW1." | layer-push gate (`mcp_allow_layer_push`) | the real-gateway push is **refused**; agent falls back to a **dry-run** (or `gateway='mock'`) and reports the push is admin-gated — a separate gate from SMS publish |
 
 > 🔁 **Substitute freely:** these prompts assume a saved dynamic layer called **DMZ** with at least one rule
 > (so #43/#45 have something to act on) and a saved gateway called **GW1**. Swap in your own — or run #39 /
@@ -224,8 +225,8 @@ built-in demo target.
 - **Management tools:** list_management_servers · list_access_layers · summarize_layer · analyze_policy ·
   correlate_service · correlate_application · coverage_lookup · decide_access · apply_access ·
   remove_access · amend_access_rule · list_changes · revert_change.
-- **Dynamic-layer tools:** list_gateways · list_dynamic_layers · get_dynamic_layer · add_dynamic_rule ·
-  remove_dynamic_rule · push_dynamic_layer.
+- **Dynamic-layer tools:** list_gateways · list_dynamic_layers · get_dynamic_layer · fetch_dynamic_layer ·
+  add_dynamic_rule · remove_dynamic_rule · push_dynamic_layer.
 - **Outcomes:** no_op · widen · create (clean-floor / above-deny / app-Internet / typed-source / named-proto)
   · review.
 - **Action column:** Accept · Drop · Reject · Ask · Inform · Apply Layer · action-settings (captive/limit).

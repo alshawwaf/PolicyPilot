@@ -139,7 +139,8 @@ whole dimension. Good for an agent to *understand* a policy before proposing a c
 |------|------|---------|
 | `list_gateways` | the saved Gaia gateways a dynamic layer can be pushed to (id/name/host/port) | no |
 | `list_dynamic_layers` | the dynamic layers authored in the portal (id/name/target layer/rule count) | no |
-| `get_dynamic_layer(layer)` | read one layer (by id or name): target access-layer name + its current rulebase | no |
+| `get_dynamic_layer(layer)` | read one layer (by id or name): target access-layer name + its current rulebase (the **portal copy**) | no |
+| `fetch_dynamic_layer(gateway, layer_name?)` | pull the **live** dynamic-layer content currently on a gateway via the Gaia API (incl. policy pushed over the API outside the portal) — fetch before a push, which is a *replace* | no |
 | `add_dynamic_rule(layer, source, destination, service?, action?, name?, position?)` | add a rule to a layer's rulebase — **edits the layer only**, persisted locally; call `push_dynamic_layer` to apply | local edit |
 | `remove_dynamic_rule(layer, rule)` | remove a rule by name — edits the layer only (a layer must keep ≥1 rule) | local edit |
 | `push_dynamic_layer(layer, gateway?, dry_run?)` | push the layer to a gateway via `set-dynamic-content`. `dry_run=true` validates; blank/`mock` gateway hits the demo target | gated — `mcp_allow_layer_push` |

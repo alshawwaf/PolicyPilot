@@ -539,3 +539,23 @@ def test_push_mock_runs_and_returns_summary(dldb, monkeypatch):
     out = mcp_tools.push_dynamic_layer("DMZ-Layer", gateway="mock", dry_run=False)
     assert out["ok"] and out["target"] == "mock" and out["task_id"] == "T1"
     assert out["pushed"] is False           # the built-in demo target is never a real push
+
+
+def test_fetch_dynamic_layer_reads_live(dldb, monkeypatch):
+    from app.services import apply_runner, gateway_creds, gaia_client
+    monkeypatch.setattr(gateway_creds, "get_password", lambda db, gw: "pw")
+    monkeypatch.setattr(gaia_client, "ensure_pinned", lambda db, gw: None)
+    monkeypatch.setattr(apply_runner, "fetch_dynamic_content", lambda **kw: {"ok": True, "trace": [],
+        "error": None, "layers": [{"name": "dynamic_layer", "objects": {"hosts": [{"name": "client"}]},
+            "rulebase": [{"name": "allow_web", "action": "Accept", "source": ["client"],
+                          "destination": ["lab_net"], "service": ["https"]}], "referenced": ["https"]}]})
+    out = mcp_tools.fetch_dynamic_layer("GW1")
+    assert out["ok"] and out["gateway"] == "GW1"
+    assert out["layers"][0]["name"] == "dynamic_layer"
+    assert out["layers"][0]["rules"][0]["name"] == "allow_web"   # reads the LIVE rulebase, not the portal copy
+    assert "hosts" in out["layers"][0]["object_types"]
+
+
+def test_fetch_dynamic_layer_unknown_gateway(dldb):
+    out = mcp_tools.fetch_dynamic_layer("nope")
+    assert out["ok"] is False and "GW1" in out["error"]   # error lists the available gateways

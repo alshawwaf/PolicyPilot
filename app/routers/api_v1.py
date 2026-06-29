@@ -125,3 +125,55 @@ def api_correlate_service(body: CorrelateBody, _=_API):
 @router.post("/access/correlate/application", summary="Resolve an application/site name to a CP object")
 def api_correlate_application(body: CorrelateBody, _=_API):
     return _respond(mcp_tools.correlate_application(body.server_id, body.name))
+
+
+# --- dynamic layers (Rail B) — author + push an access rulebase to a gateway via the Gaia API -----
+class DynRuleBody(BaseModel):
+    layer: str
+    source: str
+    destination: str
+    service: str = "any"
+    action: str = "Accept"
+    name: str = ""
+    position: str = "bottom"
+
+
+class DynRuleRemoveBody(BaseModel):
+    layer: str
+    rule: str
+
+
+class DynPushBody(BaseModel):
+    layer: str
+    gateway: str = ""          # blank or "mock" = the built-in demo target; else a gateway name/id/host
+    dry_run: bool = False
+
+
+@router.get("/gateways", summary="List saved gateways (dynamic-layer push targets)")
+def api_gateways(_=_API):
+    return mcp_tools.list_gateways()
+
+
+@router.get("/dynamic-layers", summary="List dynamic layers")
+def api_dynamic_layers(_=_API):
+    return mcp_tools.list_dynamic_layers()
+
+
+@router.get("/dynamic-layers/get", summary="Read one dynamic layer's rulebase")
+def api_dynamic_layer(layer: str, _=_API):
+    return _respond(mcp_tools.get_dynamic_layer(layer))
+
+
+@router.post("/dynamic-layers/rule", summary="Add a rule to a dynamic layer (edit only — push to apply)")
+def api_dynamic_rule_add(body: DynRuleBody, _=_API):
+    return _respond(mcp_tools.add_dynamic_rule(**body.model_dump()))
+
+
+@router.post("/dynamic-layers/rule/remove", summary="Remove a rule from a dynamic layer")
+def api_dynamic_rule_remove(body: DynRuleRemoveBody, _=_API):
+    return _respond(mcp_tools.remove_dynamic_rule(body.layer, body.rule))
+
+
+@router.post("/dynamic-layers/push", summary="Push a dynamic layer to a gateway (real-gateway push is admin-gated)")
+def api_dynamic_push(body: DynPushBody, _=_API):
+    return _respond(mcp_tools.push_dynamic_layer(body.layer, body.gateway, body.dry_run))

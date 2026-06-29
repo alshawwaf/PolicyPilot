@@ -28,7 +28,10 @@ _INNER = None
 # The tools an agent can call (logic in services.mcp_tools; registered by name + docstring + type hints).
 _TOOLS = ("list_management_servers", "list_access_layers", "decide_access", "apply_access",
           "remove_access", "amend_access_rule", "list_changes", "revert_change", "correlate_service",
-          "correlate_application", "summarize_layer", "analyze_policy", "coverage_lookup")
+          "correlate_application", "summarize_layer", "analyze_policy", "coverage_lookup",
+          # Dynamic Layers (Rail B) — author + push an access rulebase to a gateway via the Gaia API
+          "list_gateways", "list_dynamic_layers", "get_dynamic_layer", "add_dynamic_rule",
+          "remove_dynamic_rule", "push_dynamic_layer")
 
 
 def have_mcp() -> bool:

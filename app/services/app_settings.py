@@ -248,6 +248,13 @@ SETTINGS: list[Setting] = [
             "tool results. Pair with 'Let the MCP agent publish' (above) and the Aggressive profile — the "
             "Autopilot preset button on Access automation logic sets all three at once. Lab/demo only.",
             group="MCP / agent"),
+    Setting("mcp_allow_layer_push", "bool", False,
+            "Let the MCP agent push dynamic layers to gateways",
+            "Allow an MCP/LLM agent to PUSH a dynamic layer to a live gateway via the Gaia API "
+            "(set-dynamic-content). This is a SEPARATE gate from the SMS publish toggle above — a dynamic-layer "
+            "push lands on the gateway out-of-band of SmartConsole. With it OFF, agents can still validate "
+            "(dry-run) and push to the built-in demo target, but a real-gateway push is refused.",
+            group="MCP / agent"),
 
     # --- Ticketing webhook ---------------------------------------------------------------------------
     # The inbound POST /access-automation/webhook (ServiceNow / Jira / custom portal). Setting the token

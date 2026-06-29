@@ -466,3 +466,76 @@ def test_mcp_canonical_path_rewrites_bare_mcp():
     assert seen["path"] == "/mcp/"            # already-slashed left as-is
     asyncio.run(mw({"type": "http", "path": "/settings"}, None, None))
     assert seen["path"] == "/settings"        # unrelated paths untouched
+
+
+# --- Dynamic Layers (Rail B) tools ---------------------------------------------------------------
+@pytest.fixture()
+def dldb(monkeypatch):
+    from app.models import DynamicLayer, Gateway, User
+    eng = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(eng)
+    Session = sessionmaker(bind=eng)
+    monkeypatch.setattr(mcp_tools, "SessionLocal", Session)
+    db = Session()
+    u = User(username="admin", password_hash="x"); db.add(u); db.commit()
+    db.add(DynamicLayer(token="t1", name="DMZ-Layer", layer_name="dynamic_layer", owner_id=u.id,
+                        content={"operation": "replace", "objects": {},
+                                 "rulebase": [{"name": "cleanup", "action": "Drop",
+                                               "source": "any", "destination": "any", "service": "any"}]}))
+    db.add(Gateway(token="g1", name="GW1", host="10.1.1.111", port=443, username="admin", owner_id=u.id))
+    db.commit(); db.close()
+    return Session
+
+
+def test_list_gateways_and_layers(dldb):
+    gws = mcp_tools.list_gateways()["gateways"]
+    assert any(g["name"] == "GW1" and g["host"] == "10.1.1.111" for g in gws)
+    layers = mcp_tools.list_dynamic_layers()["layers"]
+    assert any(L["name"] == "DMZ-Layer" and L["rules"] == 1 for L in layers)
+
+
+def test_get_dynamic_layer_by_name_and_unknown(dldb):
+    out = mcp_tools.get_dynamic_layer("DMZ-Layer")
+    assert out["ok"] and out["layer_name"] == "dynamic_layer" and out["rules"][0]["name"] == "cleanup"
+    miss = mcp_tools.get_dynamic_layer("nope")
+    assert miss["ok"] is False and "DMZ-Layer" in miss["error"]   # error lists what's available
+
+
+def test_add_dynamic_rule_creates_inline_host(dldb):
+    out = mcp_tools.add_dynamic_rule("DMZ-Layer", "10.1.2.50", "10.1.2.60", service="ssh",
+                                     action="Accept", name="web-ssh", position="top")
+    assert out["ok"] and out["rules"] == 2
+    layer = mcp_tools.get_dynamic_layer("DMZ-Layer")
+    assert layer["rules"][0]["name"] == "web-ssh"                 # inserted on top
+    assert layer["rules"][0]["source"] == ["h-10-1-2-50"]
+    assert "hosts" in layer["object_types"]
+
+
+def test_add_dynamic_rule_rejects_bad_action(dldb):
+    out = mcp_tools.add_dynamic_rule("DMZ-Layer", "any", "any", action="Nuke")
+    assert out["ok"] is False and "action" in out["error"]
+
+
+def test_remove_dynamic_rule_guards_last_and_removes(dldb):
+    last = mcp_tools.remove_dynamic_rule("DMZ-Layer", "cleanup")
+    assert last["ok"] is False and "at least one" in last["error"]
+    mcp_tools.add_dynamic_rule("DMZ-Layer", "10.1.2.50", "any", service="https", name="extra")
+    out = mcp_tools.remove_dynamic_rule("DMZ-Layer", "extra")
+    assert out["ok"] and out["rules"] == 1
+
+
+def test_push_real_gateway_blocked_when_toggle_off(dldb, monkeypatch):
+    monkeypatch.setattr(app_settings, "get", lambda k: False if k == "mcp_allow_layer_push" else None)
+    out = mcp_tools.push_dynamic_layer("DMZ-Layer", gateway="GW1", dry_run=False)
+    assert out["ok"] is False and out["pushed"] is False and "disabled" in out["error"]
+
+
+def test_push_mock_runs_and_returns_summary(dldb, monkeypatch):
+    from app.services import apply_runner
+    monkeypatch.setattr(app_settings, "get", lambda k: None)
+    monkeypatch.setattr(apply_runner, "start_apply", lambda **kw: "pid-1")
+    monkeypatch.setattr(apply_runner, "get_progress",
+                        lambda pid: {"status": "succeeded", "summary": {"rules": 1}, "task_id": "T1"})
+    out = mcp_tools.push_dynamic_layer("DMZ-Layer", gateway="mock", dry_run=False)
+    assert out["ok"] and out["target"] == "mock" and out["task_id"] == "T1"
+    assert out["pushed"] is False           # the built-in demo target is never a real push

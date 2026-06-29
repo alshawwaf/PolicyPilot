@@ -43,9 +43,9 @@
   <div class="ph-main">
     <h1>MCP for agents</h1>
     <p class="ph-sub">Connect an LLM agent (n8n, Claude Desktop, Cursor, VS Code) to PolicyPilot over the Model
-      Context Protocol. The agent gets typed tools to reason about and act on your Check Point management access
-      policy — decide on a request, correlate a service or app name, analyze a layer, and apply a gated change
-      via the Management Web API. Same idea as
+      Context Protocol. The agent gets typed tools for two things: automate your Check Point <b>management (SMS)
+      access policy</b> via the Management Web API, and author + push <b>dynamic layers</b> to a gateway via the
+      Gaia API — each write behind its own admin gate. Same idea as
       <a href="https://mcp.checkpoint.com/" target="_blank" rel="noopener">Check Point's MCP servers</a>,
       focused on the access-automation engine.</p>
   </div>
@@ -107,10 +107,11 @@
     <span class="icon-chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg></span>
     <h3>Tools the agent gets ({{ tools|length }})</h3>
   </div>
-  <p class="mcp-note" style="margin:0 0 12px;">Every tool acts on the Check Point <b>management (SMS) access
-    policy</b> over the Management Web API — list servers and layers, decide and apply a change, remove access,
-    amend a rule, list and revert changes, correlate a service or app, and analyze a layer. The agent does not
-    drive dynamic layers.</p>
+  <p class="mcp-note" style="margin:0 0 12px;">The tools cover two areas. <b>Management access policy</b> (the
+    SMS, over the Management Web API): list servers and layers, decide and apply a change, remove access, amend a
+    rule, list and revert changes, correlate a service or app, and analyze a layer. <b>Dynamic Layers</b> (pushed
+    to a gateway via the Gaia API): list gateways and layers, read a layer, add or remove a rule, and push it.
+    Each write is behind its own admin gate — publishing to the SMS and pushing to a gateway are separate toggles.</p>
   <div class="mcp-grid">
     {% for t in tools %}
     <div class="mcp-tool"><code>{{ t.name }}</code><p>{{ t.summary }}</p></div>

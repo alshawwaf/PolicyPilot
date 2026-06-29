@@ -11,7 +11,7 @@ from __future__ import annotations
 import logging
 
 from ..db import SessionLocal
-from ..models import ManagementServer
+from ..models import DynamicLayer, Gateway, ManagementServer
 
 logger = logging.getLogger("policypilot.mcp_tools")
 
@@ -574,3 +574,279 @@ def coverage_lookup(api: str = "management", name: str = "", version: str = "") 
         return detail
     return {"api": api, "version": ver,
             "objects": [o["name"] for g in coverage.object_groups(api, ver) for o in g["rows"]]}
+
+
+# --- Dynamic Layers (Rail B) — author an access rulebase and push it to a gateway via the Gaia API -------
+# These tools target a DYNAMIC LAYER (sk182252) applied out-of-band to a gateway — separate from the SMS
+# management access policy the other tools drive. Pushing to a REAL gateway is a commit, gated by the
+# dedicated ``mcp_allow_layer_push`` admin toggle (distinct from ``mcp_allow_publish``). dry-run and the
+# built-in demo target are always available.
+_DL_ACTIONS = ("Accept", "Drop", "Reject", "Ask", "Inform")
+
+
+def _resolve_layer(db, ref):
+    """A DynamicLayer by numeric id OR by name / layer_name (case-insensitive). Raises ValueError that LISTS
+    the available layers on no match (so the error tells the agent what to pick)."""
+    layer = None
+    if isinstance(ref, int) and not isinstance(ref, bool):
+        layer = db.get(DynamicLayer, ref)
+    elif isinstance(ref, str) and ref.strip().isdigit():
+        layer = db.get(DynamicLayer, int(ref.strip()))
+    if layer is None and isinstance(ref, str) and ref.strip():
+        want = ref.strip().lower()
+        rows = db.query(DynamicLayer).all()
+        layer = next((L for L in rows
+                      if want in ((L.name or "").lower(), (L.layer_name or "").lower())), None)
+    if layer is None:
+        avail = "; ".join(f"id {L.id} = {L.name}" for L in db.query(DynamicLayer).all())
+        raise ValueError(f"could not resolve dynamic layer “{ref}”. Available — {avail or 'none configured'}. "
+                         f"Call list_dynamic_layers and ask the user which one.")
+    return layer
+
+
+def _resolve_gateway(db, ref):
+    """A Gateway by numeric id OR by name / host (case-insensitive). Raises ValueError listing the gateways."""
+    gw = None
+    if isinstance(ref, int) and not isinstance(ref, bool):
+        gw = db.get(Gateway, ref)
+    elif isinstance(ref, str) and ref.strip().isdigit():
+        gw = db.get(Gateway, int(ref.strip()))
+    if gw is None and isinstance(ref, str) and ref.strip():
+        want = ref.strip().lower()
+        rows = db.query(Gateway).all()
+        gw = next((g for g in rows if want in ((g.name or "").lower(), (g.host or "").lower())), None)
+    if gw is None:
+        avail = "; ".join(f"id {g.id} = {g.name} ({g.host})" for g in db.query(Gateway).all())
+        raise ValueError(f"could not resolve gateway “{ref}”. Available — {avail or 'none configured'}. "
+                         f"Call list_gateways and ask the user which one.")
+    return gw
+
+
+def _rule_count(layer) -> int:
+    rb = (layer.content or {}).get("rulebase") or []
+    return len(rb) if isinstance(rb, list) else 0
+
+
+def _layer_object_for(value: str):
+    """Map a source/destination token to an inline layer object: an IP -> a host, a CIDR -> a network,
+    anything else -> a by-name reference (name, None, None)."""
+    import ipaddress
+    s = (value or "").strip()
+    try:
+        if "/" in s:
+            net = ipaddress.ip_network(s, strict=False)
+            dash = str(net.network_address).replace(".", "-").replace(":", "-")
+            name = f"n-{dash}-{net.prefixlen}"
+            if net.version == 6:
+                return name, "networks", {"name": name, "subnet6": str(net.network_address),
+                                          "mask-length6": net.prefixlen}
+            return name, "networks", {"name": name, "subnet4": str(net.network_address),
+                                      "mask-length4": net.prefixlen}
+        ip = ipaddress.ip_address(s)
+        name = "h-" + str(ip).replace(".", "-").replace(":", "-")
+        key = "ipv6-address" if ip.version == 6 else "ip-address"
+        return name, "hosts", {"name": name, key: str(ip)}
+    except ValueError:
+        return s, None, None
+
+
+def list_gateways() -> dict:
+    """The saved Gaia gateways a dynamic layer can be pushed to — returns id, name, host, port for each."""
+    db = SessionLocal()
+    try:
+        rows = db.query(Gateway).all()
+        return {"gateways": [{"id": g.id, "name": g.name, "host": g.host, "port": g.port} for g in rows]}
+    finally:
+        db.close()
+
+
+def list_dynamic_layers() -> dict:
+    """The dynamic layers authored in the portal — id, name, the gateway access-layer name, and rule count.
+    A dynamic layer is an access rulebase pushed straight to a gateway via the Gaia API (out-of-band of the
+    SMS management policy). Use get_dynamic_layer to read one, add_dynamic_rule to edit, push_dynamic_layer
+    to apply."""
+    db = SessionLocal()
+    try:
+        rows = db.query(DynamicLayer).all()
+        return {"layers": [{"id": L.id, "name": L.name, "layer_name": L.layer_name,
+                            "rules": _rule_count(L)} for L in rows]}
+    finally:
+        db.close()
+
+
+def get_dynamic_layer(layer: str) -> dict:
+    """Read one dynamic layer (by id or name): its target access-layer name and its current rulebase
+    (each rule's name, action, source, destination, service)."""
+    db = SessionLocal()
+    try:
+        L = _resolve_layer(db, layer)
+        content = L.content or {}
+        rb = content.get("rulebase") or []
+        rules = [{"name": r.get("name"), "action": r.get("action"), "source": r.get("source"),
+                  "destination": r.get("destination"), "service": r.get("service")}
+                 for r in rb if isinstance(r, dict)]
+        return {"ok": True, "id": L.id, "name": L.name, "layer_name": L.layer_name,
+                "rules": rules, "object_types": list((content.get("objects") or {}).keys())}
+    except ValueError as exc:
+        return {"ok": False, "error": str(exc)}
+    finally:
+        db.close()
+
+
+def add_dynamic_rule(layer: str, source: str, destination: str, service: str = "any",
+                     action: str = "Accept", name: str = "", position: str = "bottom") -> dict:
+    """Add a rule to a dynamic layer's rulebase (this only EDITS the layer — call push_dynamic_layer after to
+    apply it to a gateway). ``source``/``destination`` accept an IP, a CIDR, the name of an existing object,
+    or 'any'; a bare IP/CIDR is added as an inline host/network object. ``service`` is a service name (e.g.
+    https, ssh) or 'any'. ``action``: Accept | Drop | Reject | Ask | Inform. ``position``: 'top' or 'bottom'."""
+    act = (action or "Accept").strip().title() if (action or "").strip().lower() in {a.lower() for a in _DL_ACTIONS} else (action or "Accept").strip()
+    if act not in _DL_ACTIONS:
+        return {"ok": False, "error": f"unsupported action “{action}”. Use one of: {', '.join(_DL_ACTIONS)}."}
+    db = SessionLocal()
+    try:
+        L = _resolve_layer(db, layer)
+        content = dict(L.content or {})
+        objects = {k: list(v) for k, v in (content.get("objects") or {}).items()}
+        rulebase = list(content.get("rulebase") or [])
+
+        def _cell(token):
+            name_, kind, obj = _layer_object_for(token)
+            if name_ == "any":
+                return "any"
+            if obj is not None:                       # inline IP/CIDR object — add it once
+                lst = objects.setdefault(kind, [])
+                if not any(o.get("name") == name_ for o in lst):
+                    lst.append(obj)
+            return name_
+
+        src = _cell(source)
+        dst = _cell(destination)
+        svc = (service or "any").strip() or "any"
+        rname = (name or "").strip() or f"rule-{len(rulebase) + 1}"
+        rule = {"name": rname, "action": act, "track": {"type": "Log"},
+                "source": "any" if src == "any" else [src],
+                "destination": "any" if dst == "any" else [dst],
+                "service": "any" if svc.lower() == "any" else [svc]}
+        if position == "top":
+            rulebase.insert(0, rule)
+        else:
+            rulebase.append(rule)
+        content["objects"] = objects
+        content["rulebase"] = rulebase
+        from ..schemas.dynamic_layer import validate_layer_content
+        validate_layer_content(content)               # raises ValueError on a malformed result
+        L.content = content
+        db.commit()
+        return {"ok": True, "layer": L.name, "rule": rname, "rules": len(rulebase),
+                "note": "rule added to the layer — call push_dynamic_layer to apply it to a gateway."}
+    except ValueError as exc:
+        db.rollback()
+        return {"ok": False, "error": str(exc)}
+    finally:
+        db.close()
+
+
+def remove_dynamic_rule(layer: str, rule: str) -> dict:
+    """Remove a rule (by name) from a dynamic layer's rulebase. A layer must keep at least one rule; this
+    only EDITS the layer — call push_dynamic_layer after to apply the change to a gateway."""
+    db = SessionLocal()
+    try:
+        L = _resolve_layer(db, layer)
+        content = dict(L.content or {})
+        rulebase = list(content.get("rulebase") or [])
+        want = (rule or "").strip().lower()
+        kept = [r for r in rulebase
+                if not (isinstance(r, dict) and (r.get("name") or "").lower() == want)]
+        if len(kept) == len(rulebase):
+            names = ", ".join(r.get("name", "") for r in rulebase if isinstance(r, dict))
+            return {"ok": False, "error": f"no rule named “{rule}” in layer “{L.name}”. "
+                                          f"Rules: {names or 'none'}."}
+        if not kept:
+            return {"ok": False, "error": "a dynamic layer must keep at least one rule — removing the last "
+                                          "rule isn't allowed. Replace it or edit the layer instead."}
+        content["rulebase"] = kept
+        from ..schemas.dynamic_layer import validate_layer_content
+        validate_layer_content(content)
+        L.content = content
+        db.commit()
+        return {"ok": True, "layer": L.name, "removed": rule, "rules": len(kept)}
+    except ValueError as exc:
+        db.rollback()
+        return {"ok": False, "error": str(exc)}
+    finally:
+        db.close()
+
+
+def push_dynamic_layer(layer: str, gateway: str = "", dry_run: bool = False) -> dict:
+    """Push a dynamic layer to a gateway via the Gaia API (set-dynamic-content), out-of-band of SmartConsole.
+    ``gateway``: the saved gateway's name / id / host; leave blank (or 'mock') to push to the built-in demo
+    target. ``dry_run=True`` validates without applying (always allowed). A real-gateway push (dry_run=False)
+    is an admin-gated COMMIT — it requires the 'Let the MCP agent push dynamic layers to gateways' setting
+    (mcp_allow_layer_push). Returns the change summary + task id."""
+    db = SessionLocal()
+    try:
+        try:
+            L = _resolve_layer(db, layer)
+        except ValueError as exc:
+            return {"ok": False, "error": str(exc), "autopilot": _autopilot()}
+        use_mock = (not (gateway or "").strip()) or gateway.strip().lower() == "mock"
+        if not use_mock and not dry_run:
+            from . import app_settings
+            try:
+                allowed = bool(app_settings.get("mcp_allow_layer_push"))
+            except Exception:  # noqa: BLE001
+                allowed = False
+            if not allowed:
+                return {"ok": False, "pushed": False, "autopilot": _autopilot(),
+                        "error": "pushing a dynamic layer to a live gateway is disabled — an admin must enable "
+                                 "'Let the MCP agent push dynamic layers to gateways' in Settings → MCP / agent "
+                                 "(a separate toggle from the SMS publish gate). Re-run with dry_run=true to "
+                                 "validate, or gateway='mock' for the demo target."}
+        layer_id, layer_name = L.id, L.name
+        if use_mock:
+            target_name = "mock"
+            kw = {"target": "mock"}
+        else:
+            try:
+                gw = _resolve_gateway(db, gateway)
+            except ValueError as exc:
+                return {"ok": False, "error": str(exc), "autopilot": _autopilot()}
+            if not gw.username:
+                return {"ok": False, "autopilot": _autopilot(),
+                        "error": f"gateway “{gw.name}” has no username — set it on the gateway profile."}
+            from . import gateway_creds
+            pw = gateway_creds.get_password(db, gw)
+            if not pw:
+                return {"ok": False, "autopilot": _autopilot(),
+                        "error": f"gateway “{gw.name}” has no stored password — set one on the gateway profile."}
+            try:
+                from .gaia_client import ensure_pinned
+                ensure_pinned(db, gw)                 # trust-on-first-use before the TLS handshake
+            except Exception:  # noqa: BLE001
+                pass
+            target_name = gw.name
+            kw = {"target": "gateway", "gateway_host": gw.host, "gateway_port": gw.port,
+                  "user": gw.username, "password": pw, "cert_pem": gw.cert_pem or None}
+    finally:
+        db.close()
+
+    import time
+    from . import apply_runner
+    try:
+        pid = apply_runner.start_apply(layer_id=layer_id, dry_run=dry_run, **kw)
+    except Exception as exc:  # noqa: BLE001
+        return {"ok": False, "error": f"could not start the push: {exc}", "autopilot": _autopilot()}
+    prog = None
+    for _ in range(150):                              # ~45s ceiling (login + task poll + logout finishes well under)
+        prog = apply_runner.get_progress(pid)
+        if prog and prog.get("status") in ("succeeded", "failed"):
+            break
+        time.sleep(0.3)
+    if not prog:
+        return {"ok": False, "error": "push status was unavailable", "autopilot": _autopilot()}
+    status = prog.get("status")
+    ok = status == "succeeded"
+    return {"ok": ok, "pushed": ok and not dry_run and not use_mock, "dry_run": dry_run,
+            "target": target_name, "layer": layer_name, "status": status,
+            "summary": prog.get("summary"), "task_id": prog.get("task_id"),
+            "error": None if ok else (prog.get("error") or "push failed"), "autopilot": _autopilot()}

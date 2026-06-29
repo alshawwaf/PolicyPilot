@@ -7,6 +7,19 @@ All notable changes to **PolicyPilot** are documented here. This project follows
 
 Post-1.0.0 hardening of the agent surface, ahead of broader live validation.
 
+### Security hardening (audit)
+A dedicated security audit (adversarially verified) found no blockers; two majors + one minor were fixed:
+- **Login brute-force throttle could be bypassed via a spoofed `X-Forwarded-For`** (major) — `client_ip()` now
+  trusts XFF only for `PILOT_TRUSTED_PROXY_HOPS` reverse-proxy hops (default 0; compose/DEPLOY set 1 for
+  Caddy/Traefik) and reads the proxy-appended hop, so rotating the header no longer resets the lockout. The
+  same trusted-proxy resolution is used for the activity-log source IP.
+- **Webhook `callback_url` was an authenticated SSRF / exfiltration relay** (major) — the caller-supplied
+  callback is now SSRF-guarded: http(s) only, and the resolved host must not be loopback / link-local (incl.
+  the `169.254.169.254` cloud-metadata endpoint) / multicast / reserved; private ranges are refused unless an
+  admin enables **`webhook_allow_private_callbacks`** (for an internal ITSM). Redirects are not followed.
+- **Open redirect via a protocol-relative `next=`** (minor) — the table-prefs redirect now rejects `//host`
+  and scheme-bearing targets (same-origin only).
+
 ### Customer-readiness audit pass
 A full multi-dimension audit (security, engine, MCP, data, UX, docs, deploy, cruft, tests) found no blockers
 and no confirmed majors; the verified items were closed:

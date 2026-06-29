@@ -299,6 +299,14 @@ SETTINGS: list[Setting] = [
             "all allowed servers. A malformed value is rejected (the webhook fails closed — it never "
             "silently widens to all). Falls back to PILOT_WEBHOOK_SERVER_IDS when blank.",
             group="Ticketing webhook", max=200),
+    Setting("webhook_allow_private_callbacks", "bool", False,
+            "Allow webhook callbacks to private addresses",
+            "A ticket may include a callback_url we POST the result to. By default that URL is SSRF-guarded: "
+            "loopback / link-local (incl. cloud-metadata) / reserved targets are always refused, and PRIVATE "
+            "ranges (10/172.16/192.168) are refused too. Enable this ONLY if your ITSM callback endpoint is "
+            "on an internal/private address — it relaxes the private-range block (the metadata/loopback "
+            "blocks always stay on).",
+            group="Ticketing webhook"),
 
     # --- Ticket write-back -----------------------------------------------------------------------------
     # Write-back is vendor-neutral: a ticket that includes a `callback_url` gets the result POSTed there

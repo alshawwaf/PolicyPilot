@@ -32,6 +32,13 @@ class Settings(BaseSettings):
 
     database_url: str = "sqlite:///./data/policypilot.db"
 
+    # Reverse-proxy hops in front of the app that APPEND the client to X-Forwarded-For (1 for a single
+    # Caddy / Traefik / nginx). Used to derive the real client IP for the login brute-force throttle WITHOUT
+    # trusting a spoofable XFF. 0 (default) = no proxy / don't trust XFF (use the direct TCP peer). Behind
+    # the bundled Caddy or a Dokploy/Traefik proxy, set PILOT_TRUSTED_PROXY_HOPS=1 so the throttle keys on
+    # the real client and can't be bypassed by rotating the header.
+    trusted_proxy_hops: int = 0
+
     # Access automation — generic ticketing webhook (ServiceNow, Jira, Remedy, custom portal …).
     # The inbound webhook (POST /access-automation/webhook) is DISABLED unless a shared secret is set;
     # the caller must send it as the X-PolicyPilot-Token header.

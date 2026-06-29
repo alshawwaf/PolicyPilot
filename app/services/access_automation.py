@@ -2316,7 +2316,21 @@ def load_layer(session, layer_name: str, package: Optional[str] = None,
         items, objdict = _pull_items(session, name, package, max_rules)
         return [_parse_rule(e, objdict) for e in _flatten(items) if e.get("type") == "access-rule"]
 
-    rules = _pull(layer_name)
+    try:
+        rules = _pull(layer_name)
+    except MgmtError as exc:
+        # Turn the SMS's opaque "Requested object [X] not found" into a clear, actionable message that names
+        # it as an ACCESS LAYER and lists the real layer names — so a wrong/guessed layer self-corrects
+        # (e.g. "Network Layer" -> "did you mean Network?") instead of dead-ending.
+        if _is_not_found_error(str(exc)):
+            try:
+                names = [L.get("name") for L in session.list_access_layers() if L.get("name")]
+            except Exception:  # noqa: BLE001 — best-effort enrichment; fall back to the raw error
+                names = []
+            avail = ", ".join(names) if names else "none found on this server"
+            raise MgmtError(f"access layer '{layer_name}' was not found on this server. "
+                            f"Available access layers: {avail}. Re-run with the exact layer name.") from exc
+        raise
     _attach_inline_layers(session, rules, package, _pull, _INLINE_MAX_DEPTH, set())
     return rules
 

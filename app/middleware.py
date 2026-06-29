@@ -150,7 +150,18 @@ class ActivityLogMiddleware:
 
     def _log(self, scope, path, method, req_body, resp, ms):
         req_headers = {k.decode(): v.decode() for k, v in scope.get("headers", [])}
-        src = req_headers.get("x-forwarded-for", "").split(",")[0].strip()
+        # Trust X-Forwarded-For only for the configured number of proxy hops (else it's spoofable); fall
+        # back to the direct peer. Mirrors services.login_guard.client_ip so logged + throttled IPs agree.
+        try:
+            from .config import get_settings
+            hops = max(0, int(get_settings().trusted_proxy_hops or 0))
+        except Exception:  # noqa: BLE001
+            hops = 0
+        src = ""
+        if hops:
+            parts = [p.strip() for p in req_headers.get("x-forwarded-for", "").split(",") if p.strip()]
+            if len(parts) >= hops:
+                src = parts[-hops]
         if not src and scope.get("client"):
             src = scope["client"][0]
         resp_headers = {k.decode(): v.decode() for k, v in resp["headers"]}

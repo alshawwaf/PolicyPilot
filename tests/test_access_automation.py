@@ -979,6 +979,7 @@ def test_notify_posts_to_generic_callback_url(monkeypatch):
             return FakeResp()
 
     monkeypatch.setattr(tk.httpx, "Client", FakeClient)
+    monkeypatch.setattr(tk, "_outbound_url_ok", lambda url, allow_private: (True, ""))  # SSRF guard tested separately
     ticket = tk.parse_payload({"ticket_id": "INC9", "server_id": 1, "layer": "L", "source": "1.1.1.1",
                                "destination": "2.2.2.2", "port": "22", "callback_url": "https://itsm/cb",
                                "callback_token": "t0k"})

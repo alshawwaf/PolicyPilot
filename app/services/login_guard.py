@@ -36,10 +36,22 @@ def _lock_seconds(fails: int) -> int:
 
 
 def client_ip(request: Request) -> str:
-    fwd = request.headers.get("x-forwarded-for", "").split(",")[0].strip()
-    if fwd:
-        return fwd[:64]
-    return (request.client.host if request.client else "") or "?"
+    """The real client IP for throttling/logging. X-Forwarded-For is attacker-controllable, so it is trusted
+    ONLY when reverse proxies sit in front: PILOT_TRUSTED_PROXY_HOPS = the number of trusted proxies that
+    each APPEND the peer to XFF (1 for a single Caddy/Traefik/nginx). We then read the entry the OUTERMOST
+    trusted proxy appended (``parts[-hops]``), which a client cannot forge. With 0 hops (default, or no
+    proxy) XFF is ignored entirely and the direct TCP peer is used — so the throttle can't be bypassed by
+    rotating the header."""
+    try:
+        from ..config import get_settings
+        hops = max(0, int(get_settings().trusted_proxy_hops or 0))
+    except Exception:  # noqa: BLE001 — never let config trouble break the throttle
+        hops = 0
+    if hops:
+        parts = [p.strip() for p in request.headers.get("x-forwarded-for", "").split(",") if p.strip()]
+        if len(parts) >= hops:
+            return parts[-hops][:64]
+    return ((request.client.host if request.client else "") or "?")[:64]
 
 
 def locked_for(db: Session, ip: str) -> int:

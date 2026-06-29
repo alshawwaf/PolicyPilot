@@ -13,6 +13,9 @@ services:
       - PILOT_ADMIN_USERNAME=${PILOT_ADMIN_USERNAME:-admin}
       - PILOT_ADMIN_PASSWORD=${PILOT_ADMIN_PASSWORD}
       - PILOT_DATABASE_URL=sqlite:////data/policypilot.db
+      # Caddy is a single reverse proxy in front, so the real client is one X-Forwarded-For hop in. This lets
+      # the login brute-force throttle key on the real client instead of a spoofable header.
+      - PILOT_TRUSTED_PROXY_HOPS=1
     volumes:
       - policypilot-data:/data
     restart: unless-stopped

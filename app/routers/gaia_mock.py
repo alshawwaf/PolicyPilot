@@ -23,10 +23,9 @@ router = APIRouter(tags=["gaia-mock"])
 
 
 def client_ip(request: Request) -> str:
-    xff = request.headers.get("x-forwarded-for")
-    if xff:
-        return xff.split(",")[0].strip()
-    return request.client.host if request.client else ""
+    # Delegate to the canonical, trusted-proxy-aware resolver (don't trust a spoofable XFF for logging).
+    from ..services.login_guard import client_ip as _client_ip
+    return _client_ip(request)
 
 _SID_TTL = 600  # seconds — matches a gateway's 10-minute session
 _SESSIONS: dict[str, float] = {}  # sid -> expiry epoch

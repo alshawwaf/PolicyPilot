@@ -9,16 +9,19 @@ generous field aliases into a canonical request; the result can be written back 
   * BUILT-IN -- the ServiceNow Table API adapter writes a work note to the incident (PILOT_SERVICENOW_*).
 
 Security: TLS verification is ALWAYS on (never a skip-verify path). Inbound auth — the shared
-``PILOT_WEBHOOK_TOKEN`` checked as ``X-PolicyPilot-Token`` — is enforced by the router BEFORE this module runs,
-so a supplied ``callback_url`` always comes from an already-authenticated caller. Credentials come from
-env, never hardcoded.
+``PILOT_WEBHOOK_TOKEN`` checked as ``X-PolicyPilot-Token`` — is enforced by the router BEFORE this module
+runs. The webhook token is a shared, broadly-distributed credential, so a supplied ``callback_url`` is NOT
+fully trusted: it is SSRF-guarded (see ``_outbound_url_ok``) before we POST to it. Credentials come from env,
+never hardcoded.
 """
 from __future__ import annotations
 
 import ipaddress
 import re
+import socket
 from dataclasses import dataclass
 from typing import Optional
+from urllib.parse import urlparse
 
 import httpx
 
@@ -351,9 +354,49 @@ def notify(ticket: TicketRequest, result: dict) -> dict:
     return {"skipped": "no callback_url supplied and no ServiceNow callback configured"}
 
 
+def _outbound_url_ok(url: str, allow_private: bool) -> tuple[bool, str]:
+    """SSRF guard for the caller-supplied callback URL (the webhook token is broadly shared, so this URL is
+    untrusted). Require http/https and refuse any host that resolves to a loopback / link-local (incl. the
+    169.254.169.254 cloud-metadata endpoint) / multicast / unspecified / reserved address — and private
+    ranges unless an admin opted in (``webhook_allow_private_callbacks``, for an internal ITSM). Resolves
+    every A/AAAA record and fails CLOSED on any resolution error. (Resolve-then-connect leaves a narrow
+    DNS-rebinding window — acceptable for a PoV; an allowlist would close it fully.)"""
+    try:
+        u = urlparse(url)
+    except Exception:  # noqa: BLE001
+        return False, "callback_url could not be parsed"
+    if u.scheme not in ("http", "https"):
+        return False, f"callback_url scheme '{u.scheme}' is not allowed (http/https only)"
+    host = u.hostname
+    if not host:
+        return False, "callback_url has no host"
+    try:
+        infos = socket.getaddrinfo(host, u.port or (443 if u.scheme == "https" else 80),
+                                   proto=socket.IPPROTO_TCP)
+    except Exception as exc:  # noqa: BLE001 — fail closed: an unresolvable host is not posted to
+        return False, f"callback_url host did not resolve ({exc})"
+    for info in infos:
+        ip = ipaddress.ip_address(info[4][0])
+        if ip.is_loopback or ip.is_link_local or ip.is_multicast or ip.is_unspecified or ip.is_reserved:
+            return False, f"callback_url resolves to a blocked address ({ip})"
+        if ip.is_private and not allow_private:
+            return False, (f"callback_url resolves to a private address ({ip}); enable "
+                           "'Allow webhook callbacks to private addresses' in Settings for an internal ITSM")
+    return True, ""
+
+
 def _post_callback(ticket: TicketRequest, result: dict) -> dict:
-    """Generic write-back: POST the result to the caller-supplied URL. TLS verification stays on; the
-    optional ``callback_token`` is echoed as X-PolicyPilot-Token so the receiver can authenticate us."""
+    """Generic write-back: POST the result to the caller-supplied URL. SSRF-guarded (the URL is untrusted);
+    TLS verification stays on and redirects are NOT followed; the optional ``callback_token`` is echoed as
+    X-PolicyPilot-Token so the receiver can authenticate us."""
+    from . import app_settings
+    try:
+        allow_private = bool(app_settings.get("webhook_allow_private_callbacks"))
+    except Exception:  # noqa: BLE001
+        allow_private = False
+    ok, reason = _outbound_url_ok(ticket.callback_url, allow_private)
+    if not ok:
+        return {"ok": False, "error": f"callback refused: {reason}", "via": "callback_url", "blocked": True}
     headers = {"Content-Type": "application/json"}
     if ticket.callback_token:
         headers["X-PolicyPilot-Token"] = ticket.callback_token
@@ -363,7 +406,7 @@ def _post_callback(ticket: TicketRequest, result: dict) -> dict:
                "outcome": result.get("outcome"), "summary": summarize(result, ticket.ticket_id),
                "result": result}
     try:
-        with httpx.Client(timeout=15.0, verify=True) as c:   # TLS verification ALWAYS on
+        with httpx.Client(timeout=15.0, verify=True, follow_redirects=False) as c:   # TLS on; no redirect SSRF
             r = c.post(ticket.callback_url, json=payload, headers=headers)
             return {"ok": r.status_code in (200, 201, 202, 204), "status": r.status_code,
                     "via": "callback_url"}

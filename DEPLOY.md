@@ -20,6 +20,7 @@ publicly-trusted HTTPS with no cert-trust step. (Caddy / `docker-compose.yml` ar
    PILOT_ENCRYPTION_KEY=<openssl rand -base64 32>  # encrypts saved gateway / SMS creds at rest
    PILOT_ADMIN_USERNAME=admin
    PILOT_ADMIN_PASSWORD=<choose a strong password>
+   PILOT_TRUSTED_PROXY_HOPS=1                       # Traefik/Caddy = 1 proxy in front
    ```
    Don't set `PILOT_DATABASE_URL` — the `Dockerfile` already points it at `/data/policypilot.db`.
 8. **Deploy.** Sign in at your domain as the admin user above.
@@ -33,8 +34,10 @@ Everything rides Traefik on **443** — there are no extra ports to publish.
 - **`PILOT_ENCRYPTION_KEY`** encrypts saved gateway and management-server credentials at rest (AES-256-GCM). It
   falls back to `PILOT_SESSION_SECRET`; set a dedicated key so rotating the session secret doesn't orphan stored
   credentials.
-- The container runs uvicorn with `--proxy-headers`, so the **activity log shows the real client IP** (from
-  Traefik's `X-Forwarded-For`), not Traefik's address.
+- **`PILOT_TRUSTED_PROXY_HOPS`** is the number of reverse proxies in front of the app (1 for a single
+  Traefik/Caddy). It lets the **login brute-force throttle** and the activity log key on the *real* client
+  from `X-Forwarded-For` rather than a spoofable header — without it set, the throttle could be bypassed by
+  rotating XFF. Set it to match your proxy chain (0 if the app is exposed directly).
 - **Run a single uvicorn worker** — the `Dockerfile` already does; **do not add `--workers N`**. The
   housekeeping / retention loop runs per process against the single SQLite file, so multiple workers would run
   duplicate loops. Scale by running more instances behind the load balancer if ever needed, not more workers.

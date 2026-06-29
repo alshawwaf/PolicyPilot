@@ -10,7 +10,7 @@ LLM agent over MCP.*
 
 ![Version](https://img.shields.io/badge/version-1.0.0-3b82f6)
 ![Validated](https://img.shields.io/badge/validated-R82.10-7b3ff2)
-![Tests](https://img.shields.io/badge/tests-675%20passing-34d399)
+![Tests](https://img.shields.io/badge/tests-696%20passing-34d399)
 ![MCP tools](https://img.shields.io/badge/MCP%20tools-21-7b3ff2)
 ![Python](https://img.shields.io/badge/python-3.12%2B-3b82f6)
 ![TLS](https://img.shields.io/badge/TLS-always%20verified-15935a)

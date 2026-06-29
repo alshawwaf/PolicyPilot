@@ -212,7 +212,9 @@ async def save_table_columns(table_id: str, request: Request, db: Session = Depe
         return RedirectResponse("/login", status_code=303)
     form = await request.form()
     nxt = str(form.get("next") or "")
-    if not nxt.startswith("/"):
+    # Same-origin only: reject protocol-relative ("//evil.com") and scheme-bearing targets so a crafted
+    # next= can't open-redirect off-site.
+    if not nxt.startswith("/") or nxt.startswith("//") or "://" in nxt:
         nxt = "/"
     if table_prefs.spec(table_id):                      # ignore unknown table ids (no junk rows)
         if "reset" in form:

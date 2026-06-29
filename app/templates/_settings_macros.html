@@ -13,7 +13,8 @@
   'key': '<path d="M21 2l-2 2m-7.6 7.6a5.5 5.5 0 1 1-7.8 7.8 5.5 5.5 0 0 1 7.8-7.8zm0 0L15.5 7.5l3 3L22 7l-3-3"/>',
   'eye': '<path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/>',
   'shield-check': '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/>',
-  'bolt': '<path d="M13 2 3 14h9l-1 8 10-12h-9z"/>'
+  'bolt': '<path d="M13 2 3 14h9l-1 8 10-12h-9z"/>',
+  'dashboard': '<rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/>'
 } %}
 <svg width="{{ size }}" height="{{ size }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">{{ P.get(name, P['layout']) | safe }}</svg>
 {% endmacro %}
@@ -59,4 +60,44 @@
               onclick="var i=document.querySelector('input[name=base_url]'); i.value=this.dataset.url; i.focus();">Use</button></div>
     {% endif %}
   </div>
+{% endmacro %}
+
+{# macOS System-Settings style row — label (+help) on the left, control on the right, inside a .grp card.
+   Used by the two-pane Settings page. Real form controls so the existing section-scoped save still works. #}
+{% macro msrow(s, vals, secrets, crypto_ok, detected_base_url) %}
+  {% if s.kind == 'text' %}
+  <div class="gr col">
+    <div class="gl">{{ s.label }}{% if s.help %}<small>{{ s.help }}</small>{% endif %}</div>
+    <textarea name="{{ s.key }}" rows="4" maxlength="{{ s.max or 4000 }}" spellcheck="false" class="tin mono ta">{{ vals[s.key] }}</textarea>
+  </div>
+  {% else %}
+  <div class="gr">
+    <span class="gl">{{ s.label }}
+      {% if s.kind == 'secret' %}{% if secrets.get(s.key) %}<span class="pill ok">set</span>{% else %}<span class="pill muted">not set</span>{% endif %}{% endif %}
+      {% if s.help %}<small>{{ s.help }}</small>{% endif %}</span>
+    <span class="gc">
+      {% if s.kind == 'bool' %}
+        <label class="ms-sw"><input type="checkbox" name="{{ s.key }}" {% if vals[s.key] %}checked{% endif %}><span></span></label>
+      {% elif s.kind == 'choice' %}
+        <select name="{{ s.key }}">{% for val, lbl in s.choices %}<option value="{{ val }}" {% if vals[s.key] == val %}selected{% endif %}>{{ lbl }}</option>{% endfor %}</select>
+      {% elif s.kind == 'secret' %}
+        {% if crypto_ok %}
+          <input type="password" name="{{ s.key }}" value="" autocomplete="new-password" spellcheck="false" class="tin mono"
+                 placeholder="{% if secrets.get(s.key) %}•••• stored — type to replace{% else %}enter a value{% endif %}">
+          {% if s.generate %}<button type="button" class="ms-mini gen-secret" data-gen="{{ s.key }}">Generate</button>{% endif %}
+          {% if secrets.get(s.key) %}<label class="ms-clear"><input type="checkbox" name="{{ s.key }}__clear"> clear</label>{% endif %}
+        {% else %}
+          <span class="ms-warn">encryption off — set PILOT_ENCRYPTION_KEY</span>
+        {% endif %}
+      {% elif s.kind == 'int' %}
+        <input type="number" name="{{ s.key }}" value="{{ vals[s.key] }}" min="{{ s.min }}" max="{{ s.max }}" step="1" class="tin num">
+      {% else %}
+        <input type="text" name="{{ s.key }}" value="{{ vals[s.key] }}" class="tin mono" maxlength="{{ s.max or 200 }}" spellcheck="false" autocomplete="off"
+               style="min-width:200px">
+        {% if s.key == 'base_url' and detected_base_url %}<button type="button" class="ms-mini" data-url="{{ detected_base_url }}"
+               onclick="var i=this.previousElementSibling;i.value=this.dataset.url;i.focus();">Use detected</button>{% endif %}
+      {% endif %}
+    </span>
+  </div>
+  {% endif %}
 {% endmacro %}

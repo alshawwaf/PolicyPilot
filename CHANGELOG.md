@@ -20,19 +20,20 @@ A dedicated security audit (adversarially verified) found no blockers; two major
 - **Open redirect via a protocol-relative `next=`** (minor) — the table-prefs redirect now rejects `//host`
   and scheme-bearing targets (same-origin only).
 
-### Settings rebuilt as a launcher (no more endless scroll)
-- Settings is now a **launcher** (macOS System-Settings style): one **Operating mode** hero up top, then a
-  grid of tiles — each opens its **own focused page** with only that section's controls, a section rail to
-  switch, and a scoped Save. No single page scrolls forever; you go straight to the one thing you came for.
-- The **Operating mode** — **Read-only / Supervised / Autonomous** (an agent-autonomy ladder) — cascades the
-  agent gates (`mcp_allow_publish`, `aa_autopilot`) and the Behavior profile in one move, so "Autopilot" is no
-  longer scattered across a preset button + toggles + the profile. The mode is a smart front-end over the
-  existing settings (computed on load; tweaking any gate drops to **Custom**) — no new stored setting.
-- Each tile shows a live **current-state summary** (mode, profile, "session reuse on", key count, …). The
-  **Agent access** page carries the publish/Autopilot authorization matrix; **Automation logic** mirrors the
-  Behavior profile onto its individual knobs (Custom to edit); **API keys** is its own page. Saves are
-  **section-scoped** — saving one section never disturbs another's toggles. The old single long page, its
-  left section-nav, and the standalone "Autopilot preset" button are retired.
+### Settings rebuilt as a macOS System-Settings two-pane view
+- Settings is now a **single page in the macOS System Settings mold**: a fixed category **sidebar** on the
+  left (colour-tiled icons, gradient-highlighted active item) and a **detail pane that swaps in place** on the
+  right. Switching category is client-side (by URL hash) — no page navigation, no Back button, you never lose
+  your place. This replaces both the long-scroll page and the multi-page launcher that came before it.
+- It opens on a real **Overview** pane: the **Operating mode** ladder (Read-only / Supervised / Autonomous,
+  cascading `mcp_allow_publish` + `aa_autopilot` + the Behavior profile in one move) plus a **Current posture**
+  list that summarises every category at a glance and jumps straight into any of them. So "see everything"
+  costs zero clicks and "edit one thing" costs one.
+- Every existing setting stays, grouped into macOS-style inset cards with real switches, popups and fields.
+  **Agent access** carries the publish/Autopilot authorization matrix; **Automation logic** mirrors the
+  Behavior profile onto its individual knobs (Custom to edit); **API keys** is its own pane. Saves remain
+  **section-scoped** — saving one category never disturbs another's toggles. Old `/settings/<section>` links
+  redirect to the matching in-page pane.
 
 ### Layer-name resolution (UX)
 - The engine now **resolves the access-layer name** a user/agent supplies: a case-insensitive exact match,

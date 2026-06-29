@@ -1,100 +1,291 @@
 {% extends "base.html" %}
-{% from "_settings_macros.html" import icon %}
+{% from "_settings_macros.html" import icon, msrow %}
 {% block title %}Settings{% endblock %}
 {% block content %}
 <style>
-  .set-eyebrow { font-size:11px; font-weight:800; letter-spacing:.5px; text-transform:uppercase; color:var(--faint); margin:18px 2px 11px; }
-  .auto-strip { display:flex; align-items:center; gap:14px; flex-wrap:wrap; padding:11px 15px; border-radius:12px;
-    background:var(--accent-soft); border:1px solid var(--line); font-size:12.5px; }
-  .auto-strip .k { color:var(--muted); }
-  .auto-strip .dot { display:inline-flex; align-items:center; gap:6px; font-weight:600; }
-  .auto-strip .dot.on { color:var(--ok,#5dcaa5); } .auto-strip .dot.off { color:var(--faint); }
-  .auto-strip .mode-now { margin-left:auto; color:var(--faint); }
-  .modes { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-top:11px; }
-  @media (max-width:760px) { .modes { grid-template-columns:1fr; } }
-  .mode { position:relative; text-align:left; background:var(--surface-2); border:1px solid var(--line);
-    border-radius:13px; padding:14px; cursor:pointer; font-family:inherit; color:var(--text); transition:border-color .13s; }
-  .mode:hover { border-color:var(--accent); }
-  .mode.on { border-color:transparent; box-shadow:0 0 0 2px var(--accent); }
-  .mode .mi { width:30px; height:30px; border-radius:9px; background:var(--surface); display:flex; align-items:center; justify-content:center; color:var(--muted); margin-bottom:9px; }
-  .mode.on .mi { background:var(--accent-grad); color:#fff; }
-  .mode .mt { font-weight:700; font-size:14.5px; }
-  .mode .md { font-size:12px; color:var(--muted); margin-top:3px; line-height:1.45; min-height:34px; }
-  .mode .mg { margin-top:9px; font-size:11px; color:var(--faint); } .mode .mg b { color:var(--text); font-weight:600; }
-  .mode .chk { position:absolute; top:11px; right:12px; color:var(--accent); font-weight:800; display:none; }
-  .mode.on .chk { display:block; }
-  .mode-apply { margin-top:12px; display:flex; align-items:center; gap:12px; }
-  .tiles { display:grid; grid-template-columns:repeat(auto-fill,minmax(232px,1fr)); gap:13px; }
-  .tile { display:flex; gap:12px; align-items:flex-start; padding:15px 16px; border:1px solid var(--line);
-    border-radius:13px; background:var(--surface); color:var(--text); text-decoration:none; transition:border-color .13s, transform .08s; }
-  .tile:hover { border-color:var(--accent); transform:translateY(-1px); }
-  .tile .ti-ic { width:34px; height:34px; flex:none; border-radius:10px; background:var(--surface-2); display:flex; align-items:center; justify-content:center; color:var(--accent); }
-  .tile .tl { font-weight:650; font-size:14px; }
-  .tile .tb { font-size:11.5px; color:var(--muted); margin-top:2px; line-height:1.4; }
-  .tile .tsum { font-size:11px; color:var(--faint); margin-top:7px; }
-  .tile .arr { margin-left:auto; color:var(--faint); flex:none; }
+  #settings-app { --ss-card:var(--surface); --ss-ctrl:var(--surface-2); }
+  #settings-app .ss-wrap { display:grid; grid-template-columns:212px 1fr; gap:22px; align-items:start; }
+  @media (max-width:760px) { #settings-app .ss-wrap { grid-template-columns:1fr; } }
+  #settings-app .ss-side { position:sticky; top:14px; background:var(--ss-card); border:1px solid var(--line);
+    border-radius:14px; padding:11px 9px; }
+  #settings-app .ss-search { display:flex; align-items:center; gap:7px; background:var(--ss-ctrl);
+    border:1px solid var(--line); border-radius:8px; padding:6px 10px; margin-bottom:11px; }
+  #settings-app .ss-search input { border:0; background:transparent; color:var(--text); font:inherit; font-size:12.5px; width:100%; outline:none; }
+  #settings-app .ss-search svg { color:var(--faint); flex:none; }
+  #settings-app .si { display:flex; align-items:center; gap:10px; padding:6px 9px; border-radius:9px;
+    cursor:pointer; font-size:13px; color:var(--text); margin-bottom:1px; border:0; width:100%; background:transparent;
+    text-align:left; font-family:inherit; }
+  #settings-app .si:hover { background:var(--ss-ctrl); }
+  #settings-app .si.act { background:var(--accent-grad); color:#fff; }
+  #settings-app .si.act .tile { box-shadow:0 0 0 1.5px rgba(255,255,255,.3); }
+  #settings-app .tile { width:23px; height:23px; border-radius:6px; display:flex; align-items:center;
+    justify-content:center; color:#fff; flex:none; }
+  #settings-app .tile svg { width:14px; height:14px; }
+  #settings-app .sgap { height:11px; }
+  #settings-app .pane { display:none; }
+  #settings-app .pane.show { display:block; animation:ssfade .16s ease; }
+  @keyframes ssfade { from { opacity:0; transform:translateY(3px); } to { opacity:1; transform:none; } }
+  #settings-app .ss-head h1 { font-size:21px; margin:0 0 3px; }
+  #settings-app .ss-head p { font-size:13px; color:var(--muted); margin:0 0 18px; max-width:640px; line-height:1.5; }
+  #settings-app .cap { font-size:11px; letter-spacing:.4px; text-transform:uppercase; color:var(--faint);
+    font-weight:700; margin:20px 2px 8px; }
+  #settings-app .grp { background:var(--ss-card); border:1px solid var(--line); border-radius:13px; overflow:hidden; }
+  #settings-app .gr { display:flex; align-items:center; gap:14px; padding:12px 16px; border-top:1px solid var(--line); }
+  #settings-app .gr:first-child { border-top:0; }
+  #settings-app .gr.col { flex-direction:column; align-items:stretch; gap:8px; }
+  #settings-app .gr .gl { flex:1; font-size:13.5px; font-weight:550; }
+  #settings-app .gr .gl small { display:block; color:var(--faint); font-size:11.5px; font-weight:400; margin-top:2px; line-height:1.45; max-width:560px; }
+  #settings-app .gr .gc { display:flex; align-items:center; gap:8px; flex-wrap:wrap; justify-content:flex-end; }
+  #settings-app .gr.jump { cursor:pointer; }
+  #settings-app .gr.jump:hover { background:var(--ss-ctrl); }
+  #settings-app .gv { font-size:12.5px; color:var(--muted); }
+  #settings-app .chev { color:var(--faint); flex:none; }
+  #settings-app .tin { background:var(--ss-ctrl); border:1px solid var(--line); color:var(--text);
+    border-radius:8px; padding:7px 10px; font-size:13px; font-family:inherit; }
+  #settings-app .tin.mono { font-family:ui-monospace,monospace; }
+  #settings-app .tin.num { width:96px; }
+  #settings-app .tin.ta { width:100%; box-sizing:border-box; resize:vertical; }
+  #settings-app select.tin, #settings-app .gc select { background:var(--ss-ctrl); border:1px solid var(--line);
+    color:var(--text); border-radius:8px; padding:7px 10px; font-size:13px; font-family:inherit; }
+  #settings-app .ms-sw { display:inline-block; cursor:pointer; flex:none; }
+  #settings-app .ms-sw input { position:absolute; opacity:0; width:0; height:0; }
+  #settings-app .ms-sw span { display:block; width:40px; height:24px; border-radius:20px;
+    background:rgba(125,135,148,.4); position:relative; transition:.16s; }
+  #settings-app .ms-sw span::after { content:""; position:absolute; top:2px; left:2px; width:20px; height:20px;
+    border-radius:50%; background:#fff; transition:.16s; }
+  #settings-app .ms-sw input:checked + span { background:var(--accent); }
+  #settings-app .ms-sw input:checked + span::after { left:18px; }
+  #settings-app .ms-mini { background:var(--ss-ctrl); border:1px solid var(--line); color:var(--text);
+    border-radius:7px; padding:6px 11px; font-size:12px; cursor:pointer; font-family:inherit; }
+  #settings-app .ms-clear { display:inline-flex; align-items:center; gap:5px; font-size:12px; color:var(--muted); }
+  #settings-app .ms-warn { font-size:11.5px; color:var(--warn,#e0b252); max-width:320px; }
+  #settings-app .pill { font-size:10.5px; padding:2px 8px; border-radius:20px; background:var(--ss-ctrl);
+    color:var(--muted); margin-left:6px; vertical-align:middle; }
+  #settings-app .pill.ok { background:var(--accent-soft); color:var(--ok,#5dcaa5); }
+  #settings-app .ladder { display:grid; grid-template-columns:repeat(3,1fr); gap:7px; background:var(--ss-card);
+    border:1px solid var(--line); padding:6px; border-radius:13px; }
+  #settings-app .seg { text-align:left; padding:13px 14px; border-radius:9px; cursor:pointer; font-size:13.5px;
+    color:var(--text); font-weight:600; background:transparent; border:0; font-family:inherit; transition:.12s; }
+  #settings-app .seg:hover { background:var(--ss-ctrl); }
+  #settings-app .seg.on { background:var(--accent-grad); color:#fff; }
+  #settings-app .seg small { display:block; font-size:11px; font-weight:400; opacity:.85; margin-top:3px; }
+  #settings-app .casc { display:flex; gap:7px; margin-top:12px; flex-wrap:wrap; align-items:center; }
+  #settings-app .casc .l { font-size:11.5px; color:var(--faint); }
+  #settings-app .chip { font-size:11.5px; padding:3px 11px; border-radius:20px; background:var(--ss-ctrl); color:var(--muted); }
+  #settings-app .chip b { color:var(--text); font-weight:600; }
+  #settings-app .mode-apply { display:flex; align-items:center; gap:13px; margin-top:14px; }
+  #settings-app .mode-apply .small { font-size:12px; color:var(--muted); }
+  #settings-app .ss-save { display:flex; align-items:center; gap:13px; margin-top:18px; padding:13px 16px;
+    background:var(--ss-card); border:1px solid var(--line); border-radius:13px; position:sticky; bottom:12px; }
+  #settings-app .ss-save .stip { font-size:12px; color:var(--faint); }
+  #settings-app .ss-foot { margin-top:22px; padding-top:16px; border-top:1px solid var(--line); }
+  #settings-app .matrix { width:100%; border-collapse:collapse; font-size:12.5px; margin:0 0 6px;
+    background:var(--ss-card); border:1px solid var(--line); border-radius:11px; overflow:hidden; }
+  #settings-app .matrix th, #settings-app .matrix td { text-align:left; padding:8px 12px; border-bottom:1px solid var(--line); }
+  #settings-app .matrix th { font-size:10.5px; text-transform:uppercase; letter-spacing:.4px; color:var(--faint); }
+  #settings-app .matrix tr:last-child td { border-bottom:0; }
+  #settings-app .matrix td:first-child { font-weight:600; white-space:nowrap; }
+  #settings-app table.keys { width:100%; border-collapse:collapse; }
+  #settings-app table.keys th, #settings-app table.keys td { text-align:left; padding:8px 10px; border-bottom:1px solid var(--line); font-size:12.5px; }
+  #settings-app table.keys th { font-size:10.5px; text-transform:uppercase; letter-spacing:.4px; color:var(--faint); }
+  #settings-app .kform { display:flex; gap:9px; align-items:flex-end; flex-wrap:wrap; margin-top:14px; }
+  #settings-app .kform label { font-size:12.5px; font-weight:600; }
+  #settings-app .kform label input, #settings-app .kform label select { display:block; margin-top:4px; }
 </style>
 
 <div class="page-head">
   <span class="icon-chip lg">{{ icon('sliders', 24) }}</span>
   <div class="ph-main"><h1>Settings</h1>
-    <p class="ph-sub">Pick an operating mode to set the whole portal at once, or open a section to fine-tune. Changes take effect immediately on Save.</p></div>
+    <p class="ph-sub">Pick a category on the left — it opens here, in place. Start on Overview to set the operating mode and see your whole posture at a glance.</p></div>
 </div>
 
-<div class="auto-strip">
-  <span class="k">This portal’s agent can:</span>
-  <span class="dot {{ 'on' if vals.get('mcp_allow_publish') else 'off' }}">{{ icon('bolt', 15) }} Publish</span>
-  <span class="dot {{ 'on' if vals.get('aa_autopilot') else 'off' }}">{{ icon('bolt', 15) }} Autopilot</span>
-  <span class="dot off">{{ icon('database', 15) }} {% if vals.get('agent_rate_limit_per_min') %}{{ vals.get('agent_rate_limit_per_min') }}/min{% else %}no rate limit{% endif %}</span>
-  <span class="mode-now">mode: {{ active_mode }}</span>
-</div>
+<div id="settings-app">
+  <div class="ss-wrap">
+    <aside class="ss-side">
+      <div class="ss-search">{{ icon('eye', 15) }}<input type="text" id="ss-filter" placeholder="Search settings" autocomplete="off" spellcheck="false"></div>
+      <button type="button" class="si act" data-t="overview"><span class="tile" style="background:var(--accent)">{{ icon('dashboard', 14) }}</span>Overview</button>
+      <div class="sgap"></div>
+      {% for p in panes %}
+        {% if p.key in ['storage', 'keys'] %}<div class="sgap"></div>{% endif %}
+        <button type="button" class="si" data-t="{{ p.key }}"><span class="tile" style="background:{{ p.color }}">{{ icon(p.icon, 14) }}</span>{{ p.label }}</button>
+      {% endfor %}
+    </aside>
 
-<p class="set-eyebrow">Operating mode — one choice sets everything</p>
-<form method="post" action="/settings" id="mode-form">
-  <input type="hidden" name="section" value="mode">
-  <input type="checkbox" name="mcp_allow_publish" id="m-pub" style="display:none" {% if vals.get('mcp_allow_publish') %}checked{% endif %}>
-  <input type="checkbox" name="aa_autopilot" id="m-auto" style="display:none" {% if vals.get('aa_autopilot') %}checked{% endif %}>
-  <input type="hidden" name="aa_profile" id="m-prof" value="{{ vals.get('aa_profile') }}">
-  <div class="modes" id="modes">
-    <button type="button" class="mode {% if active_mode == 'readonly' %}on{% endif %}" data-mode="readonly" data-pub="0" data-auto="0" data-prof="balanced">
-      <span class="chk">✓</span><span class="mi">{{ icon('eye', 17) }}</span><div class="mt">Read-only</div>
-      <div class="md">Agents preview and explain. Look, don’t touch.</div><div class="mg">Publish <b>off</b> · Autopilot <b>—</b></div></button>
-    <button type="button" class="mode {% if active_mode == 'supervised' %}on{% endif %}" data-mode="supervised" data-pub="1" data-auto="0" data-prof="balanced">
-      <span class="chk">✓</span><span class="mi">{{ icon('shield-check', 17) }}</span><div class="mt">Supervised</div>
-      <div class="md">Agents propose; you approve each publish.</div><div class="mg">Publish <b>on</b> · Autopilot <b>off</b></div></button>
-    <button type="button" class="mode {% if active_mode == 'autonomous' %}on{% endif %}" data-mode="autonomous" data-pub="1" data-auto="1" data-prof="aggressive">
-      <span class="chk">✓</span><span class="mi">{{ icon('bolt', 17) }}</span><div class="mt">Autonomous</div>
-      <div class="md">One sentence resolves, applies and publishes. Hands-off.</div><div class="mg">Publish <b>on</b> · Autopilot <b>on</b></div></button>
-  </div>
-  <div class="mode-apply">
-    <button class="btn" type="submit" data-confirm="Apply this operating mode? It sets the agent’s publish + Autopilot gates and the behavior profile across the portal." data-confirm-title="Apply operating mode" data-confirm-ok="Apply mode">Apply mode</button>
-    <span class="muted small" id="mode-hint">Fine-tune the individual gates under <a href="/settings/agent">Agent access</a>.</span>
-  </div>
-</form>
+    <main class="ss-main">
+      <section class="pane show" data-p="overview">
+        <div class="ss-head"><h1>Overview</h1><p>Your portal's whole posture at a glance. Pick an operating mode, or jump into any category to fine-tune.</p></div>
+        <form method="post" action="/settings" id="mode-form">
+          <input type="hidden" name="section" value="mode">
+          <input type="checkbox" name="mcp_allow_publish" id="m-pub" style="display:none" {% if vals.get('mcp_allow_publish') %}checked{% endif %}>
+          <input type="checkbox" name="aa_autopilot" id="m-auto" style="display:none" {% if vals.get('aa_autopilot') %}checked{% endif %}>
+          <input type="hidden" name="aa_profile" id="m-prof" value="{{ vals.get('aa_profile') }}">
+          <div class="ladder" id="ms-ladder">
+            <button type="button" class="seg {% if active_mode == 'readonly' %}on{% endif %}" data-mode="readonly" data-pub="0" data-auto="0" data-prof="balanced" data-cpub="Off" data-cauto="—" data-cprof="Balanced">Read-only<small>Look, don't touch</small></button>
+            <button type="button" class="seg {% if active_mode == 'supervised' %}on{% endif %}" data-mode="supervised" data-pub="1" data-auto="0" data-prof="balanced" data-cpub="On" data-cauto="Off" data-cprof="Balanced">Supervised<small>Approve each publish</small></button>
+            <button type="button" class="seg {% if active_mode == 'autonomous' %}on{% endif %}" data-mode="autonomous" data-pub="1" data-auto="1" data-prof="aggressive" data-cpub="On" data-cauto="On" data-cprof="Aggressive">Autonomous<small>Hands-off</small></button>
+          </div>
+          <div class="casc"><span class="l">Cascades:</span>
+            <span class="chip">Publish <b id="c-pub">{{ 'On' if vals.get('mcp_allow_publish') else 'Off' }}</b></span>
+            <span class="chip">Autopilot <b id="c-auto">{{ 'On' if vals.get('aa_autopilot') else 'Off' }}</b></span>
+            <span class="chip">Profile <b id="c-prof">{{ (vals.get('aa_profile') or 'balanced')|capitalize }}</b></span>
+          </div>
+          <div class="mode-apply">
+            <button class="btn" type="submit" data-confirm="Apply this operating mode? It sets the agent's publish + Autopilot gates and the behavior profile across the portal." data-confirm-title="Apply operating mode" data-confirm-ok="Apply mode">Apply mode</button>
+            <span class="small" id="mode-hint">Current mode: <b>{{ {'readonly':'Read-only','supervised':'Supervised','autonomous':'Autonomous'}.get(active_mode,'Custom') }}</b>. Fine-tune the individual gates under Agent access.</span>
+          </div>
+        </form>
+        <div class="cap">Current posture</div>
+        <div class="grp">
+          {% for p in panes %}
+          <div class="gr jump" data-t="{{ p.key }}"><span class="gl">{{ p.label }}</span><span class="gv">{{ summaries.get(p.key, '') }}</span><svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></div>
+          {% endfor %}
+        </div>
+        <div class="ss-foot">
+          <form method="post" action="/settings/reset" style="margin:0;"><button class="btn secondary" type="submit" data-confirm="Restore ALL settings to defaults?" data-confirm-title="Restore defaults" data-confirm-ok="Restore defaults">Restore all defaults</button></form>
+        </div>
+      </section>
 
-<p class="set-eyebrow">All settings</p>
-<div class="tiles">
-  {% for t in tiles %}
-  <a class="tile" href="/settings/{{ t.key }}">
-    <span class="ti-ic">{{ icon(t.icon, 18) }}</span>
-    <span style="flex:1;"><span class="tl">{{ t.label }}</span><span class="tb">{{ t.blurb }}</span><span class="tsum">{{ t.summary }}</span></span>
-    <span class="arr"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></span>
-  </a>
-  {% endfor %}
+      {% for p in panes %}
+      <section class="pane" data-p="{{ p.key }}">
+        <div class="ss-head"><h1>{{ p.label }}</h1><p>{{ p.blurb }}</p></div>
+
+        {% if p.key == 'keys' %}
+          {% if new_key %}
+          <div class="grp" style="border-color:var(--ok,#5dcaa5);margin-bottom:14px;padding:13px 16px;">
+            <div style="font-weight:700;margin-bottom:7px;">New {{ new_key.scope }} key “{{ new_key.name }}” ({{ 'read-write' if new_key.can_write else 'read-only' }}) — copy it now (shown once) · expires {{ new_key.expires }}</div>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+              <input id="new-key-val" type="text" readonly value="{{ new_key.key }}" class="tin mono" style="flex:1;min-width:280px;" onclick="this.select();">
+              <button type="button" class="ms-mini" onclick="var i=document.getElementById('new-key-val');i.select();navigator.clipboard&&navigator.clipboard.writeText(i.value);this.textContent='Copied';">Copy</button>
+            </div>
+          </div>
+          {% endif %}
+          {% if api_keys %}
+          <div class="grp" style="padding:4px 8px;">
+            <table class="keys">
+              <thead><tr><th>Name</th><th>Scope</th><th>Access</th><th>Key</th><th>Last used</th><th>Expires</th><th></th></tr></thead>
+              <tbody>
+                {% for k in api_keys %}
+                <tr {% if k.status == 'expired' %}style="opacity:.55"{% endif %}>
+                  <td style="font-weight:600;">{{ k.name }}
+                    {% if k.status == 'expired' %}<span class="pill" style="color:var(--danger,#ef6b6b)">expired</span>
+                    {% elif k.status == 'soon' %}<span class="pill" style="color:var(--warn,#e0b252)">expires soon</span>
+                    {% elif k.status == 'unused' %}<span class="pill">unused 30d+</span>{% endif %}</td>
+                  <td><span class="pill">{{ k.scope }}</span></td>
+                  <td>{% if k.can_write %}<span class="pill">read-write</span>{% else %}<span class="pill ok" title="Preview/read tools only">read-only</span>{% endif %}</td>
+                  <td class="gv mono" style="font-family:ui-monospace,monospace">…{{ k.hint }}</td>
+                  <td class="gv">{{ k.last_used.strftime('%Y-%m-%d %H:%M') if k.last_used else 'never' }}</td>
+                  <td class="gv">
+                    <div style="font-weight:600;color:var(--text)">{{ k.expires.strftime('%Y-%m-%d') if k.expires else 'never' }}</div>
+                    <form method="post" action="/settings/api-keys/{{ k.id }}/expiry" style="display:flex;gap:4px;align-items:center;margin-top:4px;flex-wrap:wrap;">
+                      <input type="date" name="expires_date" class="tin" style="padding:3px 5px;font-size:11px;">
+                      <select name="expires" class="tin" style="padding:3px 5px;font-size:11px;"><option value="">— change —</option><option value="30">30 days</option><option value="90">90 days</option><option value="365">1 year</option><option value="never">never</option></select>
+                      <button class="ms-mini" type="submit" style="padding:3px 9px;font-size:11px;">Update</button></form></td>
+                  <td style="text-align:right;">
+                    <form method="post" action="/settings/api-keys/{{ k.id }}/revoke" style="margin:0;">
+                      <button class="ms-mini" type="submit" data-confirm="Revoke “{{ k.name }}”? Clients using it will get 401 immediately." data-confirm-title="Revoke API key" data-confirm-ok="Revoke">Revoke</button></form></td>
+                </tr>{% endfor %}
+              </tbody></table>
+          </div>
+          {% else %}<p class="gv">No API keys yet.</p>{% endif %}
+          <form method="post" action="/settings/api-keys" class="kform">
+            <label>Name<input type="text" name="name" placeholder="n8n-prod" maxlength="120" required class="tin"></label>
+            <label>Scope<select name="scope" class="tin">{% for sc in api_scopes %}<option value="{{ sc }}">{{ sc }}</option>{% endfor %}</select></label>
+            <label>Expires<select name="expires" class="tin">{% for val, lbl in expiry_presets %}<option value="{{ val }}" {% if val == '90' %}selected{% endif %}>{{ lbl }}</option>{% endfor %}</select></label>
+            <label>or on date<input type="date" name="expires_date" class="tin"></label>
+            <label style="display:flex;align-items:center;gap:6px;padding-bottom:8px;font-weight:500;" title="A read-only key can preview/read but every write tool refuses."><input type="checkbox" name="readonly"> Read-only</label>
+            <button class="btn" type="submit">+ New key</button>
+          </form>
+          <p class="gv" style="margin-top:10px;">Keys are least-privilege by <b>scope</b> (mcp / webhook / api) and <b>access</b> (read-write vs read-only). Shown once at creation; revoking is immediate.</p>
+
+        {% else %}
+          {% if p.key == 'agent' %}
+          <table class="matrix">
+            <thead><tr><th>Posture</th><th>Publish</th><th>Autopilot</th><th>What the agent does</th></tr></thead>
+            <tbody>
+              <tr><td>Read-only</td><td>off</td><td>—</td><td>Previews / dry-runs; a publish is refused.</td></tr>
+              <tr><td>Supervised</td><td>on</td><td>off</td><td>Commits only when your message says “publish”.</td></tr>
+              <tr><td>Autonomous</td><td>on</td><td>on</td><td>Resolves, applies and publishes in one turn.</td></tr>
+            </tbody></table>
+          <p class="gv" style="margin:-2px 0 14px;">A <b>read-only</b> API key can never publish, whatever these say. Set the broad posture from <a href="#overview" class="ss-jump" data-t="overview">Overview</a>.</p>
+          {% endif %}
+          <form method="post" action="/settings">
+            <input type="hidden" name="section" value="{{ p.key }}">
+            <div class="grp">{% for s in p['items'] %}{{ msrow(s, vals, secrets, crypto_ok, detected_base_url) }}{% endfor %}</div>
+            <div class="ss-save"><button class="btn" type="submit">Save {{ p.label|lower }}</button><span class="stip">Saves only {{ p.label }} — other categories are untouched.</span></div>
+          </form>
+        {% endif %}
+      </section>
+      {% endfor %}
+    </main>
+  </div>
 </div>
 
 <script>
-  (function () {
-    var pub = document.getElementById('m-pub'), auto = document.getElementById('m-auto'), prof = document.getElementById('m-prof');
-    var hint = document.getElementById('mode-hint');
-    document.querySelectorAll('.mode').forEach(function (b) {
-      b.addEventListener('click', function () {
-        document.querySelectorAll('.mode').forEach(function (x) { x.classList.remove('on'); });
-        b.classList.add('on');
-        pub.checked = b.dataset.pub === '1'; auto.checked = b.dataset.auto === '1'; prof.value = b.dataset.prof;
-        if (hint) hint.textContent = 'Click “Apply mode” to save, or fine-tune the gates under Agent access.';
-      });
+(function () {
+  var app = document.getElementById('settings-app');
+  function show(t) {
+    if (!app.querySelector('.pane[data-p="' + t + '"]')) t = 'overview';
+    app.querySelectorAll('.pane').forEach(function (p) { p.classList.toggle('show', p.dataset.p === t); });
+    app.querySelectorAll('.si').forEach(function (s) { s.classList.toggle('act', s.dataset.t === t); });
+    try { history.replaceState(null, '', '#' + t); } catch (e) {}
+    window.scrollTo({ top: 0, behavior: 'instant' in window ? 'instant' : 'auto' });
+  }
+  app.querySelectorAll('[data-t]').forEach(function (el) {
+    el.addEventListener('click', function (e) { e.preventDefault(); show(el.dataset.t); });
+  });
+  show((location.hash || '').replace('#', '') || 'overview');
+
+  var filter = document.getElementById('ss-filter');
+  if (filter) filter.addEventListener('input', function () {
+    var q = filter.value.trim().toLowerCase();
+    app.querySelectorAll('.si[data-t]').forEach(function (s) {
+      if (s.dataset.t === 'overview') return;
+      s.style.display = (!q || s.textContent.toLowerCase().indexOf(q) >= 0) ? '' : 'none';
     });
-  })();
+  });
+
+  var pub = document.getElementById('m-pub'), auto = document.getElementById('m-auto'), prof = document.getElementById('m-prof');
+  var hint = document.getElementById('mode-hint');
+  app.querySelectorAll('#ms-ladder .seg').forEach(function (b) {
+    b.addEventListener('click', function () {
+      app.querySelectorAll('#ms-ladder .seg').forEach(function (x) { x.classList.remove('on'); });
+      b.classList.add('on');
+      pub.checked = b.dataset.pub === '1'; auto.checked = b.dataset.auto === '1'; prof.value = b.dataset.prof;
+      document.getElementById('c-pub').textContent = b.dataset.cpub;
+      document.getElementById('c-auto').textContent = b.dataset.cauto;
+      document.getElementById('c-prof').textContent = b.dataset.cprof;
+      if (hint) hint.innerHTML = 'Click <b>Apply mode</b> to save this, or fine-tune the gates under Agent access.';
+    });
+  });
+
+  function token() { var a = new Uint8Array(24); (window.crypto || window.msCrypto).getRandomValues(a);
+    return 'policypilot_' + btoa(String.fromCharCode.apply(null, a)).replace(/[^A-Za-z0-9]/g, '').slice(0, 32); }
+  app.querySelectorAll('.gen-secret').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var key = btn.getAttribute('data-gen'), inp = app.querySelector('input[name="' + key + '"]'); if (!inp) return;
+      inp.value = token(); inp.type = 'text';
+      var clr = app.querySelector('input[name="' + key + '__clear"]'); if (clr) clr.checked = false;
+      inp.focus(); inp.select(); try { navigator.clipboard && navigator.clipboard.writeText(inp.value); } catch (e) {}
+      btn.textContent = 'Copied — Save to store'; setTimeout(function () { btn.textContent = 'Generate'; }, 2500);
+    });
+  });
+
+  var sel = app.querySelector('select[name="aa_profile"]');
+  if (sel) {
+    var KNOBS = ['aa_app_carveout', 'aa_override_blocking_deny', 'aa_prefer_widen', 'aa_emit_notes', 'aa_ignore_conditions'];
+    var PROFILES = { conservative:{aa_app_carveout:false,aa_override_blocking_deny:false,aa_prefer_widen:false,aa_emit_notes:true,aa_ignore_conditions:false},
+      balanced:{aa_app_carveout:true,aa_override_blocking_deny:true,aa_prefer_widen:true,aa_emit_notes:true,aa_ignore_conditions:false},
+      aggressive:{aa_app_carveout:true,aa_override_blocking_deny:true,aa_prefer_widen:true,aa_emit_notes:true,aa_ignore_conditions:true} };
+    var boxes = {}, rows = [], customVals = {};
+    KNOBS.forEach(function (k) { var el = app.querySelector('input[name="' + k + '"]'); if (el) { boxes[k] = el; var r = el.closest('.gr'); if (r) rows.push(r); customVals[k] = el.checked; } });
+    KNOBS.forEach(function (k) { if (boxes[k]) boxes[k].addEventListener('change', function () { if (sel.value === 'custom') customVals[k] = boxes[k].checked; }); });
+    function sync() {
+      var prof = sel.value, custom = prof === 'custom', v = PROFILES[prof];
+      KNOBS.forEach(function (k) { if (!boxes[k]) return; if (custom) boxes[k].checked = customVals[k]; else if (v) boxes[k].checked = !!v[k]; });
+      rows.forEach(function (r) { r.style.opacity = custom ? '' : '.6'; r.style.pointerEvents = custom ? '' : 'none'; });
+    }
+    sel.addEventListener('change', sync); sync();
+  }
+})();
 </script>
 {% endblock %}

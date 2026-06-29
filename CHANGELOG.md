@@ -7,6 +7,15 @@ All notable changes to **PolicyPilot** are documented here. This project follows
 
 Post-1.0.0 hardening of the agent surface, ahead of broader live validation.
 
+### Policy Manager — a first-class human view over the policy
+- New top-level **Policy Manager** (nav + `/policy-manager`): the human "fourth face" over the same engine.
+  It lists your management servers; opening one goes to the live policy viewer/editor — browse an access
+  layer (rulebase pulled over `web_api`, every cell resolved to object names, sections / negation / disabled
+  rules shown) and edit a rule (action, track, name, comments, enabled) with a **dry-run** or **publish**.
+  Every published change flows through the same change log + governance audit. (The viewer/editor already
+  existed under a management server; this surfaces it as a discoverable destination and retires the home
+  "coming soon" card.) Adding and reordering rules are the next roadmap step.
+
 ### Governance & audit — a work-note after every committed change
 - Every COMMITTED change — an agent/REST/webhook publish to a live SMS (Rail A) or a real dynamic-layer push
   to a gateway (Rail B) — now raises a **governance event**: an in-app notification to every portal user (the

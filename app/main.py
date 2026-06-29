@@ -34,7 +34,7 @@ def _setup_logging() -> None:
     log.setLevel(lvl)
 from .routers import (
     access_automation, activity, api_v1, dynamic_layers, exports, gateways,
-    gaia_mock, mgmt, notifications, settings as settings_router, ui,
+    gaia_mock, mgmt, notifications, policy_manager, settings as settings_router, ui,
 )
 from .security import hash_password
 
@@ -129,6 +129,7 @@ def create_app() -> FastAPI:
     app.include_router(gateways.router)
     app.include_router(activity.router)
     app.include_router(mgmt.router)
+    app.include_router(policy_manager.router)
     app.include_router(access_automation.router)
     app.include_router(settings_router.router)
     app.include_router(notifications.router)

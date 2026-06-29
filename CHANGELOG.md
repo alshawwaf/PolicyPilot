@@ -20,17 +20,19 @@ A dedicated security audit (adversarially verified) found no blockers; two major
 - **Open redirect via a protocol-relative `next=`** (minor) — the table-prefs redirect now rejects `//host`
   and scheme-bearing targets (same-origin only).
 
-### Settings redesigned around Operating modes
-- The Settings page is rebuilt as a focused, no-endless-scroll layout led by one **Operating mode** —
-  **Read-only / Supervised / Autonomous** (an agent-autonomy ladder). Picking a mode cascades the agent
-  gates (`mcp_allow_publish`, `aa_autopilot`) and the Behavior profile in one move, so "Autopilot" is no
+### Settings rebuilt as a launcher (no more endless scroll)
+- Settings is now a **launcher** (macOS System-Settings style): one **Operating mode** hero up top, then a
+  grid of tiles — each opens its **own focused page** with only that section's controls, a section rail to
+  switch, and a scoped Save. No single page scrolls forever; you go straight to the one thing you came for.
+- The **Operating mode** — **Read-only / Supervised / Autonomous** (an agent-autonomy ladder) — cascades the
+  agent gates (`mcp_allow_publish`, `aa_autopilot`) and the Behavior profile in one move, so "Autopilot" is no
   longer scattered across a preset button + toggles + the profile. The mode is a smart front-end over the
-  existing settings (computed on load; tweaking any toggle drops to **Custom**) — no new stored setting.
-- A persistent **agent-autonomy strip** ("this portal's agent can: Publish · Autopilot · rate") sits up top;
-  the **Agent authorization** card consolidates the gates + the trust matrix; the **Behavior profile** is its
-  own clearly-labelled "separate axis" card; everything else (Management API, Storage, naming, Governance,
-  webhook, write-back, Portal) collapses into a one-open **Advanced** accordion, with a sticky Save bar. The
-  old left section-nav and the standalone "Autopilot preset" button are retired.
+  existing settings (computed on load; tweaking any gate drops to **Custom**) — no new stored setting.
+- Each tile shows a live **current-state summary** (mode, profile, "session reuse on", key count, …). The
+  **Agent access** page carries the publish/Autopilot authorization matrix; **Automation logic** mirrors the
+  Behavior profile onto its individual knobs (Custom to edit); **API keys** is its own page. Saves are
+  **section-scoped** — saving one section never disturbs another's toggles. The old single long page, its
+  left section-nav, and the standalone "Autopilot preset" button are retired.
 
 ### Layer-name resolution (UX)
 - The engine now **resolves the access-layer name** a user/agent supplies: a case-insensitive exact match,

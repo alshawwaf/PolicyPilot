@@ -76,45 +76,125 @@ def _detected_base_url(request: Request) -> str:
     return f"{proto}://{host}".rstrip("/") if host else ""
 
 
+# --- Settings launcher: each section is its own focused page (no single long page) ----------------
+# key -> (label, icon token, settings-group it edits, one-line blurb). "keys" is special (API keys, not a
+# settings group). Order here is the order of tiles on the launcher + items in the section rail.
+SECTIONS = [
+    ("agent",      "Agent access",        "MCP / agent",            "robot",   "What an LLM agent over /mcp may do — publish, Autopilot, rate limit."),
+    ("logic",      "Automation logic",    "Access automation logic", "sliders", "How the engine shapes a change — the Behavior profile."),
+    ("naming",     "Automation naming",   "Access automation",       "tag",     "How auto-created objects and rules are named."),
+    ("management", "Management API",      "Management API",          "server",  "How the portal logs in and caches when reading/writing the SMS."),
+    ("storage",    "Storage & retention", "Storage & retention",     "database","Bound the activity log so a long run never fills the disk."),
+    ("governance", "Governance & audit",  "Governance & audit",      "shield",  "A work-note after every committed change."),
+    ("webhook",    "Ticketing webhook",  "Ticketing webhook",       "webhook", "Turn a ServiceNow / Jira / custom ticket into a policy change."),
+    ("writeback",  "Ticket write-back",  "Ticket write-back",       "reply",   "Optional ServiceNow write-back adapter."),
+    ("portal",     "Portal",             "Portal",                  "layout",  "Portal-wide options."),
+    ("keys",       "API keys",           None,                      "key",     "Named, scoped, revocable keys for /mcp, the REST API, and the webhook."),
+]
+_SECTION_GROUP = {key: group for key, _l, group, _i, _b in SECTIONS if group}
+
+
+def _active_mode(vals: dict) -> str:
+    """The Operating mode implied by the current gate + profile values (else 'custom')."""
+    p, a, pr = vals.get("mcp_allow_publish"), vals.get("aa_autopilot"), vals.get("aa_profile")
+    if p and a and pr == "aggressive":
+        return "autonomous"
+    if p and not a and pr == "balanced":
+        return "supervised"
+    if (not p) and (not a) and pr == "balanced":
+        return "readonly"
+    return "custom"
+
+
+def _section_summaries(vals: dict, secrets: dict, key_count: int) -> dict:
+    """A short current-state line per launcher tile."""
+    mode = {"readonly": "Read-only", "supervised": "Supervised", "autonomous": "Autonomous"}.get(_active_mode(vals), "Custom")
+    recs = vals.get("activity_max_records") or 0
+    return {
+        "agent": mode,
+        "logic": (vals.get("aa_profile") or "balanced").split(" ")[0].title(),
+        "naming": "object + rule templates",
+        "management": "session reuse " + ("on" if vals.get("mgmt_session_reuse") else "off"),
+        "storage": (str(recs) + " records") if recs else "by age",
+        "governance": "audit " + ("on" if vals.get("audit_notify") else "off") + (" · webhook" if secrets.get("audit_webhook_url") else ""),
+        "webhook": "enabled" if secrets.get("webhook_token") else "disabled",
+        "writeback": "ServiceNow set" if secrets.get("servicenow_password") else "not configured",
+        "portal": "portal options",
+        "keys": str(key_count) + (" key" if key_count == 1 else " keys"),
+    }
+
+
 @router.get("/settings", response_class=HTMLResponse)
 def settings_page(request: Request, db: Session = Depends(get_db)):
+    """The launcher: the Operating-mode hero + a tile per section. Each tile opens its own focused page."""
     user = get_user_or_none(request, db)
     if user is None:
         return RedirectResponse("/login", status_code=303)
-    new_key = request.session.pop("new_api_key", None)   # one-time reveal (NOT via _flash → not persisted)
-    now = dt.datetime.now(dt.timezone.utc)
+    vals = app_settings.all_values(fresh=True)
+    secrets = app_settings.secret_status()
+    summaries = _section_summaries(vals, secrets, len(api_keys.list_keys()))
+    tiles = [{"key": k, "label": l, "icon": i, "blurb": b, "summary": summaries.get(k, "")}
+             for (k, l, _g, i, b) in SECTIONS]
     return templates.TemplateResponse(request, "settings.html",
-                                      {"groups": _grouped(), "vals": app_settings.all_values(fresh=True),
-                                       "secrets": app_settings.secret_status(),       # {key: is_set} — never the value
-                                       "crypto_ok": app_settings.secret_available(),
-                                       "api_keys": _key_rows(now),
-                                       "api_scopes": api_keys.SCOPES,
-                                       "expiry_presets": EXPIRY_PRESETS,
-                                       "new_key": new_key,
-                                       "detected_base_url": _detected_base_url(request),
+                                      {"tiles": tiles, "vals": vals, "active_mode": _active_mode(vals),
                                        "flash": _pop_flash(request)})
+
+
+@router.get("/settings/{section}", response_class=HTMLResponse)
+def settings_section(section: str, request: Request, db: Session = Depends(get_db)):
+    """One focused section — only this section's controls, with a rail to switch and a scoped Save."""
+    user = get_user_or_none(request, db)
+    if user is None:
+        return RedirectResponse("/login", status_code=303)
+    meta = next((m for m in SECTIONS if m[0] == section), None)
+    if meta is None:
+        return RedirectResponse("/settings", status_code=303)
+    key, label, group, icon, blurb = meta
+    ctx = {"section": key, "section_label": label, "section_blurb": blurb, "section_icon": icon,
+           "sections": [{"key": k, "label": l, "icon": i} for (k, l, _g, i, _b) in SECTIONS],
+           "vals": app_settings.all_values(fresh=True), "active_mode": _active_mode(app_settings.all_values()),
+           "flash": _pop_flash(request)}
+    if key == "keys":
+        ctx.update({"api_keys": _key_rows(dt.datetime.now(dt.timezone.utc)), "api_scopes": api_keys.SCOPES,
+                    "expiry_presets": EXPIRY_PRESETS, "new_key": request.session.pop("new_api_key", None)})
+    else:
+        ctx.update({"items": _grouped().get(group, []), "secrets": app_settings.secret_status(),
+                    "crypto_ok": app_settings.secret_available(), "detected_base_url": _detected_base_url(request)})
+    return templates.TemplateResponse(request, "settings_section.html", ctx)
 
 
 @router.post("/settings")
 async def settings_save(request: Request, db: Session = Depends(get_db)):
+    """Section-scoped save: persist ONLY the keys belonging to the posted section (so a partial form never
+    resets another section's toggles). ``section=mode`` saves the three Operating-mode keys."""
     user = get_user_or_none(request, db)
     if user is None:
         return RedirectResponse("/login", status_code=303)
     form = await request.form()
+    section = (form.get("section") or "").strip()
+    if section == "mode":
+        keys, dest = {"mcp_allow_publish", "aa_autopilot", "aa_profile"}, "/settings"
+    elif section in _SECTION_GROUP:
+        group = _SECTION_GROUP[section]
+        keys, dest = {s.key for s in app_settings.SETTINGS if s.group == group}, "/settings/" + section
+    else:
+        return RedirectResponse("/settings", status_code=303)
+
     new: dict = {}
     for s in app_settings.SETTINGS:
-        if s.kind == "secret":
-            continue                            # secrets handled write-only below, never echoed/round-tripped
+        if s.key not in keys or s.kind == "secret":
+            continue
         if s.kind == "bool":
-            new[s.key] = s.key in form          # an unchecked checkbox is simply absent from the form
+            new[s.key] = s.key in form          # only this section's bools — others are untouched
         elif s.key in form:
-            new[s.key] = form[s.key]            # validated + clamped in app_settings.save()
-    app_settings.save(new)
+            new[s.key] = form[s.key]
+    if new:
+        app_settings.save(new)
 
-    # Secrets are write-only: a blank field means "keep current"; a "<key>__clear" checkbox removes it;
-    # a non-empty value sets/rotates it (encrypted at rest). Refuse cleartext storage if crypto is off.
     secret_err = None
     for s in app_settings.secret_settings():
+        if s.key not in keys:
+            continue
         if form.get(s.key + "__clear"):
             app_settings.clear_secret(s.key)
             continue
@@ -126,8 +206,8 @@ async def settings_save(request: Request, db: Session = Depends(get_db)):
                 secret_err = ("Can't store secrets: at-rest encryption is unavailable. Set "
                               "PILOT_ENCRYPTION_KEY (or PILOT_SESSION_SECRET) and restart, or keep using "
                               "the PILOT_* env vars.")
-    _flash(request, secret_err or "Settings saved — they take effect immediately.")
-    return RedirectResponse("/settings", status_code=303)
+    _flash(request, secret_err or "Saved — changes take effect immediately.")
+    return RedirectResponse(dest, status_code=303)
 
 
 @router.post("/settings/reset")
@@ -160,7 +240,7 @@ async def api_key_create(request: Request, db: Session = Depends(get_db)):
                                       "expires": exp_txt, "can_write": can_write}
     _flash(request, f"API key '{row.name}' ({row.scope}, {cap_txt}, expires {exp_txt}) created — copy it "
                     "now, it's shown only once.")
-    return RedirectResponse("/settings#grp-api-keys", status_code=303)
+    return RedirectResponse("/settings/keys", status_code=303)
 
 
 @router.post("/settings/api-keys/{key_id}/expiry")
@@ -179,18 +259,18 @@ async def api_key_set_expiry(key_id: int, request: Request, db: Session = Depend
                 hour=23, minute=59, second=59, tzinfo=dt.timezone.utc)
         except ValueError:
             _flash(request, "That date wasn’t valid — expiry left unchanged.")
-            return RedirectResponse("/settings#grp-api-keys", status_code=303)
+            return RedirectResponse("/settings/keys", status_code=303)
     elif preset == "never":
         expires_at = None
     elif preset.isdigit():
         expires_at = dt.datetime.now(dt.timezone.utc) + dt.timedelta(days=max(1, int(preset)))
     else:
         _flash(request, "Pick a date or a preset — expiry left unchanged.")
-        return RedirectResponse("/settings#grp-api-keys", status_code=303)
+        return RedirectResponse("/settings/keys", status_code=303)
     if api_keys.set_expiry(key_id, expires_at):
         exp_txt = expires_at.strftime("%Y-%m-%d") if expires_at else "never"
         _flash(request, f"API key expiry updated to {exp_txt}.")
-    return RedirectResponse("/settings#grp-api-keys", status_code=303)
+    return RedirectResponse("/settings/keys", status_code=303)
 
 
 @router.post("/settings/api-keys/{key_id}/revoke")
@@ -200,7 +280,7 @@ def api_key_revoke(key_id: int, request: Request, db: Session = Depends(get_db))
         return RedirectResponse("/login", status_code=303)
     if api_keys.revoke(key_id):
         _flash(request, "API key revoked — it can no longer authenticate.")
-    return RedirectResponse("/settings#grp-api-keys", status_code=303)
+    return RedirectResponse("/settings/keys", status_code=303)
 
 
 @router.post("/prefs/table/{table_id}/columns")

@@ -1,0 +1,169 @@
+{% extends "base.html" %}
+{% from "_settings_macros.html" import icon, setrow %}
+{% block title %}{{ section_label }} — Settings{% endblock %}
+{% block content %}
+<style>
+  .ss-crumb { font-size:12.5px; color:var(--muted); margin:0 0 12px; }
+  .ss-crumb a { color:var(--muted); text-decoration:none; } .ss-crumb a:hover { color:var(--accent); }
+  .ss-layout { display:grid; grid-template-columns:210px 1fr; gap:18px; align-items:start; }
+  @media (max-width:760px) { .ss-layout { grid-template-columns:1fr; } }
+  .ss-rail { position:sticky; top:14px; display:flex; flex-direction:column; gap:2px; }
+  .ss-rail a { display:flex; align-items:center; gap:10px; padding:9px 11px; border-radius:9px; color:var(--muted);
+    text-decoration:none; font-size:13px; transition:background .12s, color .12s; }
+  .ss-rail a:hover { background:var(--surface-2); color:var(--text); }
+  .ss-rail a.on { background:var(--accent-grad); color:#fff; }
+  .ss-rail a svg { width:17px; height:17px; flex:none; }
+  .ss-head { display:flex; align-items:center; gap:11px; margin:0 0 14px; }
+  .ss-head .ss-ic { width:36px; height:36px; border-radius:10px; background:var(--surface-2); display:flex; align-items:center; justify-content:center; color:var(--accent); }
+  .ss-head h1 { font-size:19px; margin:0; }
+  .ss-head p { font-size:12.5px; color:var(--muted); margin:2px 0 0; }
+  .card { background:var(--surface); border:1px solid var(--line); border-radius:14px; padding:16px 18px; }
+  .set-intro { color:var(--muted); font-size:12.5px; line-height:1.55; margin:-2px 0 12px; max-width:760px; }
+  .setrow { padding:12px 0; border-top:1px solid var(--line); }
+  .setrow:first-of-type { border-top:0; padding-top:4px; }
+  .set-line { display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
+  .set-name { font-weight:650; font-size:13.5px; flex:0 0 230px; max-width:230px; }
+  .set-ctrl { flex:1 1 240px; display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .set-ctrl input[type=text], .set-ctrl input[type=password], .set-ctrl select { min-width:240px; }
+  .set-ctrl input[type=number] { width:120px; }
+  .set-toggle { display:flex; align-items:center; gap:11px; font-weight:650; font-size:13.5px; cursor:pointer; }
+  .set-help { margin-top:7px; font-size:12.5px; color:var(--muted); line-height:1.55; max-width:760px; }
+  .set-mono { font-family:ui-monospace,monospace; }
+  @media (max-width:760px) { .set-name { flex-basis:100%; max-width:none; } }
+  .agent-matrix table.mini { border-collapse:collapse; width:100%; font-size:12.5px; margin:2px 0 12px; }
+  .agent-matrix th, .agent-matrix td { text-align:left; padding:7px 10px; border-bottom:1px solid var(--line); }
+  .agent-matrix th { font-size:11px; text-transform:uppercase; letter-spacing:.4px; color:var(--faint); font-weight:600; }
+  .agent-matrix tr:last-child td { border-bottom:0; } .agent-matrix td:first-child { font-weight:650; white-space:nowrap; }
+  .agent-matrix .pill { font-size:11px; }
+  .ss-save { display:flex; gap:12px; align-items:center; margin-top:16px; padding:13px 16px; background:var(--surface-2);
+    border:1px solid var(--line); border-radius:13px; position:sticky; bottom:14px; box-shadow:0 8px 24px rgba(0,0,0,.26); }
+  .ss-save .grow { flex:1; color:var(--faint); font-size:12px; text-align:right; }
+  .ro-note { margin-top:10px; font-size:11.5px; color:var(--faint); }
+  .pill.ok { background:var(--ok-bg,rgba(46,158,107,.14)); color:var(--ok,#5dcaa5); }
+</style>
+
+<p class="ss-crumb"><a href="/settings">‹ All settings</a></p>
+<div class="ss-layout">
+  <nav class="ss-rail" aria-label="Settings sections">
+    {% for s in sections %}
+    <a href="/settings/{{ s.key }}" class="{{ 'on' if s.key == section }}">{{ icon(s.icon, 17) }}{{ s.label }}</a>
+    {% endfor %}
+  </nav>
+
+  <div class="ss-main">
+    <div class="ss-head"><span class="ss-ic">{{ icon(section_icon, 18) }}</span>
+      <div><h1>{{ section_label }}</h1><p>{{ section_blurb }}</p></div></div>
+
+    {% if section == 'keys' %}
+    <div class="card">
+      {% if new_key %}
+      <div style="border:1px solid var(--ok-line,#2e9e6b);background:var(--ok-bg,rgba(46,158,107,.08));border-radius:11px;padding:12px 14px;margin:0 0 14px;">
+        <div style="font-weight:700;margin-bottom:6px;">New {{ new_key.scope }} key “{{ new_key.name }}” ({{ 'read-write' if new_key.can_write else 'read-only' }}) — copy it now (shown once) · expires {{ new_key.expires }}</div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+          <input id="new-key-val" type="text" readonly value="{{ new_key.key }}" style="flex:1;min-width:300px;font-family:ui-monospace,monospace;font-size:13px;" onclick="this.select();">
+          <button type="button" class="btn" onclick="var i=document.getElementById('new-key-val');i.select();navigator.clipboard&&navigator.clipboard.writeText(i.value);this.textContent='Copied';">Copy</button>
+        </div></div>
+      {% endif %}
+      {% if api_keys %}
+      <div class="tablewrap"><table class="data" style="width:100%;border-collapse:collapse;margin-bottom:14px;">
+        <thead><tr style="text-align:left;border-bottom:1px solid var(--line);">
+          <th style="padding:7px 8px;">Name</th><th style="padding:7px 8px;">Scope</th><th style="padding:7px 8px;">Access</th>
+          <th style="padding:7px 8px;">Key</th><th style="padding:7px 8px;">Created</th><th style="padding:7px 8px;">Last used</th>
+          <th style="padding:7px 8px;">Expires</th><th style="padding:7px 8px;"></th></tr></thead>
+        <tbody>
+          {% for k in api_keys %}
+          <tr style="border-bottom:1px solid var(--line);{% if k.status == 'expired' %}opacity:.6;{% endif %}">
+            <td style="padding:7px 8px;font-weight:600;">{{ k.name }}
+              {% if k.status == 'expired' %}<span class="pill" style="font-size:10px;background:var(--danger-bg);color:var(--danger);">expired</span>
+              {% elif k.status == 'soon' %}<span class="pill" style="font-size:10px;background:var(--warn-bg);color:var(--warn);">expires soon</span>
+              {% elif k.status == 'unused' %}<span class="pill" style="font-size:10px;background:var(--surface-2);color:var(--muted);">unused 30d+</span>{% endif %}</td>
+            <td style="padding:7px 8px;"><span class="pill" style="font-size:11px;">{{ k.scope }}</span></td>
+            <td style="padding:7px 8px;">{% if k.can_write %}<span class="pill" style="font-size:11px;">read-write</span>{% else %}<span class="pill ok" style="font-size:11px;" title="Preview/read tools only">read-only</span>{% endif %}</td>
+            <td style="padding:7px 8px;font-family:ui-monospace,monospace;color:var(--muted);">…{{ k.hint }}</td>
+            <td style="padding:7px 8px;" class="small muted">{{ k.created.strftime('%Y-%m-%d') if k.created else '—' }}</td>
+            <td style="padding:7px 8px;" class="small muted">{{ k.last_used.strftime('%Y-%m-%d %H:%M') if k.last_used else 'never' }}</td>
+            <td style="padding:7px 8px;" class="small muted">
+              <div style="font-weight:600;color:var(--text);">{{ k.expires.strftime('%Y-%m-%d') if k.expires else 'never' }}</div>
+              <form method="post" action="/settings/api-keys/{{ k.id }}/expiry" style="display:flex;gap:4px;align-items:center;margin-top:4px;flex-wrap:wrap;">
+                <input type="date" name="expires_date" style="font-size:11px;padding:2px 4px;">
+                <select name="expires" style="font-size:11px;padding:2px 4px;"><option value="">— change —</option><option value="30">30 days</option><option value="90">90 days</option><option value="365">1 year</option><option value="never">never</option></select>
+                <button class="btn secondary" type="submit" style="padding:2px 9px;font-size:11px;">Update</button></form></td>
+            <td style="padding:7px 8px;text-align:right;">
+              <form method="post" action="/settings/api-keys/{{ k.id }}/revoke" style="margin:0;">
+                <button class="btn secondary" type="submit" style="padding:4px 12px;font-size:12px;" data-confirm="Revoke “{{ k.name }}”? Clients using it will get 401 immediately." data-confirm-title="Revoke API key" data-confirm-ok="Revoke">Revoke</button></form></td>
+          </tr>{% endfor %}
+        </tbody></table></div>
+      {% else %}<p class="muted small">No API keys yet.</p>{% endif %}
+      <form method="post" action="/settings/api-keys" style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;">
+        <label style="font-weight:600;font-size:13px;">Name<input type="text" name="name" placeholder="e.g. n8n-prod" maxlength="120" required style="display:block;min-width:200px;margin-top:3px;"></label>
+        <label style="font-weight:600;font-size:13px;">Scope<select name="scope" style="display:block;margin-top:3px;">{% for sc in api_scopes %}<option value="{{ sc }}">{{ sc }}</option>{% endfor %}</select></label>
+        <label style="font-weight:600;font-size:13px;">Expires<select name="expires" style="display:block;margin-top:3px;">{% for val, lbl in expiry_presets %}<option value="{{ val }}" {% if val == '90' %}selected{% endif %}>{{ lbl }}</option>{% endfor %}</select></label>
+        <label style="font-weight:600;font-size:13px;">or on date<input type="date" name="expires_date" style="display:block;margin-top:3px;"></label>
+        <label style="font-weight:600;font-size:13px;display:flex;align-items:center;gap:6px;padding-bottom:7px;" title="A read-only key can preview/read but every write tool refuses."><input type="checkbox" name="readonly" style="margin:0;"> Read-only</label>
+        <button class="btn" type="submit">+ New key</button>
+      </form>
+      <p class="ro-note">Keys are least-privilege by <b>scope</b> (mcp / webhook / api) and by <b>access</b> (read-write vs read-only). Shown once at creation; revoking is immediate.</p>
+    </div>
+
+    {% else %}
+    <form method="post" action="/settings" id="settings-form">
+      <input type="hidden" name="section" value="{{ section }}">
+      <div class="card">
+        {% if section == 'agent' %}
+        <p class="set-intro">Set the broad posture from <a href="/settings">Operating mode</a> on the launcher; fine-tune the individual gates here. A <b>read-only</b> API key (under <a href="/settings/keys">API keys</a>) can never publish, whatever these say.</p>
+        <div class="agent-matrix"><table class="mini">
+          <thead><tr><th>Posture</th><th>Publish</th><th>Autopilot</th><th>What the agent does</th></tr></thead>
+          <tbody>
+            <tr><td>Read-only</td><td><span class="pill faint">off</span></td><td><span class="muted">—</span></td><td>Previews / dry-runs; a publish is refused.</td></tr>
+            <tr><td>Supervised</td><td><span class="pill ok">on</span></td><td><span class="pill faint">off</span></td><td>Commits only when your message says “publish”.</td></tr>
+            <tr><td>Autonomous</td><td><span class="pill ok">on</span></td><td><span class="pill ok">on</span></td><td>Resolves, applies and publishes in one turn.</td></tr>
+          </tbody></table></div>
+        {% elif section == 'logic' %}
+        <p class="set-intro">How the engine <i>shapes</i> a change — for every surface, not just the agent. Pick a profile, or Custom to edit the individual knobs.</p>
+        {% endif %}
+        {% for s in items %}{{ setrow(s, vals, secrets, crypto_ok, detected_base_url) }}{% endfor %}
+      </div>
+    </form>
+    <div class="ss-save">
+      <button class="btn" type="submit" form="settings-form">Save {{ section_label|lower }}</button>
+      <form method="post" action="/settings/reset" style="margin:0;"><button class="btn secondary" type="submit" data-confirm="Restore ALL settings to defaults?" data-confirm-title="Restore defaults" data-confirm-ok="Restore defaults">Restore all defaults</button></form>
+      <span class="grow">Saves this section. Changes apply immediately.</span>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<script>
+  (function () {
+    function token() { var a = new Uint8Array(24); (window.crypto || window.msCrypto).getRandomValues(a);
+      return 'policypilot_' + btoa(String.fromCharCode.apply(null, a)).replace(/[^A-Za-z0-9]/g, '').slice(0, 32); }
+    document.querySelectorAll('.gen-secret').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var key = btn.getAttribute('data-gen'), inp = document.querySelector('input[name="' + key + '"]'); if (!inp) return;
+        inp.value = token(); inp.type = 'text';
+        var clr = document.querySelector('input[name="' + key + '__clear"]'); if (clr) clr.checked = false;
+        inp.focus(); inp.select(); try { navigator.clipboard && navigator.clipboard.writeText(inp.value); } catch (e) {}
+        btn.textContent = 'Copied — Save to store'; setTimeout(function () { btn.textContent = 'Generate'; }, 2500);
+      });
+    });
+    var sel = document.querySelector('select[name="aa_profile"]');
+    if (sel) {
+      var KNOBS = ['aa_app_carveout', 'aa_override_blocking_deny', 'aa_prefer_widen', 'aa_emit_notes', 'aa_ignore_conditions'];
+      var PROFILES = { conservative:{aa_app_carveout:false,aa_override_blocking_deny:false,aa_prefer_widen:false,aa_emit_notes:true,aa_ignore_conditions:false},
+        balanced:{aa_app_carveout:true,aa_override_blocking_deny:true,aa_prefer_widen:true,aa_emit_notes:true,aa_ignore_conditions:false},
+        aggressive:{aa_app_carveout:true,aa_override_blocking_deny:true,aa_prefer_widen:true,aa_emit_notes:true,aa_ignore_conditions:true} };
+      var boxes = {}, rows = [], customVals = {};
+      KNOBS.forEach(function (k) { var el = document.querySelector('input[name="' + k + '"]'); if (el) { boxes[k] = el; var r = el.closest('.setrow'); if (r) rows.push(r); customVals[k] = el.checked; } });
+      KNOBS.forEach(function (k) { if (boxes[k]) boxes[k].addEventListener('change', function () { if (sel.value === 'custom') customVals[k] = boxes[k].checked; }); });
+      var hint = document.createElement('div'); hint.className = 'set-help'; hint.style.color = 'var(--accent)';
+      var pr = sel.closest('.setrow'); if (pr) pr.appendChild(hint);
+      function sync() { var prof = sel.value, custom = prof === 'custom', v = PROFILES[prof];
+        hint.textContent = custom ? '' : 'Showing the “' + sel.options[sel.selectedIndex].text.split(' —')[0] + '” profile (read-only). Switch to Custom to edit these individually.';
+        KNOBS.forEach(function (k) { if (!boxes[k]) return; if (custom) boxes[k].checked = customVals[k]; else if (v) boxes[k].checked = !!v[k]; });
+        rows.forEach(function (r) { r.style.opacity = custom ? '' : '0.6'; r.style.pointerEvents = custom ? '' : 'none'; });
+      }
+      sel.addEventListener('change', sync); sync();
+    }
+  })();
+</script>
+{% endblock %}

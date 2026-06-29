@@ -165,7 +165,7 @@
   {% if new_key %}
   <div style="border:1px solid var(--ok-line,#2e9e6b);background:var(--ok-bg,rgba(46,158,107,.08));
               border-radius:11px;padding:12px 14px;margin:0 0 14px;">
-    <div style="font-weight:700;margin-bottom:6px;">New {{ new_key.scope }} key “{{ new_key.name }}” — copy it now (shown once) · expires {{ new_key.expires }}</div>
+    <div style="font-weight:700;margin-bottom:6px;">New {{ new_key.scope }} key “{{ new_key.name }}” ({{ 'read-write' if new_key.can_write else 'read-only' }}) — copy it now (shown once) · expires {{ new_key.expires }}</div>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
       <input id="new-key-val" type="text" readonly value="{{ new_key.key }}"
              style="flex:1;min-width:320px;font-family:ui-monospace,monospace;font-size:13px;"
@@ -180,6 +180,7 @@
     <thead>
       <tr style="text-align:left;border-bottom:1px solid var(--line);">
         <th style="padding:7px 8px;">Name</th><th style="padding:7px 8px;">Scope</th>
+        <th style="padding:7px 8px;">Access</th>
         <th style="padding:7px 8px;">Key</th><th style="padding:7px 8px;">Created</th>
         <th style="padding:7px 8px;">Last used</th><th style="padding:7px 8px;">Expires</th>
         <th style="padding:7px 8px;"></th>
@@ -194,6 +195,10 @@
           {% elif k.status == 'unused' %}<span class="pill" style="font-size:10px;background:var(--surface-2);color:var(--muted);">unused 30d+</span>{% endif %}
         </td>
         <td style="padding:7px 8px;"><span class="pill" style="font-size:11px;">{{ k.scope }}</span></td>
+        <td style="padding:7px 8px;">
+          {% if k.can_write %}<span class="pill" style="font-size:11px;">read-write</span>
+          {% else %}<span class="pill ok" style="font-size:11px;" title="Preview/read tools only — every write tool refuses">read-only</span>{% endif %}
+        </td>
         <td style="padding:7px 8px;font-family:ui-monospace,monospace;color:var(--muted);">…{{ k.hint }}</td>
         <td style="padding:7px 8px;" class="small muted">{{ k.created.strftime('%Y-%m-%d') if k.created else '—' }}</td>
         <td style="padding:7px 8px;" class="small muted">{{ k.last_used.strftime('%Y-%m-%d %H:%M') if k.last_used else 'never' }}</td>
@@ -246,12 +251,19 @@
     <label style="font-weight:600;font-size:13px;">or on date
       <input type="date" name="expires_date" style="display:block;margin-top:3px;">
     </label>
+    <label style="font-weight:600;font-size:13px;display:flex;align-items:center;gap:6px;padding-bottom:7px;"
+           title="A read-only key can preview/read (decide_access, fetch, list_*, …) but every write tool refuses.">
+      <input type="checkbox" name="readonly" style="margin:0;"> Read-only
+    </label>
     <button class="btn" type="submit">+ New key</button>
   </form>
   <p class="muted small" style="margin-top:8px;max-width:820px;">Best practice: give each client its own
     named key, set an expiry (default 90 days), and revoke keys that show <b>unused</b> or that you no
     longer recognise. Keys are least-privilege by <b>scope</b> — an <code>mcp</code> key can't call the
-    REST API and vice-versa.</p>
+    REST API and vice-versa — and by <b>access</b>: a <b>read-only</b> key lets an agent preview and read
+    (<code>decide_access</code>, <code>fetch_dynamic_layer</code>, <code>list_*</code>, …) but every write
+    tool refuses, so you can give an LLM look-but-don't-touch access. Writes still need the publish/push
+    gate on top.</p>
 </div>
   </div><!-- /.settings-main -->
 </div><!-- /.settings-layout -->

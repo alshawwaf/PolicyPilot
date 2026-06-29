@@ -6,8 +6,10 @@ from fastapi.testclient import TestClient
 from app.routers import api_v1
 
 
-def _client(monkeypatch, *, valid="good"):
-    monkeypatch.setattr(api_v1.api_keys, "verify", lambda p, scope: p == valid and scope == "api")
+def _client(monkeypatch, *, valid="good", can_write=True):
+    monkeypatch.setattr(api_v1.api_keys, "authorize",
+                        lambda p, scope: {"id": 1, "can_write": can_write}
+                        if (p == valid and scope == "api") else None)
     app = FastAPI()
     app.include_router(api_v1.router)
     return TestClient(app)
@@ -85,6 +87,37 @@ def test_error_maps_to_status(monkeypatch):
     r2 = c.post("/dbapi/v1/access/decide", headers={"Authorization": "Bearer good"},
                 json={"server_id": 1, "source": "x", "destination": "Any", "service": "https"})
     assert r2.status_code == 400                                       # other error -> 400
+
+
+def test_readonly_key_blocks_write_endpoints_but_allows_reads(monkeypatch):
+    # A read-only api key (can_write=False) is refused 403 at the WRITE endpoints (apply + dynamic-layer
+    # edits/push) while every read/preview endpoint still works. The engine is never reached for a write.
+    c = _client(monkeypatch, can_write=False)
+    called = {"n": 0}
+    monkeypatch.setattr(api_v1.mcp_tools, "list_management_servers", lambda: {"servers": []})
+    monkeypatch.setattr(api_v1.mcp_tools, "apply_access", lambda **kw: called.update(n=called["n"] + 1) or {})
+    monkeypatch.setattr(api_v1.mcp_tools, "push_dynamic_layer",
+                        lambda *a, **k: called.update(n=called["n"] + 1) or {})
+    monkeypatch.setattr(api_v1.mcp_tools, "decide_access", lambda **kw: {"outcome": "create"})
+    assert c.get("/dbapi/v1/servers", headers={"Authorization": "Bearer good"}).status_code == 200
+    assert c.post("/dbapi/v1/access/decide", headers={"Authorization": "Bearer good"},
+                  json={"server_id": 1, "source": "10.1.1.5", "destination": "Any",
+                        "service": "https"}).status_code == 200    # preview is read-only -> allowed
+    for path, body in [("/dbapi/v1/access/apply", {"server_id": 1, "source": "10.1.1.5",
+                                                   "destination": "Any", "port": "443", "publish": True}),
+                       ("/dbapi/v1/dynamic-layers/push", {"layer": "L", "gateway": "GW"})]:
+        r = c.post(path, headers={"Authorization": "Bearer good"}, json=body)
+        assert r.status_code == 403 and "read-only" in r.json()["detail"], (path, r.status_code)
+    assert called["n"] == 0                                          # no write tool was invoked
+
+
+def test_write_key_allows_apply(monkeypatch):
+    # A normal (read-write) key passes the write dependency, so apply runs (here a stubbed engine).
+    c = _client(monkeypatch, can_write=True)
+    monkeypatch.setattr(api_v1.mcp_tools, "apply_access", lambda **kw: {"outcome": "create", "published": False})
+    r = c.post("/dbapi/v1/access/apply", headers={"Authorization": "Bearer good"},
+               json={"server_id": 1, "source": "10.1.1.5", "destination": "Any", "port": "443"})
+    assert r.status_code == 200 and r.json()["outcome"] == "create"
 
 
 def test_correlate_endpoints(monkeypatch):

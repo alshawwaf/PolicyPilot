@@ -64,6 +64,12 @@ The three scopes (`api_keys.SCOPES`):
 - **`webhook`** — authenticate the inbound ticketing webhook.
 - **`api`** — the general REST API (`/dbapi/v1`) for any HTTP client.
 
+Each key also has an **access** capability — **read-write** (default) or **read-only** (the *Read-only*
+checkbox on the create form). A read-only key may call read/preview operations but every write is refused
+(MCP write tools return a read-only error; REST write endpoints → **403**; the webhook refuses `apply=true`),
+so you can give an agent look-but-don't-touch access. The key table shows each key's access. This is
+independent of, and on top of, the publish/push gates.
+
 ## 3. SMS session reuse + policy cache (Management API group)
 
 Why it exists: Check Point throttles remote API logins (3 per admin/domain/60s in R81+) and caps

@@ -62,7 +62,8 @@ def _key_rows(now: dt.datetime) -> list[dict]:
         else:
             status = "ok"
         out.append({"id": k.id, "name": k.name, "scope": k.scope, "hint": k.hint,
-                    "created": created, "last_used": used, "expires": exp, "status": status})
+                    "created": created, "last_used": used, "expires": exp, "status": status,
+                    "can_write": bool(k.can_write)})
     return out
 
 
@@ -150,11 +151,15 @@ async def api_key_create(request: Request, db: Session = Depends(get_db)):
     name = (form.get("name") or "").strip() or "key"
     scope = form.get("scope") or "mcp"
     expires_at = _parse_expiry(form)
-    row, secret = api_keys.generate(name, scope, created_by=user.username, expires_at=expires_at)
+    can_write = "readonly" not in form           # checkbox "readonly" → a preview/read-only key
+    row, secret = api_keys.generate(name, scope, created_by=user.username, expires_at=expires_at,
+                                    can_write=can_write)
     exp_txt = expires_at.strftime("%Y-%m-%d") if expires_at else "never"
-    request.session["new_api_key"] = {"name": row.name, "scope": row.scope, "key": secret, "expires": exp_txt}
-    _flash(request, f"API key '{row.name}' ({row.scope}, expires {exp_txt}) created — copy it now, "
-                    "it's shown only once.")
+    cap_txt = "read-write" if can_write else "read-only"
+    request.session["new_api_key"] = {"name": row.name, "scope": row.scope, "key": secret,
+                                      "expires": exp_txt, "can_write": can_write}
+    _flash(request, f"API key '{row.name}' ({row.scope}, {cap_txt}, expires {exp_txt}) created — copy it "
+                    "now, it's shown only once.")
     return RedirectResponse("/settings#grp-api-keys", status_code=303)
 
 

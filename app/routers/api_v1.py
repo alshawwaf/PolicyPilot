@@ -16,20 +16,29 @@ from ..services import api_keys, mcp_tools
 router = APIRouter(prefix="/dbapi/v1", tags=["api"])
 
 
-def require_api_key(scope: str = "api"):
+def require_api_key(scope: str = "api", write: bool = False):
     """A dependency that requires a valid ``scope`` API key in ``Authorization: Bearer <key>`` (401 else).
-    Reusable on any endpoint: ``Depends(require_api_key("api"))``."""
+    With ``write=True`` it also requires the key to be write-capable, refusing a read-only key with 403 — so
+    a read-only key can hit the read/preview endpoints but never the apply/push/edit ones. (Enforced here at
+    the dependency, not via a contextvar — FastAPI resolves a dependency and its endpoint in separate
+    threadpool calls, so a contextvar set in the dependency wouldn't reach the endpoint.)"""
     def _dep(authorization: str = Header(default="")):
         presented = authorization[7:].strip() if authorization.startswith("Bearer ") else ""
-        if not presented or not api_keys.verify(presented, scope):
+        caps = api_keys.authorize(presented, scope) if presented else None
+        if caps is None:
             raise HTTPException(status_code=401,
                                 detail="Invalid or missing API key — send 'Authorization: Bearer <key>' "
                                        "with an api-scope key (create one in Settings → API keys).")
+        if write and not caps["can_write"]:
+            raise HTTPException(status_code=403,
+                                detail="This API key is read-only — it cannot apply, publish, push, or edit "
+                                       "layers. Use a write-enabled key for changes.")
         return True
     return _dep
 
 
 _API = Depends(require_api_key("api"))
+_API_WRITE = Depends(require_api_key("api", write=True))
 
 
 def _respond(result: dict):
@@ -114,7 +123,7 @@ def api_decide(body: DecideBody, _=_API):
 
 
 @router.post("/access/apply", summary="Apply an access request (publish is admin-gated)")
-def api_apply(body: ApplyBody, _=_API):
+def api_apply(body: ApplyBody, _=_API_WRITE):
     return _respond(mcp_tools.apply_access(**body.model_dump()))
 
 
@@ -178,21 +187,21 @@ class DynImportBody(BaseModel):
 
 
 @router.post("/dynamic-layers/import", summary="Import a gateway's LIVE layer into a portal layer (then edit + push)")
-def api_dynamic_import(body: DynImportBody, _=_API):
+def api_dynamic_import(body: DynImportBody, _=_API_WRITE):
     return _respond(mcp_tools.import_dynamic_layer(body.gateway, body.layer_name, body.into_layer))
 
 
 @router.post("/dynamic-layers/rule", summary="Add a rule to a dynamic layer (edit only — push to apply)")
-def api_dynamic_rule_add(body: DynRuleBody, _=_API):
+def api_dynamic_rule_add(body: DynRuleBody, _=_API_WRITE):
     return _respond(mcp_tools.add_dynamic_rule(**body.model_dump()))
 
 
 @router.post("/dynamic-layers/rule/remove", summary="Remove a rule from a dynamic layer")
-def api_dynamic_rule_remove(body: DynRuleRemoveBody, _=_API):
+def api_dynamic_rule_remove(body: DynRuleRemoveBody, _=_API_WRITE):
     return _respond(mcp_tools.remove_dynamic_rule(body.layer, body.rule))
 
 
 @router.post("/dynamic-layers/push", summary="Push a dynamic layer to a gateway (real-gateway push is admin-gated)")
-def api_dynamic_push(body: DynPushBody, _=_API):
+def api_dynamic_push(body: DynPushBody, _=_API_WRITE):
     return _respond(mcp_tools.push_dynamic_layer(body.layer, body.gateway, body.dry_run,
                                                  body.idempotency_key))

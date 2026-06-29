@@ -16,6 +16,15 @@ Post-1.0.0 hardening of the agent surface, ahead of broader live validation.
   wipes out-of-band policy. The gateway-detail page gains an **Import to portal** button for the same flow.
 - Dynamic-layer rail is now **8 tools** (21 MCP tools total).
 
+### Per-key RBAC — read-only vs write API keys
+- An API key now carries a **read-only / read-write** capability (alongside its scope). A **read-only** key
+  lets an agent preview and read (`decide_access`, `fetch_dynamic_layer`, `list_*`, summarize/analyze, …) but
+  **every write tool refuses** — so you can hand an LLM look-but-don't-touch access. Enforced on all three
+  surfaces: the MCP guard sets the request capability and the write tools refuse; the REST write endpoints
+  return **403**; the webhook refuses an `apply=true` from a read-only key. Existing keys default to
+  read-write (no behaviour change); mint a read-only key from **Settings → API keys** (the new *Read-only*
+  checkbox; the table shows each key's access). Writes still need the publish/push gate on top.
+
 ### Idempotent writes — a retry can't double-commit
 - `apply_access` and `push_dynamic_layer` (MCP + REST) accept an optional **`idempotency_key`**. A repeat with
   the same key REPLAYS the first committed result (`idempotent_replay: true`) instead of publishing/pushing

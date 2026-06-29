@@ -14,6 +14,8 @@ from __future__ import annotations
 import contextlib
 import hmac
 
+from .services import authz
+
 try:
     from mcp.server.fastmcp import FastMCP
     _HAVE_MCP, _IMPORT_ERR = True, ""
@@ -85,6 +87,19 @@ def authorize_mcp(presented: str) -> bool:
         return False
 
 
+def mcp_can_write(presented: str) -> bool:
+    """The presented mcp key's write capability — used to scope the request (read-only keys can't call write
+    tools). Fails OPEN to True (the verify gate already proved the key is valid; a lookup miss is a revoke
+    race, and the live publish/push gates still apply), so a transient DB blip never silently downgrades a
+    write key."""
+    try:
+        from .services import api_keys
+        caps = api_keys.authorize(presented, "mcp")
+        return True if caps is None else bool(caps["can_write"])
+    except Exception:  # noqa: BLE001
+        return True
+
+
 async def _send_json(send, status: int, body: bytes):
     await send({"type": "http.response.start", "status": status,
                 "headers": [(b"content-type", b"application/json"),
@@ -97,9 +112,13 @@ class _BearerGuard:
     decided PER REQUEST by the injected callables so tokens/keys can be set/rotated/revoked at runtime
     with no redeploy: ``enabled_fn()`` → is the endpoint configured at all (else 503), ``verify_fn(token)``
     → is this bearer valid (else 401, constant-time inside). Only the ``lifespan`` scope passes through
-    unguarded (so the inner session manager starts); websocket/unknown scopes are refused."""
-    def __init__(self, app, verify_fn, enabled_fn):
-        self.app, self._verify, self._enabled = app, verify_fn, enabled_fn
+    unguarded (so the inner session manager starts); websocket/unknown scopes are refused.
+
+    ``caps_fn(token) -> bool`` (optional) resolves the key's write capability; the guard sets it on the
+    request context (services.authz) around the inner call, so a read-only key's write tools refuse. Omitted
+    -> writes always allowed (back-compat)."""
+    def __init__(self, app, verify_fn, enabled_fn, caps_fn=None):
+        self.app, self._verify, self._enabled, self._caps = app, verify_fn, enabled_fn, caps_fn
 
     async def __call__(self, scope, receive, send):
         stype = scope.get("type")
@@ -142,7 +161,17 @@ class _BearerGuard:
                                  b'{"error":"Unauthorized - the bearer is not a valid active mcp-scope API '
                                  b'key (confirm it is not revoked/expired and was generated with mcp scope)"}')
                 return
-            await self.app(scope, receive, send)
+            can_write = True
+            if self._caps is not None:
+                try:
+                    can_write = bool(self._caps(presented))
+                except Exception:  # noqa: BLE001 — fail open (verify already proved the key); gates still apply
+                    can_write = True
+            token = authz.set_can_write(can_write)
+            try:
+                await self.app(scope, receive, send)
+            finally:
+                authz.reset_can_write(token)
             return
         if stype == "lifespan":
             await self.app(scope, receive, send)   # let the inner session manager start/stop
@@ -206,7 +235,7 @@ def _asgi_app(mcp):
     return None
 
 
-def build_mcp_app(verify_fn=None, enabled_fn=None):
+def build_mcp_app(verify_fn=None, enabled_fn=None, caps_fn=None):
     """A guarded ASGI app to mount at /mcp — or None only if the MCP SDK isn't installed (then the caller
     just doesn't mount it). It is mounted REGARDLESS of whether any token/key is set yet: the guard
     decides per request via ``verify_fn``/``enabled_fn`` (default: the MCP token + active API keys) and
@@ -216,6 +245,7 @@ def build_mcp_app(verify_fn=None, enabled_fn=None):
         return None
     verify_fn = verify_fn or authorize_mcp
     enabled_fn = enabled_fn or mcp_enabled
+    caps_fn = caps_fn or mcp_can_write
     from .services import mcp_tools as t
     mcp = _new_server()
     for name in _TOOLS:
@@ -227,7 +257,7 @@ def build_mcp_app(verify_fn=None, enabled_fn=None):
         return None
     global _INNER
     _INNER = app                          # parent lifespan runs its session manager (see mcp_lifespan)
-    return _BearerGuard(app, verify_fn, enabled_fn)
+    return _BearerGuard(app, verify_fn, enabled_fn, caps_fn)
 
 
 @contextlib.asynccontextmanager
@@ -254,8 +284,10 @@ def main():
     token = os.environ.get("PILOT_MCP_TOKEN", "")
     if not token:
         raise SystemExit("set PILOT_MCP_TOKEN to a strong secret first")
-    # Env-only auth in the standalone process (no DB-backed Settings / API keys here).
-    app = build_mcp_app(verify_fn=lambda p: hmac.compare_digest(p, token), enabled_fn=lambda: True)
+    # Env-only auth in the standalone process (no DB-backed Settings / API keys here). The single env token
+    # is full-access (no per-key capability store here), so caps_fn always grants write.
+    app = build_mcp_app(verify_fn=lambda p: hmac.compare_digest(p, token), enabled_fn=lambda: True,
+                        caps_fn=lambda p: True)
     if app is None:
         raise SystemExit("could not build the MCP app")
     import uvicorn

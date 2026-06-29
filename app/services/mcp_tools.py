@@ -8,12 +8,29 @@ HTTP request lifecycle), mirroring the webhook. Reads/preview/correlate/coverage
 ``mcp_allow_publish`` setting — an LLM never commits to live policy by default."""
 from __future__ import annotations
 
+import functools
 import logging
 
 from ..db import SessionLocal
 from ..models import DynamicLayer, Gateway, ManagementServer
+from . import authz
 
 logger = logging.getLogger("policypilot.mcp_tools")
+
+
+def _write_tool(fn):
+    """Mark a tool as a WRITE: it refuses when the calling key is read-only (see services.authz). The check
+    runs before any work and returns a plain error dict, so a read-only agent gets a clear message instead of
+    a side effect. ``functools.wraps`` keeps the name/docstring/signature so the MCP schema is unchanged.
+    Independent of, and in addition to, the live publish/push gates."""
+    @functools.wraps(fn)
+    def wrapper(*args, **kwargs):
+        if not authz.can_write():
+            return {"ok": False, "error": "this API key is read-only — it can preview and read (decide_access, "
+                    "fetch_dynamic_layer, list_*, summarize/analyze, …) but cannot apply, publish, push, or "
+                    "edit layers. Use a write-enabled key for changes."}
+        return fn(*args, **kwargs)
+    return wrapper
 
 
 def _resolve_server(db, server_ref):
@@ -198,6 +215,7 @@ def _record_applied(ms, result: dict, req, layer: str, package, ticket_id: str) 
         logger.exception("recording MCP change for rollback failed")
 
 
+@_write_tool
 def apply_access(server_id: str, source: str, destination: str, layer: str, service: str | None = None,
                  port: str | None = None, protocol: str = "tcp", application: str | None = None,
                  package: str | None = None, publish: bool = False, ticket_id: str = "",
@@ -267,6 +285,7 @@ def apply_access(server_id: str, source: str, destination: str, layer: str, serv
     return result
 
 
+@_write_tool
 def remove_access(server_id: str, source: str, destination: str, layer: str, service: str | None = None,
                   port: str | None = None, protocol: str = "tcp", application: str | None = None,
                   package: str | None = None, publish: bool = False, ticket_id: str = "",
@@ -325,6 +344,7 @@ def _amend_target_from_change(change) -> tuple:
     return None, (change.layer or "")
 
 
+@_write_tool
 def amend_access_rule(server_id: str | None = None, layer: str | None = None,
                       change_id: int | None = None, rule_uid: str | None = None,
                       name: str | None = None, comment: str | None = None,
@@ -440,6 +460,7 @@ def list_changes(limit: int = 20) -> dict:
         db.close()
 
 
+@_write_tool
 def revert_change(change_id: int, publish: bool = False, disable_instead_of_delete: bool = False) -> dict:
     """ROLL BACK a previously published change by its id (from list_changes): replays the recorded inverse —
     delete the rule that was added / re-enable the rule that was disabled / remove the object that was widened
@@ -707,6 +728,7 @@ def get_dynamic_layer(layer: str) -> dict:
         db.close()
 
 
+@_write_tool
 def add_dynamic_rule(layer: str, source: str, destination: str, service: str = "any",
                      action: str = "Accept", name: str = "", position: str = "bottom") -> dict:
     """Add a rule to a dynamic layer's rulebase (this only EDITS the layer — call push_dynamic_layer after to
@@ -760,6 +782,7 @@ def add_dynamic_rule(layer: str, source: str, destination: str, service: str = "
         db.close()
 
 
+@_write_tool
 def remove_dynamic_rule(layer: str, rule: str) -> dict:
     """Remove a rule (by name) from a dynamic layer's rulebase. A layer must keep at least one rule; this
     only EDITS the layer — call push_dynamic_layer after to apply the change to a gateway."""
@@ -791,6 +814,7 @@ def remove_dynamic_rule(layer: str, rule: str) -> dict:
         db.close()
 
 
+@_write_tool
 def push_dynamic_layer(layer: str, gateway: str = "", dry_run: bool = False,
                        idempotency_key: str = "") -> dict:
     """Push a dynamic layer to a gateway via the Gaia API (set-dynamic-content), out-of-band of SmartConsole.
@@ -929,6 +953,7 @@ def fetch_dynamic_layer(gateway: str, layer_name: str = "") -> dict:
     return {"ok": True, "gateway": gw_name, "layers": layers}
 
 
+@_write_tool
 def import_dynamic_layer(gateway: str, layer_name: str = "", into_layer: str = "") -> dict:
     """Fetch a gateway's LIVE dynamic layer and SAVE it into a portal dynamic layer (create or overwrite) — so
     the next add_dynamic_rule + push_dynamic_layer operate on the REAL current state and the push (a REPLACE)

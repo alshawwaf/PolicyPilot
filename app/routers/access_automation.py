@@ -498,10 +498,13 @@ async def aa_webhook(request: Request, db: Session = Depends(get_db)):
                                       "set a token in Settings → Ticketing webhook (or the "
                                       "PILOT_WEBHOOK_TOKEN env var) to enable it."},
                             status_code=503)
-    ok = bool(presented) and ((legacy and hmac.compare_digest(presented, legacy))
-                              or api_keys.verify(presented, "webhook"))
+    via_legacy = bool(presented and legacy and hmac.compare_digest(presented, legacy))
+    key_caps = None if via_legacy else (api_keys.authorize(presented, "webhook") if presented else None)
+    ok = via_legacy or key_caps is not None
     if not ok:
         return JSONResponse({"error": "Invalid or missing X-PolicyPilot-Token."}, status_code=401)
+    # Write capability: the legacy token is full-access; a webhook API key may be read-only (preview-only).
+    can_write = via_legacy or bool(key_caps and key_caps["can_write"])
 
     try:
         data = await request.json()
@@ -532,6 +535,10 @@ async def aa_webhook(request: Request, db: Session = Depends(get_db)):
         return JSONResponse({"error": "Target server has no stored credential."}, status_code=400)
     ensure_pinned(db, ms)
 
+    if ticket.apply and not can_write:
+        return JSONResponse({"error": "This webhook API key is read-only — it cannot apply changes. "
+                                      "Send apply=false to preview, or use a write-enabled webhook key."},
+                            status_code=403)
     if ticket.apply:
         result = aa.execute(ms, secret, ticket.request, ticket.layer, package=ticket.package,
                             ticket_id=ticket.ticket_id, publish=True)

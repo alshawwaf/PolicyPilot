@@ -200,9 +200,13 @@ class ApiKey(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(120))
-    scope: Mapped[str] = mapped_column(String(20), default="mcp", index=True)   # "mcp" | "webhook"
+    scope: Mapped[str] = mapped_column(String(20), default="mcp", index=True)   # "mcp" | "webhook" | "api"
     key_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)  # sha256 hex of the secret
     hint: Mapped[str] = mapped_column(String(12), default="")                   # last chars, for display
+    # Capability: a read-only key may call read/preview tools (decide_access, fetch_dynamic_layer, …) but
+    # every write tool (apply/remove/amend/revert/add/remove-rule/import/push) refuses. Default True so
+    # existing keys keep full access; mint a read-only key to give an agent look-but-don't-touch access.
+    can_write: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     created_by: Mapped[str] = mapped_column(String(120), default="")
     last_used_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

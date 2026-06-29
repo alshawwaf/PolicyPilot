@@ -1126,6 +1126,47 @@ def test_webhook_preview_does_not_publish_or_record(monkeypatch):
     db.close()
 
 
+def _webhook_key_auth(monkeypatch, *, can_write):
+    """Authenticate the webhook via an API KEY (no legacy token), with a chosen write capability."""
+    monkeypatch.setattr(aar.app_settings, "get_secret_or_env", lambda k, env: "")   # no legacy token
+    monkeypatch.setattr(aar, "get_settings",
+                        lambda: types.SimpleNamespace(webhook_token="", webhook_server_ids=""))
+    monkeypatch.setattr(aar.api_keys, "any_active", lambda scope="webhook": True)
+    monkeypatch.setattr(aar.api_keys, "authorize",
+                        lambda p, scope: {"id": 1, "can_write": can_write} if scope == "webhook" else None)
+    monkeypatch.setattr(aar.mgmt_creds, "get_secret", lambda db, ms: "secret")
+    monkeypatch.setattr(aar, "ensure_pinned", lambda db, ms: None)
+    monkeypatch.setattr(aar.ticketing, "notify", lambda ticket, result: {"skipped": "test"})
+
+
+def test_webhook_readonly_key_cannot_apply(monkeypatch):
+    # A read-only webhook key may preview but is refused 403 when it asks to apply — the engine isn't called.
+    _webhook_key_auth(monkeypatch, can_write=False)
+    called = {"execute": False}
+    monkeypatch.setattr(aa, "execute", lambda *a, **k: called.update(execute=True) or {})
+    db = _webhook_db()
+    body = {"ticket_id": "INC9", "server_id": 1, "layer": "L", "source": "10.0.0.5",
+            "destination": "1.1.1.1", "port": "443", "apply": True}
+    resp = _run(aar.aa_webhook(_WReq(body, token="ro-key"), db=db))
+    assert resp.status_code == 403 and "read-only" in json.loads(resp.body)["error"]
+    assert called["execute"] is False                               # never reached the SMS
+    db.close()
+
+
+def test_webhook_write_key_can_apply(monkeypatch):
+    # A write-capable webhook key applies normally.
+    _webhook_key_auth(monkeypatch, can_write=True)
+    seen = {}
+    monkeypatch.setattr(aa, "execute", lambda *a, **k: seen.update(publish=k.get("publish")) or {
+        "ok": True, "applied": True, "published": True, "outcome": "create"})
+    db = _webhook_db()
+    body = {"ticket_id": "INC10", "server_id": 1, "layer": "L", "source": "10.0.0.5",
+            "destination": "1.1.1.1", "port": "443", "apply": True}
+    out = json.loads(_run(aar.aa_webhook(_WReq(body, token="rw-key"), db=db)).body)
+    assert seen["publish"] is True and out["published"] is True
+    db.close()
+
+
 # --- template rendering -----------------------------------------------------------------------
 def _render(name, **ctx):
     ctx.setdefault("request", None)

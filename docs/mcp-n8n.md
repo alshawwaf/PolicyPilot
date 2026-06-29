@@ -174,6 +174,14 @@ a `dry_run=true` push and a push to the built-in `mock` target are **always** al
 
   The two toggles are **independent** — enabling one does not enable the other, so an LLM cannot reach
   either live target unless you deliberately allow that rail.
+- **Read-only keys (per-key RBAC):** an API key is either **read-write** (default) or **read-only**. A
+  read-only key can call the read/preview tools (`decide_access`, `fetch_dynamic_layer`, `list_*`,
+  `summarize_layer`, `analyze_policy`, …) but **every write tool refuses** (`apply_access`, `remove_access`,
+  `amend_access_rule`, `revert_change`, `add`/`remove_dynamic_rule`, `import_dynamic_layer`,
+  `push_dynamic_layer`) — over MCP the tool returns a read-only error; over REST the write endpoints return
+  **403**; the webhook refuses an `apply=true`. Mint one in **Settings → API keys** (the *Read-only*
+  checkbox) to give an agent look-but-don't-touch access. This is independent of, and on top of, the publish
+  /push gates.
 - **Idempotent commits:** pass an optional `idempotency_key` (any stable string per logical change) to
   `apply_access` or `push_dynamic_layer`. A retry with the same key **replays** the first committed result
   (`idempotent_replay: true`) instead of publishing/pushing again — so an agent retry, an n8n retry-on-fail,

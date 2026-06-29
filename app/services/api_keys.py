@@ -46,11 +46,13 @@ def _normalize_scope(scope: str) -> str:
     return scope if scope in SCOPES else "mcp"
 
 
-def generate(name: str, scope: str = "mcp", created_by: str = "", expires_at=None) -> tuple[ApiKey, str]:
+def generate(name: str, scope: str = "mcp", created_by: str = "", expires_at=None,
+             can_write: bool = True) -> tuple[ApiKey, str]:
     """Create a key and return (record, PLAINTEXT). The plaintext is the only time the secret exists in
     the clear — show it once to the admin, then it's unrecoverable (only the hash is stored). Retries once
     on the astronomically-unlikely key_hash UNIQUE collision (256-bit token) so it self-heals, never 500s.
-    ``expires_at`` (tz-aware, optional) makes the key stop authenticating after that time."""
+    ``expires_at`` (tz-aware, optional) makes the key stop authenticating after that time. ``can_write=False``
+    mints a read-only key (preview/read tools only; every write tool refuses)."""
     from sqlalchemy.exc import IntegrityError
     scope = _normalize_scope(scope)
     name = (name or "key").strip()[:120]
@@ -58,7 +60,7 @@ def generate(name: str, scope: str = "mcp", created_by: str = "", expires_at=Non
     for _ in range(3):
         secret = f"{_PREFIX}_{scope}_{secrets.token_urlsafe(32)}"
         row = ApiKey(name=name, scope=scope, key_hash=_hash(secret), hint=secret[-4:],
-                     created_by=created_by, expires_at=expires_at)
+                     created_by=created_by, expires_at=expires_at, can_write=bool(can_write))
         db = SessionLocal()
         try:
             db.add(row)
@@ -120,10 +122,10 @@ def set_expiry(key_id: int, expires_at) -> bool:
     return True
 
 
-def _active(scope: str) -> list[tuple[int, str, object]]:
-    """[(id, key_hash, expires_at)] for a scope, cached ~5s. The single chokepoint for verify()/
-    any_active(), so it normalizes the scope (an unknown scope can't silently cache an empty list under a
-    typo'd key). Expiry is checked per call (not cache-bound) by _live()."""
+def _active(scope: str) -> list[tuple[int, str, object, bool]]:
+    """[(id, key_hash, expires_at, can_write)] for a scope, cached ~5s. The single chokepoint for verify()/
+    authorize()/any_active(), so it normalizes the scope (an unknown scope can't silently cache an empty list
+    under a typo'd key). Expiry is checked per call (not cache-bound) by _live()."""
     scope = _normalize_scope(scope)
     now = time.monotonic()
     hit = _cache.get(scope)
@@ -132,7 +134,7 @@ def _active(scope: str) -> list[tuple[int, str, object]]:
     try:
         db = SessionLocal()
         try:
-            rows = [(r.id, r.key_hash, r.expires_at)
+            rows = [(r.id, r.key_hash, r.expires_at, bool(r.can_write))
                     for r in db.query(ApiKey).filter(ApiKey.scope == scope).all()]
         finally:
             db.close()
@@ -142,27 +144,36 @@ def _active(scope: str) -> list[tuple[int, str, object]]:
     return rows
 
 
-def _live(scope: str) -> list[tuple[int, str]]:
-    """[(id, key_hash)] for keys that are NOT expired — expiry checked against 'now' each call so a key
-    expiring mid-cache-window stops authenticating immediately, without waiting for the cache TTL."""
+def _live(scope: str) -> list[tuple[int, str, bool]]:
+    """[(id, key_hash, can_write)] for keys that are NOT expired — expiry checked against 'now' each call so
+    a key expiring mid-cache-window stops authenticating immediately, without waiting for the cache TTL."""
     now = utcnow()
-    return [(kid, kh) for (kid, kh, exp) in _active(scope) if as_utc(exp) is None or as_utc(exp) > now]
+    return [(kid, kh, cw) for (kid, kh, exp, cw) in _active(scope)
+            if as_utc(exp) is None or as_utc(exp) > now]
+
+
+def _match(presented: str, scope: str) -> tuple[int, bool] | None:
+    """(id, can_write) of the live key matching ``presented`` (constant-time), marking it used; else None."""
+    if not presented:
+        return None
+    h = _hash(presented)
+    for kid, kh, cw in _live(scope):
+        if hmac.compare_digest(h, kh):     # constant-time per comparison
+            _touch(kid)
+            return kid, cw
+    return None
 
 
 def verify(presented: str, scope: str = "mcp") -> bool:
     """True if ``presented`` matches a live (non-expired) key for ``scope`` (constant-time). Marks used."""
-    if not presented:
-        return False
-    h = _hash(presented)
-    matched_id = None
-    for kid, kh in _live(scope):
-        if hmac.compare_digest(h, kh):     # constant-time per comparison
-            matched_id = kid
-            break
-    if matched_id is None:
-        return False
-    _touch(matched_id)
-    return True
+    return _match(presented, scope) is not None
+
+
+def authorize(presented: str, scope: str = "mcp") -> dict | None:
+    """``{"id": int, "can_write": bool}`` for the live key matching ``presented``, else None. The auth
+    layers use this to set the request capability (see services.authz). Marks the key used."""
+    m = _match(presented, scope)
+    return None if m is None else {"id": m[0], "can_write": m[1]}
 
 
 def any_active(scope: str = "mcp") -> bool:

@@ -62,7 +62,8 @@ _ADDED_COLUMNS = {
         "email": "VARCHAR(200) DEFAULT ''",
         "title": "VARCHAR(120) DEFAULT ''",
     },
-    "api_keys": {"expires_at": "DATETIME"},     # key-expiry, added after the table shipped
+    "api_keys": {"expires_at": "DATETIME",                  # key-expiry, added after the table shipped
+                 "can_write": "BOOLEAN DEFAULT 1"},          # read-only vs write capability (default: write)
     "applied_changes": {"resolution": "VARCHAR(16) DEFAULT ''"},   # rolled-back vs disabled-rule-deleted
 }
 

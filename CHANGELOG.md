@@ -7,14 +7,14 @@ All notable changes to **PolicyPilot** are documented here. This project follows
 
 Post-1.0.0 hardening of the agent surface, ahead of broader live validation.
 
-### Policy Manager — a first-class human view over the policy
-- New top-level **Policy Manager** (nav + `/policy-manager`): the human "fourth face" over the same engine.
-  It lists your management servers; opening one goes to the live policy viewer/editor — browse an access
-  layer (rulebase pulled over `web_api`, every cell resolved to object names, sections / negation / disabled
-  rules shown) and edit a rule (action, track, name, comments, enabled) with a **dry-run** or **publish**.
-  Every published change flows through the same change log + governance audit. (The viewer/editor already
-  existed under a management server; this surfaces it as a discoverable destination and retires the home
-  "coming soon" card.) Adding and reordering rules are the next roadmap step.
+### Policy Manager — staged, hidden until fully developed
+- The dedicated **Policy Manager** landing is built (`app/routers/policy_manager.py` + template) but
+  **intentionally not surfaced yet** — no nav entry, no home link, and the route is unmounted (`/policy-manager`
+  404s) — pending the write features (add / delete / reorder). The underlying live policy **viewer + per-rule
+  editor** continues to ship under each management server (`/management/{id}`): browse an access layer
+  (rulebase over `web_api`, cells resolved to names, sections / negation / disabled shown) and edit a rule
+  (action, track, name, comments, enabled) with a **dry-run** or **publish**, flowing through the same change
+  log + governance audit.
 
 ### Governance & audit — a work-note after every committed change
 - Every COMMITTED change — an agent/REST/webhook publish to a live SMS (Rail A) or a real dynamic-layer push

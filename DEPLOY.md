@@ -59,4 +59,11 @@ layers, and settings across deploys.
 ## Reachability check
 
 The portal must be reachable at `https://<your-domain>` on 443. From any shell:
-`curl -s https://<your-domain>/healthz` returns `{"status":"ok"}`.
+- `curl -s https://<your-domain>/healthz` → `{"status":"ok"}` (liveness)
+- `curl -s https://<your-domain>/readyz` → `{"status":"ready"}` (DB reachable)
+- `curl -s https://<your-domain>/version` → `{"version":…,"mcp_tools":21,"mcp_ready":…}`
+
+## After deploy — validate
+
+Run the **[15-minute live validation](docs/live-validation.md)** to prove both rails (management access +
+dynamic layers) against your real SMS and a Gaia gateway, including the publish / layer-push gates.

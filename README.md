@@ -145,6 +145,7 @@ pip install pytest && pytest -q          # 626 tests, all green
 - **[docs/policypilot-management-agent.json](docs/policypilot-management-agent.json)** — ready-made n8n agent for the management access rail.
 - **[docs/policypilot-dynamic-layer-agent.json](docs/policypilot-dynamic-layer-agent.json)** — ready-made n8n agent for the dynamic-layer rail.
 - **[docs/mcp-agent-qa.md](docs/mcp-agent-qa.md)** — the one-sentence "…and publish" QA battery (demo + regression).
+- **[docs/live-validation.md](docs/live-validation.md)** — the 15-minute post-deploy smoke test for both rails against a real lab.
 - **[docs/access-automation-whitepaper.md](docs/access-automation-whitepaper.md)** — how the engine reasons.
 - **[docs/integrations/access-automation.md](docs/integrations/access-automation.md)** — the ticket→rule flow.
 - **[docs/integrations/management-export.md](docs/integrations/management-export.md)** — pull & export policy as Terraform / Ansible / `mgmt_cli`.

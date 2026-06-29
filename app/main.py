@@ -151,6 +151,29 @@ def create_app() -> FastAPI:
     def healthz() -> dict:
         return {"status": "ok"}
 
+    @app.get("/version", include_in_schema=False)
+    def version() -> dict:
+        """Build + capability info for agents and ops — version, the MCP tool count, and whether /mcp is live."""
+        info = {"name": settings.app_name, "version": __version__, "mcp_tools": 0, "mcp_ready": False}
+        try:
+            from . import mcp_server
+            info["mcp_tools"] = len(mcp_server.tool_catalog())
+            info["mcp_ready"] = bool(mcp_server.have_mcp() and mcp_server.token_configured())
+        except Exception:  # noqa: BLE001
+            pass
+        return info
+
+    @app.get("/readyz", include_in_schema=False)
+    def readyz():
+        """Readiness: the DB is reachable. 200 when ready, 503 otherwise (for the load balancer / Dokploy)."""
+        from fastapi.responses import JSONResponse
+        try:
+            with SessionLocal() as db:
+                db.execute(select(User.id).limit(1))
+            return {"status": "ready"}
+        except Exception:  # noqa: BLE001
+            return JSONResponse({"status": "not-ready"}, status_code=503)
+
     return app
 
 

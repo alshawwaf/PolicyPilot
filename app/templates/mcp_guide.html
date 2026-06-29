@@ -150,6 +150,24 @@
   dry-runs (validate, then discard); <code>publish=true</code> is <b>refused</b> unless an admin enables
   <b>Settings → MCP / agent → "Let the MCP agent publish to live policy"</b>. The engine's own guarantees
   still hold — an unknown or ambiguous service returns a review plus suggestions, never a wrong call to the SMS.</p>
+
+  <div style="margin-top:14px;border:1px solid var(--line);border-radius:11px;overflow:hidden;">
+    <div style="padding:9px 13px;font-weight:600;font-size:13px;border-bottom:1px solid var(--line);">Operating mode → what the agent may do</div>
+    <table style="width:100%;border-collapse:collapse;font-size:12.5px;">
+      <thead><tr style="color:var(--faint);text-align:left;">
+        <th style="padding:7px 13px;font-weight:600;">Mode (Settings → MCP / agent)</th>
+        <th style="padding:7px 10px;font-weight:600;">Publish</th><th style="padding:7px 10px;font-weight:600;">Autopilot</th>
+        <th style="padding:7px 13px;font-weight:600;">What the agent does</th></tr></thead>
+      <tbody>
+        <tr style="border-top:1px solid var(--line);"><td style="padding:7px 13px;font-weight:600;">Read-only</td><td style="padding:7px 10px;"><span class="pill">off</span></td><td style="padding:7px 10px;color:var(--faint);">—</td><td style="padding:7px 13px;">decide / preview / dry-run; a publish is refused.</td></tr>
+        <tr style="border-top:1px solid var(--line);"><td style="padding:7px 13px;font-weight:600;">Supervised</td><td style="padding:7px 10px;"><span class="pill ok">on</span></td><td style="padding:7px 10px;"><span class="pill">off</span></td><td style="padding:7px 13px;">applies, but publishes only when your message says “publish”.</td></tr>
+        <tr style="border-top:1px solid var(--line);"><td style="padding:7px 13px;font-weight:600;">Autonomous</td><td style="padding:7px 10px;"><span class="pill ok">on</span></td><td style="padding:7px 10px;"><span class="pill ok">on</span></td><td style="padding:7px 13px;">resolves, applies <b>and</b> publishes in one turn — the <code>autopilot:true</code> flag on results.</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="mcp-note" style="margin-top:10px;">Set the mode in <b>Settings → MCP / agent</b>. A <b>read-only</b> API key
+  can never publish, whatever the mode — give an agent look-but-don't-touch access with one. A per-key
+  <b>rate limit</b> (Settings) caps requests across /mcp, REST, and the webhook.</p>
 </div>
 
 <script>

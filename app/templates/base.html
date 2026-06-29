@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}PolicyPilot{% endblock %}</title>
-  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PGRlZnM+PGxpbmVhckdyYWRpZW50IGlkPSJnIiB4MT0iMCIgeTE9IjAiIHgyPSIxIiB5Mj0iMSI+PHN0b3Agb2Zmc2V0PSIwIiBzdG9wLWNvbG9yPSIjZmYzZDlhIi8+PHN0b3Agb2Zmc2V0PSIxIiBzdG9wLWNvbG9yPSIjN2MzYWVkIi8+PC9saW5lYXJHcmFkaWVudD48L2RlZnM+PHJlY3Qgd2lkdGg9IjI0IiBoZWlnaHQ9IjI0IiByeD0iNiIgZmlsbD0idXJsKCNnKSIvPjxnIGZpbGw9Im5vbmUiIHN0cm9rZT0iI2ZmZiIgc3Ryb2tlLXdpZHRoPSIxLjciIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCI+PGxpbmUgeDE9IjQiIHkxPSI5IiB4Mj0iMjAiIHkyPSI5Ii8+PHBhdGggZD0iTTYgMTdWMTIuNWEyLjYgMi42IDAgMCAxIDUuMiAwVjE3Ii8+PHBhdGggZD0iTTEyLjggMTdWMTIuNWEyLjYgMi42IDAgMCAxIDUuMiAwVjE3Ii8+PGxpbmUgeDE9IjYiIHkxPSIxNyIgeDI9IjYiIHkyPSIxOC41Ii8+PGxpbmUgeDE9IjE4IiB5MT0iMTciIHgyPSIxOCIgeTI9IjE4LjUiLz48L2c+PC9zdmc+">
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PGRlZnM+PGxpbmVhckdyYWRpZW50IGlkPSJnIiB4MT0iMCIgeTE9IjAiIHgyPSIxIiB5Mj0iMSI+PHN0b3Agb2Zmc2V0PSIwIiBzdG9wLWNvbG9yPSIjZmYzZDlhIi8+PHN0b3Agb2Zmc2V0PSIxIiBzdG9wLWNvbG9yPSIjN2MzYWVkIi8+PC9saW5lYXJHcmFkaWVudD48L2RlZnM+PHJlY3Qgd2lkdGg9IjI0IiBoZWlnaHQ9IjI0IiByeD0iNiIgZmlsbD0idXJsKCNnKSIvPjxnIGZpbGw9Im5vbmUiIHN0cm9rZT0iI2ZmZiIgc3Ryb2tlLXdpZHRoPSIxLjciIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCI+PGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iNi41Ii8+PHBvbHlnb24gcG9pbnRzPSIxNC42IDkuNCAxMy4yIDEzLjIgOS40IDE0LjYgMTAuOCAxMC44IDE0LjYgOS40Ii8+PC9nPjwvc3ZnPg==">
   <script>
     /* Set the theme before first paint (no flash). Dark is the default. */
     (function () {
@@ -582,7 +582,7 @@
 <body>
   <header>
     <a class="brand-link" href="/">
-      <span class="brand-mark"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="9" x2="20" y2="9"/><path d="M6 17V12.5a2.6 2.6 0 0 1 5.2 0V17"/><path d="M12.8 17V12.5a2.6 2.6 0 0 1 5.2 0V17"/><line x1="6" y1="17" x2="6" y2="18.5"/><line x1="18" y1="17" x2="18" y2="18.5"/></svg></span>
+      <span class="brand-mark"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><polygon points="15 9 13.4 13.4 9 15 10.6 10.6 15 9"/></svg></span>
       <span class="brand">PolicyPilot</span>
     </a>
     {% block nav %}
@@ -635,10 +635,12 @@
   </header>
   <main class="{% block main_class %}{% endblock %}">{% block content %}{% endblock %}</main>
 
+  {% block footer %}
   <footer style="max-width:1180px; margin:40px auto 24px; padding:14px 20px 0; border-top:1px solid var(--line);
                  color:var(--faint); font-size:12px; text-align:center;">
     <strong style="color:var(--muted);">PolicyPilot</strong> v{{ app_version }}
   </footer>
+  {% endblock %}
 
   {% if flash %}
   <div id="toast" class="toast {{ flash.type }}">{{ flash.text }}</div>

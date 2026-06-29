@@ -54,7 +54,7 @@
   </form>
 
   {% if snapshot %}
-    {{ lv.render_layers(snapshot.layers) }}
+    {{ lv.render_layers(snapshot.layers, gw.id) }}
   {% else %}
     <p class="muted">Not fetched yet. Enter the password and click <b>Fetch now</b> to pull this gateway's dynamic layers — the result is saved here so you can review it any time without re-fetching.</p>
   {% endif %}

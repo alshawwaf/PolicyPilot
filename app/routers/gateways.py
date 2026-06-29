@@ -170,6 +170,42 @@ def gateways_fetch(gid: int, request: Request, password: str = Form(""),
     return RedirectResponse(f"/gateways/{gid}", status_code=303)
 
 
+@router.post("/gateways/{gid}/import-layer")
+def gateways_import_layer(gid: int, request: Request, layer: str = Form(...),
+                          db: Session = Depends(get_db)):
+    """Import a layer from this gateway's last fetch into a portal Dynamic Layer (create or overwrite by name),
+    so it shows up under Dynamic Layers where it can be edited and pushed back. Writes the portal only."""
+    user = get_user_or_none(request, db)
+    if user is None:
+        return RedirectResponse("/login", status_code=303)
+    gw = _owned(db, gid, user)
+    snap = db.scalar(select(GatewayLayerSnapshot).where(GatewayLayerSnapshot.gateway_id == gw.id))
+    src = next((L for L in (snap.layers if snap and snap.layers else []) if (L.get("name") or "") == layer), None)
+    if src is None:
+        _flash(request, f"Couldn't find layer “{layer}” in the last fetch — click Fetch now, then import.", "error")
+        return RedirectResponse(f"/gateways/{gid}", status_code=303)
+    content = {"operation": "replace", "objects": src.get("objects") or {}, "rulebase": src.get("rulebase") or []}
+    from ..schemas.dynamic_layer import validate_layer_content
+    try:
+        validate_layer_content(content)
+    except ValueError as exc:
+        _flash(request, f"Can't import “{layer}”: {exc}", "error")
+        return RedirectResponse(f"/gateways/{gid}", status_code=303)
+    existing = next((L for L in db.scalars(select(DynamicLayer).where(DynamicLayer.owner_id == user.id)).all()
+                     if (L.name or "").lower() == layer.lower()), None)
+    if existing is not None:
+        existing.content = content
+        existing.layer_name = layer
+        verb = "Updated"
+    else:
+        db.add(DynamicLayer(token=new_feed_token(), name=layer, layer_name=layer,
+                            owner_id=user.id, content=content))
+        verb = "Imported"
+    db.commit()
+    _flash(request, f"{verb} “{layer}” from “{gw.name}” — edit or push it from Dynamic Layers.")
+    return RedirectResponse("/layers", status_code=303)
+
+
 @router.get("/gateways/{gid}/gaia-export", response_class=HTMLResponse)
 def gw_gaia_export_page(gid: int, request: Request, db: Session = Depends(get_db)):
     """Export this gateway's Gaia OS config (interfaces/routes/dns/ntp/…) to Terraform/Ansible/clish."""

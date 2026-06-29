@@ -120,6 +120,22 @@ def test_write_key_allows_apply(monkeypatch):
     assert r.status_code == 200 and r.json()["outcome"] == "create"
 
 
+def test_conformance_endpoint(monkeypatch):
+    c = _client(monkeypatch)
+    monkeypatch.setattr(api_v1.conformance, "run", lambda: {"ok": True, "tools": 21, "checks": []})
+    r = c.get("/dbapi/v1/conformance", headers={"Authorization": "Bearer good"})
+    assert r.status_code == 200 and r.json()["tools"] == 21
+    monkeypatch.setattr(api_v1.conformance, "run",
+                        lambda: {"ok": False, "tools": 21, "checks": [{"name": "db_reachable", "ok": False}]})
+    r2 = c.get("/dbapi/v1/conformance", headers={"Authorization": "Bearer good"})
+    assert r2.status_code == 503 and r2.json()["ok"] is False     # health checks can gate on it
+    # read-only key may still run the read-only self-check
+    c_ro = _client(monkeypatch, can_write=False)
+    monkeypatch.setattr(api_v1.conformance, "run", lambda: {"ok": True, "tools": 21, "checks": []})
+    assert c_ro.get("/dbapi/v1/conformance",
+                    headers={"Authorization": "Bearer good"}).status_code == 200
+
+
 def test_correlate_endpoints(monkeypatch):
     c = _client(monkeypatch)
     monkeypatch.setattr(api_v1.mcp_tools, "correlate_service", lambda sid, name: {"match": name})

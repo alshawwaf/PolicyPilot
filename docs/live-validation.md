@@ -16,6 +16,13 @@ dynamic-layer rail ships covered by unit + mock tests only, so this is its first
    curl -s https://<your-host>/version   # {"version":"1.0.0","mcp_tools":21,"mcp_ready":…}
    ```
    `mcp_tools` should be **21**. `mcp_ready` is `true` once the `mcp` SDK is installed and an mcp-scope key exists.
+3. **Conformance self-check** — proves the agent surface is wired + safe (no live SMS/gateway touched). Either:
+   ```bash
+   curl -s -H "Authorization: Bearer <api-key>" https://<your-host>/dbapi/v1/conformance   # 200 + {"ok":true,…}
+   ```
+   or, on the host: `python -m app.services.conformance` (prints a checklist, exits non-zero on failure).
+   Expect every **required** check green: tools_registered (21), write_tools_rbac_guarded,
+   readonly_capability_enforced, db_reachable. The gate states + MCP-SDK presence are reported as info.
 
 ## 1. Connect your lab (in the portal)
 

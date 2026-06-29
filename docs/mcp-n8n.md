@@ -71,7 +71,8 @@ Endpoints (thin wrappers over the same `services.mcp_tools`, so behaviour + safe
 
 **Management access policy:**
 `GET /dbapi/v1/servers`, `GET /dbapi/v1/layers?server_id=`, `GET /dbapi/v1/layers/summary`,
-`GET /dbapi/v1/layers/analyze`, `GET /dbapi/v1/coverage`, `POST /dbapi/v1/access/decide`,
+`GET /dbapi/v1/layers/analyze`, `GET /dbapi/v1/coverage`, `GET /dbapi/v1/conformance` (post-deploy
+self-check: surface wired + safe, no live SMS/gateway touched), `POST /dbapi/v1/access/decide`,
 `POST /dbapi/v1/access/apply` (publish admin-gated), `POST /dbapi/v1/access/correlate/{service,application}`.
 The `correlate/*` endpoints take a body of `{"server_id":1,"name":"dns"}` (a fuzzy name → matching Check
 Point service / application objects).

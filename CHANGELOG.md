@@ -34,6 +34,10 @@ Post-1.0.0 hardening of the agent surface, ahead of broader live validation.
 ### Operations
 - **`GET /version`** (name, build, MCP tool count, `mcp_ready`) and **`GET /readyz`** (DB readiness, 503 when
   not ready) for deploy health checks, alongside `GET /healthz`.
+- **Conformance self-check** — `python -m app.services.conformance` (prints a checklist, non-zero exit on
+  failure) and **`GET /dbapi/v1/conformance`** (api-scope; 200/503) prove the agent surface is correctly
+  wired and safe — tools registered, write tools RBAC-guarded, read-only enforced, DB reachable, gate states
+  — without touching a live SMS/gateway or mutating policy. The first thing to run after a deploy.
 - `docs/live-validation.md` — a 15-minute post-deploy smoke test covering both rails and the publish gates.
 
 ## 1.0.0 — 2026-06-28

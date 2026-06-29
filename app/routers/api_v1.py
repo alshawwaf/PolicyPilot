@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from ..services import api_keys, mcp_tools
+from ..services import api_keys, conformance, mcp_tools
 
 router = APIRouter(prefix="/dbapi/v1", tags=["api"])
 
@@ -114,6 +114,15 @@ def api_layer_analyze(server_id: int, layer: str, _=_API):
 @router.get("/coverage", summary="Terraform/Ansible coverage for a CP object")
 def api_coverage(api: str = "management", name: str = "", version: str = "", _=_API):
     return _respond(mcp_tools.coverage_lookup(api, name, version))
+
+
+@router.get("/conformance", summary="Self-check: is the agent surface correctly wired and safe? (read-only)")
+def api_conformance(_=_API):
+    """Post-deploy conformance probe — tools registered, write tools RBAC-guarded, read-only enforced, DB
+    reachable, gate states. Never touches a live SMS/gateway or mutates policy. 200 when all required checks
+    pass, else 503 (so a health check can gate on it)."""
+    report = conformance.run()
+    return report if report.get("ok") else JSONResponse(report, status_code=503)
 
 
 # --- access automation ---------------------------------------------------------------------------

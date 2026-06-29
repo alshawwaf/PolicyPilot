@@ -2335,6 +2335,44 @@ def load_layer(session, layer_name: str, package: Optional[str] = None,
     return rules
 
 
+def _norm_layer(s: str) -> str:
+    """Normalize a layer name for matching: lowercase, trimmed, with a trailing noise word the user/agent
+    often appends ('Network Layer' / 'Network policy') dropped — so 'Network Layer' resolves to 'Network'."""
+    out = " ".join((s or "").strip().lower().split())
+    for w in (" access layer", " layer", " policy", " rulebase", " access"):
+        if out.endswith(w):
+            out = out[: -len(w)].strip()
+            break
+    return out
+
+
+def resolve_layer_name(session, requested: str) -> tuple[str, str]:
+    """Map a user/agent-supplied layer name to the EXACT name on the server. Returns (canonical, note).
+
+    A case-insensitive exact match wins; otherwise a normalized match that ignores a trailing 'layer'/
+    'policy' noise word ('Network Layer' -> 'Network'). A normalized match must be UNIQUE — so we never
+    silently target the wrong layer. With no confident match, raise MgmtError listing the real layer names
+    (the caller surfaces it), so a wrong name self-corrects or fails clearly instead of dead-ending on the
+    SMS's opaque 'Requested object [...] not found'. Falls back to the requested name if layers can't be
+    listed (the load attempt then surfaces the true error)."""
+    req = (requested or "").strip()
+    try:
+        names = [L.get("name") for L in session.list_access_layers() if L.get("name")]
+    except Exception:  # noqa: BLE001 — can't list -> let the subsequent load surface the real error
+        return req, ""
+    if not names or not req:
+        return req, ""
+    for n in names:                                   # exact, case-insensitive
+        if n.lower() == req.lower():
+            return n, ""
+    rn = _norm_layer(req)
+    matches = [n for n in names if _norm_layer(n) == rn] if rn else []
+    if len(matches) == 1:
+        return matches[0], f"resolved access layer “{requested}” to “{matches[0]}”"
+    raise MgmtError(f"access layer '{requested}' was not found on this server. "
+                    f"Available access layers: {', '.join(names)}. Re-run with the exact layer name.")
+
+
 def lookup_host(session, ip: str) -> Optional[str]:
     """Existing host object name for this exact IP (v4 or v6), or None. Read-only (dedup by value;
     compared numerically so a differently-formatted v6 literal still matches)."""
@@ -3331,6 +3369,7 @@ def preview(server, secret, req: AccessRequest, layer: str, *, package: Optional
     """Read-only: correlate app -> load (cached) -> decide -> describe."""
     try:
         with read_session(server, secret) as s:          # read-only, pooled — no login per preview
+            layer, layer_note = resolve_layer_name(s, layer)   # "Network Layer" -> "Network"; clear error if unknown
             block = _dynamic_layer_block(s, layer)
             if block is not None:                         # the chosen layer is managed out-of-band
                 return {**block, "trace": s.trace}
@@ -3340,7 +3379,8 @@ def preview(server, secret, req: AccessRequest, layer: str, *, package: Optional
             rules, cached = load_layer_cached(s, server, layer, package)
             decision = decide(req, rules, _decide_options(server, layer))
             out = build_preview(s, decision, req, rules)
-            return {"ok": True, **out, "cached": cached, "trace": s.trace, **res}
+            extra = {"layer_note": layer_note} if layer_note else {}
+            return {"ok": True, **out, "cached": cached, "trace": s.trace, **res, **extra}
     except MgmtError as exc:
         return {"ok": False, "error": str(exc)}
     except Exception as exc:  # noqa: BLE001 — never let a non-MgmtError (connection/TLS reset, a degraded
@@ -3359,6 +3399,7 @@ def execute(server, secret, req: AccessRequest, layer: str, *, package: Optional
         # policy, decides, applies, and publishes/discards in one transaction -> always decided on
         # fresh rules, locks held only for this commit.
         with write_session(server, secret) as s:
+            layer, layer_note = resolve_layer_name(s, layer)   # "Network Layer" -> "Network"; clear error if unknown
             block = _dynamic_layer_block(s, layer)
             if block is not None:             # the chosen layer is a Dynamic Layer (managed out-of-band)
                 return {**block, "applied": False, "published": False, "trace": s.trace}
@@ -3370,6 +3411,8 @@ def execute(server, secret, req: AccessRequest, layer: str, *, package: Optional
             decision = decide(req, rules, _decide_options(server, layer))
             base = {"outcome": decision.outcome.value, "reason": decision.reason,
                     "target_rule": _brief(decision.target_rule), **res}
+            if layer_note:
+                base["layer_note"] = layer_note
             if decision.notes:
                 base["notes"] = list(decision.notes)
             if decision.outcome in (Outcome.NO_OP, Outcome.REVIEW):
@@ -3518,6 +3561,7 @@ def remove_preview(server, secret, req: AccessRequest, layer: str, *, package: O
     """Read-only: what PolicyPilot would do to REVOKE src->dst:svc (no_op / disable / deny / review)."""
     try:
         with read_session(server, secret) as s:
+            layer, layer_note = resolve_layer_name(s, layer)
             block = _dynamic_layer_block(s, layer)
             if block is not None:
                 return {**block, "trace": s.trace}
@@ -3526,8 +3570,9 @@ def remove_preview(server, secret, req: AccessRequest, layer: str, *, package: O
                 return _obj_review(res, unresolved, kind, {"cached": False, "trace": s.trace})
             rules, cached = load_layer_cached(s, server, layer, package)
             decision = decide_removal(req, rules, _decide_options(server, layer))
+            extra = {"layer_note": layer_note} if layer_note else {}
             return {"ok": True, **_build_removal_preview(decision, req, rules), "cached": cached,
-                    "trace": s.trace, **res}
+                    "trace": s.trace, **res, **extra}
     except MgmtError as exc:
         return {"ok": False, "error": str(exc)}
     except Exception as exc:  # noqa: BLE001
@@ -3541,6 +3586,7 @@ def remove_execute(server, secret, req: AccessRequest, layer: str, *, package: O
     (validate with zero commit). NO_OP / REVIEW change nothing. Discards on any error (mirrors execute())."""
     try:
         with write_session(server, secret) as s:
+            layer, layer_note = resolve_layer_name(s, layer)
             block = _dynamic_layer_block(s, layer)
             if block is not None:
                 return {**block, "applied": False, "published": False, "trace": s.trace}
@@ -3552,6 +3598,8 @@ def remove_execute(server, secret, req: AccessRequest, layer: str, *, package: O
             decision = decide_removal(req, rules, _decide_options(server, layer))
             base = {"action": "remove", "outcome": decision.outcome.value, "reason": decision.reason,
                     "target_rule": _brief(decision.target_rule), **res}
+            if layer_note:
+                base["layer_note"] = layer_note
             if decision.notes:
                 base["notes"] = list(decision.notes)
             if decision.outcome in (RemovalOutcome.NO_OP, RemovalOutcome.REVIEW):

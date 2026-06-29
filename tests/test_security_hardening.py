@@ -90,6 +90,25 @@ def test_table_prefs_next_open_redirect_guard(monkeypatch, nxt, expected):
     assert resp.headers["location"] == expected
 
 
+# --- layer-name resolution ("Network Layer" -> "Network") -----------------------------------------
+def test_resolve_layer_name_normalizes_and_lists():
+    session = types.SimpleNamespace(list_access_layers=lambda: [{"name": "Network"}, {"name": "DMZ"}])
+    assert aa.resolve_layer_name(session, "Network") == ("Network", "")          # exact
+    assert aa.resolve_layer_name(session, "network")[0] == "Network"             # case-insensitive exact
+    canon, note = aa.resolve_layer_name(session, "Network Layer")                # the reported bug (capital L)
+    assert canon == "Network" and "Network" in note
+    assert aa.resolve_layer_name(session, "network layer")[0] == "Network"       # lowercase too
+    with pytest.raises(aa.MgmtError) as e:
+        aa.resolve_layer_name(session, "Bogus Layer")
+    assert "Available access layers" in str(e.value) and "Network" in str(e.value)
+
+
+def test_resolve_layer_name_passthrough_when_unlistable():
+    # If layers can't be listed, fall back to the requested name (the later load surfaces the real error).
+    session = types.SimpleNamespace(list_access_layers=lambda: (_ for _ in ()).throw(RuntimeError("no api")))
+    assert aa.resolve_layer_name(session, "Whatever") == ("Whatever", "")
+
+
 # --- clearer layer-not-found message --------------------------------------------------------------
 def test_load_layer_missing_lists_available_layers(monkeypatch):
     def _boom(session, name, package, max_rules=50000):

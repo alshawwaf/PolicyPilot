@@ -20,6 +20,14 @@ A dedicated security audit (adversarially verified) found no blockers; two major
 - **Open redirect via a protocol-relative `next=`** (minor) — the table-prefs redirect now rejects `//host`
   and scheme-bearing targets (same-origin only).
 
+### Layer-name resolution (UX)
+- The engine now **resolves the access-layer name** a user/agent supplies: a case-insensitive exact match,
+  else a normalized match that ignores a trailing "layer"/"policy" noise word — so "Network Layer",
+  "Network layer", and "Network" all resolve to the real `Network` layer (a unique match is required, so it
+  never silently targets the wrong layer). When there's no confident match it returns a clear error listing
+  the available layers, instead of the SMS's opaque "Requested object [...] not found". Applied across
+  decide / apply / remove on every surface.
+
 ### Customer-readiness audit pass
 A full multi-dimension audit (security, engine, MCP, data, UX, docs, deploy, cruft, tests) found no blockers
 and no confirmed majors; the verified items were closed:

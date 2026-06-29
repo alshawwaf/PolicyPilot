@@ -2,11 +2,9 @@
 {% block title %}Settings{% endblock %}
 {% block content %}
 <style>
-  .set-intro { color:var(--muted); font-size:12.5px; line-height:1.55; margin:-4px 0 6px; max-width:840px; }
-  .settings-main .card { padding:20px 22px; }
-  .settings-main .card h2 { display:flex; align-items:center; gap:9px; font-size:16px; margin:0 0 2px; }
-  .setrow { padding:13px 0; border-top:1px solid var(--line); }
-  .setrow:first-of-type { border-top:0; padding-top:8px; }
+  .set-intro { color:var(--muted); font-size:12.5px; line-height:1.55; margin:-2px 0 10px; max-width:840px; }
+  .setrow { padding:12px 0; border-top:1px solid var(--line); }
+  .setrow:first-of-type { border-top:0; padding-top:6px; }
   .set-line { display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
   .set-name { font-weight:650; font-size:13.5px; flex:0 0 250px; max-width:250px; }
   .set-ctrl { flex:1 1 260px; display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
@@ -16,417 +14,344 @@
   .set-help { margin-top:7px; font-size:12.5px; color:var(--muted); line-height:1.55; max-width:820px; }
   .set-mono { font-family:ui-monospace,monospace; }
   @media (max-width:720px) { .set-name { flex-basis:100%; max-width:none; } }
-  .settings-actions { display:flex; gap:12px; align-items:center; margin-top:18px; padding:14px 16px;
-    background:var(--surface-2); border:1px solid var(--line); border-radius:14px; }
-  .settings-actions .grow { flex:1; color:var(--faint); font-size:12px; text-align:right; }
-  .ap-btn { margin-top:10px; padding:8px 15px; font-weight:700; font-size:12.5px; border:0;
-    border-radius:10px; background:var(--accent-grad); color:#fff; cursor:pointer;
-    box-shadow:0 3px 12px var(--accent-soft); }
-  .ap-btn:hover { filter:brightness(1.05); }
-  .ap-caption { margin-top:7px; font-size:12px; color:var(--muted); line-height:1.5; max-width:820px; }
-  /* "How an agent is authorized" explainer matrix (MCP / agent group) */
-  .agent-matrix { border:1px solid var(--line); border-radius:12px; background:var(--surface-2);
-    padding:13px 15px; margin:2px 0 14px; }
-  .agent-matrix table.mini { border-collapse:collapse; width:100%; margin:10px 0 2px; font-size:12.5px; }
-  .agent-matrix table.mini th, .agent-matrix table.mini td { text-align:left; padding:7px 10px;
-    border-bottom:1px solid var(--line); vertical-align:top; }
-  .agent-matrix table.mini th { font-size:11px; text-transform:uppercase; letter-spacing:.4px; color:var(--faint); }
-  .agent-matrix table.mini tr:last-child td { border-bottom:0; }
-  .agent-matrix table.mini td:first-child { font-weight:650; white-space:nowrap; }
+
+  .set-eyebrow { font-size:11px; font-weight:800; letter-spacing:.5px; text-transform:uppercase;
+    color:var(--faint); margin:22px 2px 11px; }
+  /* agent-autonomy strip */
+  .auto-strip { display:flex; align-items:center; gap:14px; flex-wrap:wrap; padding:11px 15px; border-radius:12px;
+    background:var(--accent-soft); border:1px solid var(--line); font-size:12.5px; margin-bottom:4px; }
+  .auto-strip .k { color:var(--muted); }
+  .auto-strip .dot { display:inline-flex; align-items:center; gap:6px; font-weight:600; }
+  .auto-strip .dot.on { color:var(--ok); } .auto-strip .dot.off { color:var(--faint); }
+  .auto-strip .mode-now { margin-left:auto; color:var(--faint); }
+  /* operating-mode cards */
+  .modes { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; }
+  @media (max-width:720px) { .modes { grid-template-columns:1fr; } }
+  .mode { position:relative; text-align:left; background:var(--surface-2); border:1px solid var(--line);
+    border-radius:13px; padding:14px; cursor:pointer; font-family:inherit; color:var(--text); transition:border-color .13s; }
+  .mode:hover { border-color:var(--accent); }
+  .mode.on { border-color:transparent; box-shadow:0 0 0 2px var(--accent); }
+  .mode .mi { width:30px; height:30px; border-radius:9px; background:var(--surface); display:flex; align-items:center;
+    justify-content:center; margin-bottom:9px; }
+  .mode .mi svg { width:17px; height:17px; color:var(--muted); }
+  .mode.on .mi { background:var(--accent-grad); } .mode.on .mi svg { color:#fff; }
+  .mode .mt { font-weight:700; font-size:14.5px; }
+  .mode .md { font-size:12px; color:var(--muted); margin-top:3px; line-height:1.45; min-height:34px; }
+  .mode .mg { margin-top:9px; font-size:11px; color:var(--faint); }
+  .mode .mg b { color:var(--text); font-weight:600; }
+  .mode .chk { position:absolute; top:11px; right:12px; color:var(--accent); font-weight:800; display:none; }
+  .mode.on .chk { display:block; }
+  /* consolidated agent matrix */
+  .agent-matrix { margin:10px 0 4px; }
+  .agent-matrix table.mini { border-collapse:collapse; width:100%; font-size:12.5px; }
+  .agent-matrix th, .agent-matrix td { text-align:left; padding:7px 10px; border-bottom:1px solid var(--line); vertical-align:top; }
+  .agent-matrix th { font-size:11px; text-transform:uppercase; letter-spacing:.4px; color:var(--faint); font-weight:600; }
+  .agent-matrix tr:last-child td { border-bottom:0; }
+  .agent-matrix td:first-child { font-weight:650; white-space:nowrap; }
   .agent-matrix .pill { font-size:11px; }
+  .card { background:var(--surface); border:1px solid var(--line); border-radius:14px; padding:16px 18px; margin-top:14px; }
+  .card > h2 { display:flex; align-items:center; gap:9px; font-size:15px; margin:0 0 2px; }
+  .card .axis { font-size:11px; color:var(--faint); font-weight:400; }
+  .ro-note { margin-top:10px; font-size:11.5px; color:var(--faint); display:flex; align-items:center; gap:7px; }
+  .xlink { color:var(--accent); cursor:pointer; }
+  /* advanced accordion */
+  .acc { border:1px solid var(--line); border-radius:14px; overflow:hidden; }
+  .acc-item + .acc-item .acc-h { border-top:1px solid var(--line); }
+  .acc-h { display:flex; align-items:center; gap:10px; width:100%; text-align:left; background:var(--surface);
+    color:var(--text); border:0; font-family:inherit; font-size:13.5px; font-weight:650; padding:13px 16px; cursor:pointer; }
+  .acc-h:hover { background:var(--surface-2); }
+  .acc-h .cv { margin-left:auto; color:var(--faint); transition:transform .15s; }
+  .acc-h.open .cv { transform:rotate(90deg); }
+  .acc-b { display:none; padding:4px 16px 16px; background:var(--surface-2); }
+  .acc-b.open { display:block; }
+  /* sticky save bar */
+  .save-bar { display:flex; gap:12px; align-items:center; margin-top:18px; padding:13px 16px;
+    background:var(--surface-2); border:1px solid var(--line); border-radius:14px; position:sticky; bottom:14px;
+    box-shadow:0 8px 24px rgba(0,0,0,.28); z-index:5; }
+  .save-bar .grow { flex:1; color:var(--faint); font-size:12px; text-align:right; }
+  .pill.ok { background:var(--ok-bg,rgba(46,158,107,.14)); color:var(--ok,#5dcaa5); }
 </style>
 
 {% set GROUP_DESC = {
   'Management API': 'How the portal authenticates and caches when it reads or writes a Check Point SMS — tuned to stay inside Check Point’s login-rate and concurrent-session limits.',
-  'Storage & retention': 'Keep the high-volume Activity log bounded so a long-running demo can never fill the disk.',
+  'Storage & retention': 'Keep the high-volume Activity log bounded so a long-running deployment can never fill the disk.',
   'Access automation': 'How the engine names auto-created objects and rules.',
-  'Access automation logic': 'How the engine SHAPES a change (reuse / widen / create / placement) — pick a one-click Behavior profile, or Custom for individual toggles. Separate from whether an agent may publish (that lives under MCP / agent).',
-  'MCP / agent': 'What an LLM agent over /mcp is AUTHORIZED to do — can it publish to live policy, and may it do so in one turn (Autopilot). Separate from the Behavior profile above, which only shapes the change.',
+  'Governance & audit': 'A work-note after every committed change — an in-app audit trail plus an optional outbound webhook.',
   'Ticketing webhook': 'The inbound endpoint that turns a ServiceNow / Jira / custom ticket into a policy change.',
   'Portal': 'Portal-wide settings.'
 } %}
+{% set HERO = ['MCP / agent', 'Access automation logic'] %}
+{% set AGENT = groups.get('MCP / agent', []) %}
+{% set LOGIC = groups.get('Access automation logic', []) %}
+
+{% set _pub = vals.get('mcp_allow_publish') %}
+{% set _auto = vals.get('aa_autopilot') %}
+{% set _prof = vals.get('aa_profile') %}
+{% set active_mode = 'custom' %}
+{% if _pub and _auto and _prof == 'aggressive' %}{% set active_mode = 'autonomous' %}
+{% elif _pub and not _auto and _prof == 'balanced' %}{% set active_mode = 'supervised' %}
+{% elif (not _pub) and (not _auto) and _prof == 'balanced' %}{% set active_mode = 'readonly' %}
+{% endif %}
+
+{% macro setrow(s, vals, secrets, crypto_ok, detected_base_url) %}
+  <div class="setrow">
+    {% if s.kind == 'bool' %}
+      <label class="set-toggle"><input type="checkbox" name="{{ s.key }}" {% if vals[s.key] %}checked{% endif %}> {{ s.label }}</label>
+    {% elif s.kind == 'secret' %}
+      <div class="set-line">
+        <span class="set-name">{{ s.label }}
+          {% if secrets.get(s.key) %}<span class="pill ok" style="font-size:11px;">set</span>
+          {% else %}<span class="pill" style="font-size:11px;background:var(--surface-2);color:var(--muted);">not set</span>{% endif %}</span>
+        <div class="set-ctrl">
+          {% if crypto_ok %}
+            <input type="password" name="{{ s.key }}" value="" autocomplete="new-password" spellcheck="false" class="set-mono"
+                   placeholder="{% if secrets.get(s.key) %}•••• stored — type to replace{% else %}enter a value to set{% endif %}">
+            {% if s.generate %}<button type="button" class="btn secondary gen-secret" data-gen="{{ s.key }}" title="Generate a strong random token" style="padding:6px 13px;font-size:12px;">Generate</button>{% endif %}
+            {% if secrets.get(s.key) %}<label style="display:inline-flex;align-items:center;gap:6px;font-weight:500;font-size:12px;color:var(--muted);"><input type="checkbox" name="{{ s.key }}__clear"> clear</label>{% endif %}
+          {% else %}
+            <span class="small" style="color:var(--warn);max-width:420px;">At-rest encryption unavailable — set PILOT_ENCRYPTION_KEY or PILOT_SESSION_SECRET to store this in the portal, or keep using the env var.</span>
+          {% endif %}
+        </div>
+      </div>
+    {% elif s.kind == 'choice' %}
+      <div class="set-line"><span class="set-name">{{ s.label }}</span>
+        <div class="set-ctrl"><select name="{{ s.key }}">{% for val, lbl in s.choices %}<option value="{{ val }}" {% if vals[s.key] == val %}selected{% endif %}>{{ lbl }}</option>{% endfor %}</select></div></div>
+    {% elif s.kind == 'str' %}
+      <div class="set-line"><span class="set-name">{{ s.label }}</span>
+        <div class="set-ctrl"><input type="text" name="{{ s.key }}" value="{{ vals[s.key] }}" class="set-mono" maxlength="{{ s.max or 200 }}" spellcheck="false" autocomplete="off"></div></div>
+    {% elif s.kind == 'text' %}
+      <div class="set-name" style="flex-basis:100%;max-width:none;margin-bottom:6px;">{{ s.label }}</div>
+      <textarea name="{{ s.key }}" rows="4" maxlength="{{ s.max or 4000 }}" spellcheck="false" class="set-mono" style="display:block;width:100%;font-size:12.5px;padding:8px 10px;box-sizing:border-box;">{{ vals[s.key] }}</textarea>
+    {% else %}
+      <div class="set-line"><span class="set-name">{{ s.label }}</span>
+        <div class="set-ctrl"><input type="number" name="{{ s.key }}" value="{{ vals[s.key] }}" min="{{ s.min }}" max="{{ s.max }}" step="1"><span class="muted small">({{ s.min }}–{{ s.max }})</span></div></div>
+    {% endif %}
+    <div class="set-help">{{ s.help }}</div>
+    {% if s.key == 'base_url' and detected_base_url %}
+    <div class="small" style="margin-top:6px;">Detected from this session: <code>{{ detected_base_url }}</code>
+      <button type="button" class="btn secondary" data-url="{{ detected_base_url }}" style="padding:2px 10px;font-size:12px;margin-left:6px;"
+              onclick="var i=document.querySelector('input[name=base_url]'); i.value=this.dataset.url; i.focus();">Use</button></div>
+    {% endif %}
+  </div>
+{% endmacro %}
 
 <div class="page-head">
   <span class="icon-chip lg"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span>
-  <div class="ph-main">
-    <h1>Settings</h1>
-    <p class="ph-sub">Control how PolicyPilot talks to your Check Point management servers. Changes take effect immediately, across the whole portal.</p>
-  </div>
+  <div class="ph-main"><h1>Settings</h1>
+    <p class="ph-sub">Pick an operating mode to set the whole portal at once, or fine-tune below. Changes take effect immediately on Save.</p></div>
 </div>
 
-<div class="settings-layout">
-  <nav class="settings-nav" aria-label="Settings sections">
-    {% for group in groups.keys() %}
-    <a href="#grp-{{ group | lower | replace(' & ','-') | replace(' / ','-') | replace(' ','-') }}">{{ group }}</a>
-    {% endfor %}
-    <a href="#grp-api-keys">API keys</a>
-  </nav>
-  <div class="settings-main">
-
 <form method="post" action="/settings" id="settings-form">
-{% for group, items in groups.items() %}
-  <div class="card" id="grp-{{ group | lower | replace(' & ','-') | replace(' / ','-') | replace(' ','-') }}">
-    <h2>{{ group }}</h2>
-    {% if GROUP_DESC.get(group) %}<p class="set-intro">{{ GROUP_DESC[group] }}</p>{% endif %}
-    {% if group == 'MCP / agent' %}
+
+  <div class="auto-strip" id="auto-strip">
+    <span class="k">This portal’s agent can:</span>
+    <span class="dot {{ 'on' if _pub else 'off' }}" id="strip-pub"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V6M5 12l7-7 7 7"/></svg>Publish</span>
+    <span class="dot {{ 'on' if _auto else 'off' }}" id="strip-auto"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 3 14h9l-1 8 10-12h-9z"/></svg>Autopilot</span>
+    <span class="dot off"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20v-6M6 20v-3M18 20v-9"/></svg><span id="strip-rate">{% if vals.get('agent_rate_limit_per_min') %}{{ vals.get('agent_rate_limit_per_min') }}/min{% else %}no rate limit{% endif %}</span></span>
+    <span class="mode-now" id="strip-mode">mode: {{ active_mode }}</span>
+  </div>
+
+  <p class="set-eyebrow">Operating mode — one choice sets everything</p>
+  <div class="modes" id="modes">
+    <button type="button" class="mode {% if active_mode == 'readonly' %}on{% endif %}" data-mode="readonly" data-pub="0" data-auto="0" data-prof="balanced">
+      <span class="chk">✓</span>
+      <span class="mi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg></span>
+      <div class="mt">Read-only</div>
+      <div class="md">Agents preview and explain. Look, don’t touch.</div>
+      <div class="mg">Publish <b>off</b> · Autopilot <b>—</b></div></button>
+    <button type="button" class="mode {% if active_mode == 'supervised' %}on{% endif %}" data-mode="supervised" data-pub="1" data-auto="0" data-prof="balanced">
+      <span class="chk">✓</span>
+      <span class="mi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg></span>
+      <div class="mt">Supervised</div>
+      <div class="md">Agents propose; you approve each publish.</div>
+      <div class="mg">Publish <b>on</b> · Autopilot <b>off</b></div></button>
+    <button type="button" class="mode {% if active_mode == 'autonomous' %}on{% endif %}" data-mode="autonomous" data-pub="1" data-auto="1" data-prof="aggressive">
+      <span class="chk">✓</span>
+      <span class="mi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 3 14h9l-1 8 10-12h-9z"/></svg></span>
+      <div class="mt">Autonomous</div>
+      <div class="md">One sentence resolves, applies and publishes. Hands-off.</div>
+      <div class="mg">Publish <b>on</b> · Autopilot <b>on</b></div></button>
+  </div>
+
+  <div class="card" id="grp-mcp-agent">
+    <h2><span class="icon-chip"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="12" cy="5" r="2"/><path d="M12 7v4M8 16h0M16 16h0"/></svg></span>Agent authorization <span class="axis" id="mode-tag">{% if active_mode == 'custom' %}· Custom{% endif %}</span></h2>
+    <p class="set-intro">What an LLM agent over <code>/mcp</code> may do. The mode above sets these two gates — nudge a toggle to fine-tune (it switches the mode to Custom). Separate from the Behavior profile below, which only shapes the change.</p>
     <div class="agent-matrix">
-      <div style="font-weight:700;font-size:13px;">How an agent is authorized — two independent gates</div>
-      <p class="set-intro" style="margin:5px 0 0;"><b>Publish</b> decides whether an agent may commit to live
-        policy at all; <b>Autopilot</b> decides whether it may do so in one turn without you saying “publish”.
-        Autopilot rides on Publish (with Publish off, nothing commits). Both are separate from the engine’s
-        <b>Behavior profile</b> on <a href="#grp-access-automation-logic">Access automation logic</a>, which only
-        shapes the change.</p>
       <table class="mini">
         <thead><tr><th>If you want…</th><th>Publish</th><th>Autopilot</th><th>What the agent does</th></tr></thead>
         <tbody>
-          <tr><td>Look, don’t touch</td>
-            <td><span class="pill faint">off</span></td><td><span class="muted">—</span></td>
-            <td>Always previews / dry-runs; a publish is refused.</td></tr>
-          <tr><td>Preview, then you approve</td>
-            <td><span class="pill ok">on</span></td><td><span class="pill faint">off</span></td>
-            <td>Dry-runs first; commits only when your message says “publish”.</td></tr>
-          <tr><td>One sentence → done <span class="muted">(demo)</span></td>
-            <td><span class="pill ok">on</span></td><td><span class="pill ok">on</span></td>
-            <td>Resolves, applies <b>and publishes</b> in one turn — no confirmation step.</td></tr>
+          <tr><td>Read-only</td><td><span class="pill faint">off</span></td><td><span class="muted">—</span></td><td>Always previews / dry-runs; a publish is refused.</td></tr>
+          <tr><td>Supervised</td><td><span class="pill ok">on</span></td><td><span class="pill faint">off</span></td><td>Dry-runs first; commits only when your message says “publish”.</td></tr>
+          <tr><td>Autonomous</td><td><span class="pill ok">on</span></td><td><span class="pill ok">on</span></td><td>Resolves, applies and publishes in one turn — no confirmation.</td></tr>
         </tbody>
       </table>
-      <p class="muted small" style="margin:8px 0 0;">Shortcut: the <b>⚡ demo preset</b> on
-        <a href="#grp-access-automation-logic">Access automation logic</a> flips both of these on (plus the
-        Aggressive profile) in one click. A <b>read-only</b> API key can never publish regardless of these.</p>
     </div>
-    {% endif %}
-    {% if group == 'Ticket write-back' %}
-    <p class="set-intro">Write-back is vendor-neutral — if a ticket includes a <code>callback_url</code>, the
-      result is POSTed there (ServiceNow, Jira, Slack, anything). The fields below configure the optional
-      built-in <b>ServiceNow</b> Table API adapter, used only when no <code>callback_url</code> is supplied.</p>
-    {% endif %}
-    {% for s in items %}
-      <div class="setrow">
-        {% if s.kind == 'bool' %}
-          <label class="set-toggle">
-            <input type="checkbox" name="{{ s.key }}" {% if vals[s.key] %}checked{% endif %}>
-            {{ s.label }}
-          </label>
-        {% elif s.kind == 'secret' %}
-          <div class="set-line">
-            <span class="set-name">{{ s.label }}
-              {% if secrets.get(s.key) %}<span class="pill ok" style="font-size:11px;">set</span>
-              {% else %}<span class="pill" style="font-size:11px;background:var(--surface-2);color:var(--muted);">not set</span>{% endif %}
-            </span>
-            <div class="set-ctrl">
-              {% if crypto_ok %}
-                <input type="password" name="{{ s.key }}" value="" autocomplete="new-password" spellcheck="false"
-                       class="set-mono"
-                       placeholder="{% if secrets.get(s.key) %}•••• stored — type to replace{% else %}enter a value to set{% endif %}">
-                {% if s.generate %}
-                  <button type="button" class="btn secondary gen-secret" data-gen="{{ s.key }}"
-                          title="Generate a strong random token" style="padding:6px 13px;font-size:12px;">Generate</button>
-                {% endif %}
-                {% if secrets.get(s.key) %}
-                  <label style="display:inline-flex;align-items:center;gap:6px;font-weight:500;font-size:12px;color:var(--muted);">
-                    <input type="checkbox" name="{{ s.key }}__clear"> clear
-                  </label>
-                {% endif %}
-              {% else %}
-                <span class="small" style="color:var(--warn);max-width:420px;">At-rest encryption unavailable —
-                  set PILOT_ENCRYPTION_KEY or PILOT_SESSION_SECRET to store this in the portal, or keep using
-                  the env var.</span>
-              {% endif %}
-            </div>
-          </div>
-        {% elif s.kind == 'choice' %}
-          <div class="set-line">
-            <span class="set-name">{{ s.label }}</span>
-            <div class="set-ctrl">
-              <select name="{{ s.key }}">
-                {% for val, lbl in s.choices %}
-                <option value="{{ val }}" {% if vals[s.key] == val %}selected{% endif %}>{{ lbl }}</option>
-                {% endfor %}
-              </select>
-            </div>
-          </div>
-        {% elif s.kind == 'str' %}
-          <div class="set-line">
-            <span class="set-name">{{ s.label }}</span>
-            <div class="set-ctrl">
-              <input type="text" name="{{ s.key }}" value="{{ vals[s.key] }}" class="set-mono"
-                     maxlength="{{ s.max or 200 }}" spellcheck="false" autocomplete="off">
-            </div>
-          </div>
-        {% elif s.kind == 'text' %}
-          <div class="set-name" style="flex-basis:100%;max-width:none;margin-bottom:6px;">{{ s.label }}</div>
-          <textarea name="{{ s.key }}" rows="4" maxlength="{{ s.max or 4000 }}" spellcheck="false" class="set-mono"
-                    style="display:block;width:100%;font-size:12.5px;padding:8px 10px;box-sizing:border-box;">{{ vals[s.key] }}</textarea>
-        {% else %}
-          <div class="set-line">
-            <span class="set-name">{{ s.label }}</span>
-            <div class="set-ctrl">
-              <input type="number" name="{{ s.key }}" value="{{ vals[s.key] }}"
-                     min="{{ s.min }}" max="{{ s.max }}" step="1">
-              <span class="muted small">({{ s.min }}–{{ s.max }})</span>
-            </div>
-          </div>
-        {% endif %}
-        <div class="set-help">{{ s.help }}</div>
-        {% if s.key == 'base_url' and detected_base_url %}
-        <div class="small" style="margin-top:6px;">Detected from this session:
-          <code>{{ detected_base_url }}</code>
-          <button type="button" class="btn secondary" data-url="{{ detected_base_url }}"
-                  style="padding:2px 10px;font-size:12px;margin-left:6px;"
-                  onclick="var i=document.querySelector('input[name=base_url]'); i.value=this.dataset.url; i.focus();">Use</button>
-        </div>
-        {% endif %}
-      </div>
-    {% endfor %}
+    {% for s in AGENT %}{{ setrow(s, vals, secrets, crypto_ok, detected_base_url) }}{% endfor %}
+    <div class="ro-note"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>A read-only API key can never publish, whatever the mode.</div>
   </div>
-{% endfor %}
 
+  <div class="card" id="grp-access-automation-logic">
+    <h2><span class="icon-chip"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></svg></span>Behavior profile <span class="axis">· a separate axis</span></h2>
+    <p class="set-intro">How the engine <i>shapes</i> a change — reuse / widen / create / placement — for every surface, not just the agent. The mode picks a sensible default; change it independently here.</p>
+    {% for s in LOGIC %}{{ setrow(s, vals, secrets, crypto_ok, detected_base_url) }}{% endfor %}
+  </div>
+
+  <p class="set-eyebrow">Advanced — connection, storage, governance, naming</p>
+  <div class="acc" id="acc">
+    {% for group, items in groups.items() %}{% if group not in HERO %}
+    <div class="acc-item">
+      <button type="button" class="acc-h">{{ group }}<svg class="cv" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></button>
+      <div class="acc-b">
+        {% if GROUP_DESC.get(group) %}<p class="set-intro">{{ GROUP_DESC[group] }}</p>{% endif %}
+        {% if group == 'Ticket write-back' %}<p class="set-intro">Write-back is vendor-neutral — if a ticket includes a <code>callback_url</code>, the result is POSTed there (SSRF-guarded). The fields below configure the optional built-in <b>ServiceNow</b> adapter, used only when no <code>callback_url</code> is supplied.</p>{% endif %}
+        {% for s in items %}{{ setrow(s, vals, secrets, crypto_ok, detected_base_url) }}{% endfor %}
+      </div>
+    </div>
+    {% endif %}{% endfor %}
+  </div>
 </form>
 
-<div class="settings-actions">
-  <button class="btn" type="submit" form="settings-form">Save settings</button>
-  <form method="post" action="/settings/reset" style="margin:0;">
-    <button class="btn secondary" type="submit" data-confirm="Restore all settings to their defaults?"
-            data-confirm-title="Restore defaults" data-confirm-ok="Restore defaults">Restore defaults</button>
-  </form>
-  <span class="grow">Changes take effect immediately across the portal.</span>
-</div>
-
 <div class="card" id="grp-api-keys" style="margin-top:18px;">
-  <h2>API keys</h2>
-  <p class="set-intro">Named, revocable keys for the machine endpoints. An <b>MCP</b> key is sent as
-    <code>Authorization: Bearer &lt;key&gt;</code> to /mcp; a <b>webhook</b> key is sent as the
-    <code>X-PolicyPilot-Token</code> header. Keys are stored hashed and shown <b>once</b> at creation — copy
-    it then. Revoking is immediate. (The single shared token in MCP / agent and Ticketing webhook above
-    still works too, as a fallback.)</p>
+  <h2><span class="icon-chip"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3"/></svg></span>API keys</h2>
+  <p class="set-intro">Named, revocable keys for the machine endpoints. An <b>mcp</b> key is sent as <code>Authorization: Bearer &lt;key&gt;</code> to /mcp; a <b>webhook</b> key as the <code>X-PolicyPilot-Token</code> header. Keys are stored hashed and shown <b>once</b> at creation. Each is <b>read-write</b> or <b>read-only</b> (look-but-don’t-touch).</p>
 
   {% if new_key %}
-  <div style="border:1px solid var(--ok-line,#2e9e6b);background:var(--ok-bg,rgba(46,158,107,.08));
-              border-radius:11px;padding:12px 14px;margin:0 0 14px;">
+  <div style="border:1px solid var(--ok-line,#2e9e6b);background:var(--ok-bg,rgba(46,158,107,.08));border-radius:11px;padding:12px 14px;margin:0 0 14px;">
     <div style="font-weight:700;margin-bottom:6px;">New {{ new_key.scope }} key “{{ new_key.name }}” ({{ 'read-write' if new_key.can_write else 'read-only' }}) — copy it now (shown once) · expires {{ new_key.expires }}</div>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-      <input id="new-key-val" type="text" readonly value="{{ new_key.key }}"
-             style="flex:1;min-width:320px;font-family:ui-monospace,monospace;font-size:13px;"
-             onclick="this.select();">
+      <input id="new-key-val" type="text" readonly value="{{ new_key.key }}" style="flex:1;min-width:320px;font-family:ui-monospace,monospace;font-size:13px;" onclick="this.select();">
       <button type="button" class="btn" onclick="var i=document.getElementById('new-key-val');i.select();navigator.clipboard&&navigator.clipboard.writeText(i.value);this.textContent='Copied';">Copy</button>
     </div>
   </div>
   {% endif %}
 
   {% if api_keys %}
-  <table class="data" style="width:100%;border-collapse:collapse;margin-bottom:14px;">
-    <thead>
-      <tr style="text-align:left;border-bottom:1px solid var(--line);">
-        <th style="padding:7px 8px;">Name</th><th style="padding:7px 8px;">Scope</th>
-        <th style="padding:7px 8px;">Access</th>
-        <th style="padding:7px 8px;">Key</th><th style="padding:7px 8px;">Created</th>
-        <th style="padding:7px 8px;">Last used</th><th style="padding:7px 8px;">Expires</th>
-        <th style="padding:7px 8px;"></th>
-      </tr>
-    </thead>
+  <div class="tablewrap"><table class="data" style="width:100%;border-collapse:collapse;margin-bottom:14px;">
+    <thead><tr style="text-align:left;border-bottom:1px solid var(--line);">
+      <th style="padding:7px 8px;">Name</th><th style="padding:7px 8px;">Scope</th><th style="padding:7px 8px;">Access</th>
+      <th style="padding:7px 8px;">Key</th><th style="padding:7px 8px;">Created</th><th style="padding:7px 8px;">Last used</th>
+      <th style="padding:7px 8px;">Expires</th><th style="padding:7px 8px;"></th></tr></thead>
     <tbody>
       {% for k in api_keys %}
       <tr style="border-bottom:1px solid var(--line);{% if k.status == 'expired' %}opacity:.6;{% endif %}">
         <td style="padding:7px 8px;font-weight:600;">{{ k.name }}
           {% if k.status == 'expired' %}<span class="pill" style="font-size:10px;background:var(--danger-bg);color:var(--danger);">expired</span>
           {% elif k.status == 'soon' %}<span class="pill" style="font-size:10px;background:var(--warn-bg);color:var(--warn);">expires soon</span>
-          {% elif k.status == 'unused' %}<span class="pill" style="font-size:10px;background:var(--surface-2);color:var(--muted);">unused 30d+</span>{% endif %}
-        </td>
+          {% elif k.status == 'unused' %}<span class="pill" style="font-size:10px;background:var(--surface-2);color:var(--muted);">unused 30d+</span>{% endif %}</td>
         <td style="padding:7px 8px;"><span class="pill" style="font-size:11px;">{{ k.scope }}</span></td>
-        <td style="padding:7px 8px;">
-          {% if k.can_write %}<span class="pill" style="font-size:11px;">read-write</span>
-          {% else %}<span class="pill ok" style="font-size:11px;" title="Preview/read tools only — every write tool refuses">read-only</span>{% endif %}
-        </td>
+        <td style="padding:7px 8px;">{% if k.can_write %}<span class="pill" style="font-size:11px;">read-write</span>{% else %}<span class="pill ok" style="font-size:11px;" title="Preview/read tools only — every write tool refuses">read-only</span>{% endif %}</td>
         <td style="padding:7px 8px;font-family:ui-monospace,monospace;color:var(--muted);">…{{ k.hint }}</td>
         <td style="padding:7px 8px;" class="small muted">{{ k.created.strftime('%Y-%m-%d') if k.created else '—' }}</td>
         <td style="padding:7px 8px;" class="small muted">{{ k.last_used.strftime('%Y-%m-%d %H:%M') if k.last_used else 'never' }}</td>
         <td style="padding:7px 8px;" class="small muted">
           <div style="font-weight:600;color:var(--text);">{{ k.expires.strftime('%Y-%m-%d') if k.expires else 'never' }}</div>
-          <form method="post" action="/settings/api-keys/{{ k.id }}/expiry"
-                style="display:flex;gap:4px;align-items:center;margin-top:4px;flex-wrap:wrap;">
-            <input type="date" name="expires_date" title="Set a specific expiry date"
-                   style="font-size:11px;padding:2px 4px;">
+          <form method="post" action="/settings/api-keys/{{ k.id }}/expiry" style="display:flex;gap:4px;align-items:center;margin-top:4px;flex-wrap:wrap;">
+            <input type="date" name="expires_date" title="Set a specific expiry date" style="font-size:11px;padding:2px 4px;">
             <select name="expires" title="…or a preset" style="font-size:11px;padding:2px 4px;">
-              <option value="">— change —</option>
-              <option value="30">30 days</option>
-              <option value="90">90 days</option>
-              <option value="365">1 year</option>
-              <option value="never">never</option>
-            </select>
+              <option value="">— change —</option><option value="30">30 days</option><option value="90">90 days</option><option value="365">1 year</option><option value="never">never</option></select>
             <button class="btn secondary" type="submit" style="padding:2px 9px;font-size:11px;">Update</button>
-          </form>
-        </td>
+          </form></td>
         <td style="padding:7px 8px;text-align:right;">
           <form method="post" action="/settings/api-keys/{{ k.id }}/revoke" style="margin:0;">
-            <button class="btn secondary" type="submit" style="padding:4px 12px;font-size:12px;"
-                    data-confirm="Revoke “{{ k.name }}”? Clients using it will get 401 immediately."
-                    data-confirm-title="Revoke API key" data-confirm-ok="Revoke">Revoke</button>
-          </form>
-        </td>
+            <button class="btn secondary" type="submit" style="padding:4px 12px;font-size:12px;" data-confirm="Revoke “{{ k.name }}”? Clients using it will get 401 immediately." data-confirm-title="Revoke API key" data-confirm-ok="Revoke">Revoke</button>
+          </form></td>
       </tr>
       {% endfor %}
     </tbody>
-  </table>
-  {% else %}
-  <p class="muted small">No API keys yet.</p>
-  {% endif %}
+  </table></div>
+  {% else %}<p class="muted small">No API keys yet.</p>{% endif %}
 
   <form method="post" action="/settings/api-keys" style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;">
-    <label style="font-weight:600;font-size:13px;">Name
-      <input type="text" name="name" placeholder="e.g. n8n-prod" maxlength="120" required
-             style="display:block;min-width:200px;margin-top:3px;">
-    </label>
-    <label style="font-weight:600;font-size:13px;">Scope
-      <select name="scope" style="display:block;margin-top:3px;">
-        {% for sc in api_scopes %}<option value="{{ sc }}">{{ sc }}</option>{% endfor %}
-      </select>
-    </label>
-    <label style="font-weight:600;font-size:13px;">Expires
-      <select name="expires" style="display:block;margin-top:3px;">
-        {% for val, lbl in expiry_presets %}<option value="{{ val }}" {% if val == '90' %}selected{% endif %}>{{ lbl }}</option>{% endfor %}
-      </select>
-    </label>
-    <label style="font-weight:600;font-size:13px;">or on date
-      <input type="date" name="expires_date" style="display:block;margin-top:3px;">
-    </label>
-    <label style="font-weight:600;font-size:13px;display:flex;align-items:center;gap:6px;padding-bottom:7px;"
-           title="A read-only key can preview/read (decide_access, fetch, list_*, …) but every write tool refuses.">
-      <input type="checkbox" name="readonly" style="margin:0;"> Read-only
-    </label>
+    <label style="font-weight:600;font-size:13px;">Name<input type="text" name="name" placeholder="e.g. n8n-prod" maxlength="120" required style="display:block;min-width:200px;margin-top:3px;"></label>
+    <label style="font-weight:600;font-size:13px;">Scope<select name="scope" style="display:block;margin-top:3px;">{% for sc in api_scopes %}<option value="{{ sc }}">{{ sc }}</option>{% endfor %}</select></label>
+    <label style="font-weight:600;font-size:13px;">Expires<select name="expires" style="display:block;margin-top:3px;">{% for val, lbl in expiry_presets %}<option value="{{ val }}" {% if val == '90' %}selected{% endif %}>{{ lbl }}</option>{% endfor %}</select></label>
+    <label style="font-weight:600;font-size:13px;">or on date<input type="date" name="expires_date" style="display:block;margin-top:3px;"></label>
+    <label style="font-weight:600;font-size:13px;display:flex;align-items:center;gap:6px;padding-bottom:7px;" title="A read-only key can preview/read but every write tool refuses."><input type="checkbox" name="readonly" style="margin:0;"> Read-only</label>
     <button class="btn" type="submit">+ New key</button>
   </form>
-  <p class="muted small" style="margin-top:8px;max-width:820px;">Best practice: give each client its own
-    named key, set an expiry (default 90 days), and revoke keys that show <b>unused</b> or that you no
-    longer recognise. Keys are least-privilege by <b>scope</b> — an <code>mcp</code> key can't call the
-    REST API and vice-versa — and by <b>access</b>: a <b>read-only</b> key lets an agent preview and read
-    (<code>decide_access</code>, <code>fetch_dynamic_layer</code>, <code>list_*</code>, …) but every write
-    tool refuses, so you can give an LLM look-but-don't-touch access. Writes still need the publish/push
-    gate on top.</p>
 </div>
-  </div><!-- /.settings-main -->
-</div><!-- /.settings-layout -->
+
+<div class="save-bar">
+  <button class="btn" type="submit" form="settings-form">Save settings</button>
+  <form method="post" action="/settings/reset" style="margin:0;">
+    <button class="btn secondary" type="submit" data-confirm="Restore all settings to their defaults?" data-confirm-title="Restore defaults" data-confirm-ok="Restore defaults">Restore defaults</button>
+  </form>
+  <span class="grow">Changes take effect immediately across the portal.</span>
+</div>
 
 <script>
-  // "Generate" buttons for the random-token secrets (MCP / webhook) — fill a strong random value,
-  // reveal + copy it, then Save stores it encrypted. (Type your own to change; tick "clear" to revoke.)
   (function () {
+    var root = document.getElementById('settings-form');
     function token() {
-      var a = new Uint8Array(24);
-      (window.crypto || window.msCrypto).getRandomValues(a);
-      var s = btoa(String.fromCharCode.apply(null, a)).replace(/[^A-Za-z0-9]/g, '');
-      return 'policypilot_' + s.slice(0, 32);
+      var a = new Uint8Array(24); (window.crypto || window.msCrypto).getRandomValues(a);
+      return 'policypilot_' + btoa(String.fromCharCode.apply(null, a)).replace(/[^A-Za-z0-9]/g, '').slice(0, 32);
     }
     document.querySelectorAll('.gen-secret').forEach(function (btn) {
       btn.addEventListener('click', function () {
-        var key = btn.getAttribute('data-gen');
-        var inp = document.querySelector('input[name="' + key + '"]');
-        if (!inp) return;
-        inp.value = token();
-        inp.type = 'text';                     // reveal so it can be copied
+        var key = btn.getAttribute('data-gen'), inp = document.querySelector('input[name="' + key + '"]'); if (!inp) return;
+        inp.value = token(); inp.type = 'text';
         var clr = document.querySelector('input[name="' + key + '__clear"]'); if (clr) clr.checked = false;
-        inp.focus(); inp.select();
-        try { navigator.clipboard && navigator.clipboard.writeText(inp.value); } catch (e) {}
-        btn.textContent = 'Copied — Save to store';
-        setTimeout(function () { btn.textContent = 'Generate'; }, 2500);
+        inp.focus(); inp.select(); try { navigator.clipboard && navigator.clipboard.writeText(inp.value); } catch (e) {}
+        btn.textContent = 'Copied — Save to store'; setTimeout(function () { btn.textContent = 'Generate'; }, 2500);
       });
     });
-  })();
 
-  // Scrollspy: highlight the section nav link for whatever group is currently in view.
-  (function () {
-    var nav = document.querySelector('.settings-nav'); if (!nav) return;
-    var links = {};
-    nav.querySelectorAll('a').forEach(function (a) { links[a.getAttribute('href').slice(1)] = a; });
-    var secs = document.querySelectorAll('.settings-main [id^="grp-"]');
-    if (!('IntersectionObserver' in window) || !secs.length) return;
-    var io = new IntersectionObserver(function (entries) {
-      entries.forEach(function (e) {
-        if (!e.isIntersecting) return;
-        Object.keys(links).forEach(function (k) { links[k].classList.remove('active'); });
-        if (links[e.target.id]) links[e.target.id].classList.add('active');
-      });
-    }, { rootMargin: '-72px 0px -55% 0px', threshold: 0 });
-    secs.forEach(function (s) { io.observe(s); });
-  })();
-
-  // Access-automation behavior profile: selecting a named profile (not "Custom") MIRRORS its knob values
-  // onto the toggles (read-only preview, greyed) so the user SEES what the profile does; "Custom" restores
-  // the user's own saved values and makes them editable. The toggles stay enabled (not `disabled`) so they
-  // still submit — when a profile is active they submit the profile's values (which is what's used anyway).
-  (function () {
-    var sel = document.querySelector('select[name="aa_profile"]'); if (!sel) return;
-    var KNOBS = ['aa_app_carveout', 'aa_override_blocking_deny', 'aa_prefer_widen', 'aa_emit_notes',
-                 'aa_ignore_conditions'];
-    // mirror of access_automation._PROFILES — keep in lock-step with the server bundles
+    var KNOBS = ['aa_app_carveout', 'aa_override_blocking_deny', 'aa_prefer_widen', 'aa_emit_notes', 'aa_ignore_conditions'];
     var PROFILES = {
-      conservative: { aa_app_carveout: false, aa_override_blocking_deny: false, aa_prefer_widen: false, aa_emit_notes: true,  aa_ignore_conditions: false },
-      balanced:     { aa_app_carveout: true,  aa_override_blocking_deny: true,  aa_prefer_widen: true,  aa_emit_notes: true,  aa_ignore_conditions: false },
-      aggressive:   { aa_app_carveout: true,  aa_override_blocking_deny: true,  aa_prefer_widen: true,  aa_emit_notes: true,  aa_ignore_conditions: true }
+      conservative: { aa_app_carveout: false, aa_override_blocking_deny: false, aa_prefer_widen: false, aa_emit_notes: true, aa_ignore_conditions: false },
+      balanced:     { aa_app_carveout: true,  aa_override_blocking_deny: true,  aa_prefer_widen: true,  aa_emit_notes: true, aa_ignore_conditions: false },
+      aggressive:   { aa_app_carveout: true,  aa_override_blocking_deny: true,  aa_prefer_widen: true,  aa_emit_notes: true, aa_ignore_conditions: true }
     };
-    var boxes = {}, rows = [];
-    KNOBS.forEach(function (k) {
-      var el = document.querySelector('input[name="' + k + '"]');
-      if (el) { boxes[k] = el; var r = el.closest('.setrow'); if (r) rows.push(r); }
-    });
-    // capture the user's own (saved) values BEFORE any profile mirror overwrites the checkboxes
-    var customVals = {};
-    KNOBS.forEach(function (k) { if (boxes[k]) customVals[k] = boxes[k].checked; });
-    KNOBS.forEach(function (k) {                       // edits in Custom mode update the remembered values
-      if (boxes[k]) boxes[k].addEventListener('change', function () { if (sel.value === 'custom') customVals[k] = boxes[k].checked; });
-    });
-    var hint = document.createElement('div');
-    hint.className = 'muted small';
-    hint.style.cssText = 'margin-top:6px;color:var(--accent);';
-    var selRow = sel.closest('.setrow'); if (selRow) selRow.appendChild(hint);
-    function sync() {
-      var prof = sel.value, custom = prof === 'custom', vals = PROFILES[prof];
-      hint.textContent = custom ? '' :
-        'Showing the “' + sel.options[sel.selectedIndex].text.split(' —')[0] +
-        '” profile (read-only). Switch to Custom to edit these individually.';
-      KNOBS.forEach(function (k) {
-        if (!boxes[k]) return;
-        if (custom) boxes[k].checked = customVals[k];        // restore the user's own values (editable)
-        else if (vals) boxes[k].checked = !!vals[k];          // mirror the profile so its effect is VISIBLE
-      });
-      rows.forEach(function (r) {
-        r.style.opacity = custom ? '' : '0.6';
-        r.style.pointerEvents = custom ? '' : 'none';
-      });
+    var sel = document.querySelector('select[name="aa_profile"]');
+    var boxes = {}, rows = [], customVals = {};
+    KNOBS.forEach(function (k) { var el = document.querySelector('input[name="' + k + '"]'); if (el) { boxes[k] = el; var r = el.closest('.setrow'); if (r) rows.push(r); customVals[k] = el.checked; } });
+    KNOBS.forEach(function (k) { if (boxes[k]) boxes[k].addEventListener('change', function () { if (sel && sel.value === 'custom') customVals[k] = boxes[k].checked; recomputeMode(); }); });
+    var profHint = null;
+    if (sel) { profHint = document.createElement('div'); profHint.className = 'set-help'; profHint.style.color = 'var(--accent)';
+      var pr = sel.closest('.setrow'); if (pr) pr.appendChild(profHint); }
+    function syncProfile() {
+      if (!sel) return; var prof = sel.value, custom = prof === 'custom', vals = PROFILES[prof];
+      if (profHint) profHint.textContent = custom ? '' : 'Showing the “' + sel.options[sel.selectedIndex].text.split(' —')[0] + '” profile (read-only). Switch to Custom to edit these individually.';
+      KNOBS.forEach(function (k) { if (!boxes[k]) return; if (custom) boxes[k].checked = customVals[k]; else if (vals) boxes[k].checked = !!vals[k]; });
+      rows.forEach(function (r) { r.style.opacity = custom ? '' : '0.6'; r.style.pointerEvents = custom ? '' : 'none'; });
     }
-    sel.addEventListener('change', sync);
-    sync();
+    if (sel) sel.addEventListener('change', function () { syncProfile(); recomputeMode(); });
+    syncProfile();
 
-    // One-click "Autopilot (lab demo)" preset: Aggressive engine posture + agent publish + the one-turn
-    // autopilot blessing (all live in the form, just across two groups), then save in one go. Uses the
-    // in-app confirm modal (never a native browser dialog).
-    var apBtn = document.createElement('button');
-    apBtn.type = 'button';
-    apBtn.className = 'ap-btn';
-    apBtn.textContent = '⚡ Autopilot preset (lab demo)';
-    apBtn.title = 'One click: Aggressive profile + agent Publish + one-turn Autopilot, then save (lab/demo only)';
-    apBtn.addEventListener('click', function () {
-      window.appConfirm(
-        'This sets the Aggressive profile, lets the MCP agent PUBLISH to live policy, and pre-authorizes ' +
-        'one-turn apply + publish with no confirmation step. Intended for lab / demo use.',
-        { title: 'Enable Autopilot (lab demo)', okText: 'Enable Autopilot', danger: false }
-      ).then(function (ok) {
-        if (!ok) return;
-        sel.value = 'aggressive'; sync();
-        var pub = document.querySelector('input[name="mcp_allow_publish"]');
-        var auto = document.querySelector('input[name="aa_autopilot"]');
-        if (pub) pub.checked = true;
-        if (auto) auto.checked = true;
-        var f = sel.form || document.getElementById('settings-form');
-        if (f) { if (f.requestSubmit) f.requestSubmit(); else f.submit(); }
+    var pub = document.querySelector('input[name="mcp_allow_publish"]');
+    var auto = document.querySelector('input[name="aa_autopilot"]');
+    var modeBtns = Array.prototype.slice.call(document.querySelectorAll('.mode'));
+    var sPub = document.getElementById('strip-pub'), sAuto = document.getElementById('strip-auto'), sMode = document.getElementById('strip-mode'), tag = document.getElementById('mode-tag');
+    function curMode() {
+      var p = pub && pub.checked, a = auto && auto.checked, pr = sel ? sel.value : '';
+      if (p && a && pr === 'aggressive') return 'autonomous';
+      if (p && !a && pr === 'balanced') return 'supervised';
+      if (!p && !a && pr === 'balanced') return 'readonly';
+      return 'custom';
+    }
+    function recomputeMode() {
+      var m = curMode();
+      modeBtns.forEach(function (b) { b.classList.toggle('on', b.dataset.mode === m); });
+      if (sMode) sMode.textContent = 'mode: ' + m;
+      if (tag) tag.textContent = m === 'custom' ? '· Custom' : '';
+      if (sPub) sPub.className = 'dot ' + (pub && pub.checked ? 'on' : 'off');
+      if (sAuto) sAuto.className = 'dot ' + (auto && auto.checked ? 'on' : 'off');
+    }
+    modeBtns.forEach(function (b) {
+      b.addEventListener('click', function () {
+        if (pub) pub.checked = b.dataset.pub === '1';
+        if (auto) auto.checked = b.dataset.auto === '1';
+        if (sel) { sel.value = b.dataset.prof; syncProfile(); }
+        recomputeMode();
       });
     });
-    if (selRow) selRow.appendChild(apBtn);
-    var apCap = document.createElement('div');
-    apCap.className = 'ap-caption';
-    apCap.innerHTML = 'A one-click shortcut that flips all three at once: the <b>Aggressive</b> profile (here) plus ' +
-      '<b>Publish to live policy</b> and <b>Autopilot</b> (both under <a href="#grp-mcp-agent">MCP / agent</a>). ' +
-      'It’s not a separate mode — just a fast way to set those toggles for a demo.';
-    if (selRow) selRow.appendChild(apCap);
+    if (pub) pub.addEventListener('change', recomputeMode);
+    if (auto) auto.addEventListener('change', recomputeMode);
+    recomputeMode();
+
+    document.querySelectorAll('.acc-h').forEach(function (h) {
+      h.addEventListener('click', function () { var b = h.nextElementSibling; h.classList.toggle('open'); if (b) b.classList.toggle('open'); });
+    });
   })();
 </script>
 {% endblock %}

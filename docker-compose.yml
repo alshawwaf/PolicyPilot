@@ -1,0 +1,43 @@
+# Hosted deployment: Caddy (auto-TLS) in front of the app.
+#   1. cp .env.example .env  and fill in DCSIM_DOMAIN, DCSIM_BASE_URL, secrets
+#   2. docker compose up -d --build
+services:
+  app:
+    build: .
+    environment:
+      - DCSIM_BASE_URL=${DCSIM_BASE_URL:-http://localhost:8000}
+      - DCSIM_SESSION_SECRET=${DCSIM_SESSION_SECRET}
+      - DCSIM_ADMIN_USERNAME=${DCSIM_ADMIN_USERNAME:-admin}
+      - DCSIM_ADMIN_PASSWORD=${DCSIM_ADMIN_PASSWORD}
+      - DCSIM_DATABASE_URL=sqlite:////data/dcsim.db
+      # SIEM receiver port (Check Point Log Exporter target). 0 disables the listener.
+      - DCSIM_SYSLOG_PORT=${DCSIM_SYSLOG_PORT:-5514}
+    ports:
+      # Raw syslog/CEF/LEEF from Log Exporter isn't HTTP, so it bypasses Caddy and is published
+      # straight from the app. Point cp_log_export target-port at this port (host = container).
+      - "${DCSIM_SYSLOG_PORT:-5514}:${DCSIM_SYSLOG_PORT:-5514}/udp"
+      - "${DCSIM_SYSLOG_PORT:-5514}:${DCSIM_SYSLOG_PORT:-5514}/tcp"
+    volumes:
+      - dcsim-data:/data
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2
+    depends_on:
+      - app
+    ports:
+      - "80:80"
+      - "443:443"
+      - "9440:9440"   # Nutanix: CloudGuard's Prism connector hardcodes port 9440 (same cert/app)
+    environment:
+      - DCSIM_DOMAIN=${DCSIM_DOMAIN:-localhost}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    restart: unless-stopped
+
+volumes:
+  dcsim-data:
+  caddy-data:
+  caddy-config:

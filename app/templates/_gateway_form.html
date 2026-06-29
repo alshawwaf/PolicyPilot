@@ -1,0 +1,99 @@
+{# Gateway create/edit form — shared by the full page (gateway_form.html) and the modal fragment
+   (returned when the X-Fragment header is set). No page chrome here. #}
+{% if error %}<div class="err" style="margin:0 0 12px; max-width:620px;">{{ error }}</div>{% endif %}
+
+<form method="post" action="{{ action }}" class="card" style="max-width:620px;">
+  <div class="form-sec">Connection</div>
+  <label>Name</label>
+  <input name="name" value="{{ gw.name if gw else '' }}" placeholder="Boston-GW-01" required>
+  <div class="row">
+    <div class="grow"><label>Gateway address</label><input name="host" id="gw_host" value="{{ gw.host if gw else '' }}" placeholder="10.1.1.1" required></div>
+    <div style="width:120px;"><label>Port</label><input name="port" id="gw_port" value="{{ gw.port if gw else 443 }}"></div>
+  </div>
+
+  <hr>
+  <div class="form-sec">Credentials</div>
+  <label>Username</label>
+  <input name="username" value="{{ gw.username if gw else '' }}" placeholder="admin">
+  <p class="muted">Used to log in when applying or fetching a Dynamic Layer.</p>
+
+  <label>Password <span class="muted" style="font-weight:400;">— optional, stored AES-256-encrypted</span></label>
+  {% if crypto_ok %}
+  <input name="password" type="password" autocomplete="new-password"
+         placeholder="{{ 'Leave blank to keep the saved password' if has_password else 'Stored encrypted; reused for apply & fetch' }}">
+  {% if has_password %}
+  <div class="check" style="margin-top:8px;"><input type="checkbox" id="clear_password" name="clear_password" value="1"><label for="clear_password">Clear the saved password</label></div>
+  <p class="muted">A password is currently <b>saved (encrypted)</b>. Type a new one to replace it, tick “Clear” to remove it, or leave blank to keep it.</p>
+  {% else %}
+  <p class="muted">If set, it's encrypted with <b>AES-256-GCM</b> and reused for apply &amp; fetch so you don't retype it. Leave blank to enter it each time instead.</p>
+  {% endif %}
+  {% else %}
+  <input type="password" disabled placeholder="Encryption unavailable — password can't be stored in this environment">
+  <p class="muted">Storing a password needs the encryption library, which isn't available in this environment. The password is entered per apply/fetch for now.</p>
+  {% endif %}
+
+  <hr>
+  {% set auto_on = gw.auto_trust if gw else True %}
+  <div class="form-sec">TLS certificate <span class="muted" style="font-weight:600; text-transform:none; letter-spacing:0;">· optional</span></div>
+  <div class="check" style="margin:2px 0 6px;">
+    <input type="checkbox" id="auto_trust" name="auto_trust" value="1" {{ 'checked' if auto_on else '' }}>
+    <label for="auto_trust">Trust this gateway's certificate automatically <span class="muted" style="font-weight:400;">— pin it for you on save</span></label>
+  </div>
+  <p class="muted">Recommended for self-signed lab gateways. When you save, the portal fetches and pins whatever certificate the gateway presents (you'll see its fingerprint), then verifies against that pinned certificate on every connect after — TLS verification is never turned off. If the gateway isn't reachable yet, it pins automatically on the first connect instead. Untick only to paste a specific certificate yourself below.</p>
+  <div class="subpanel" id="tls-subpanel">
+    <div class="row" style="align-items:center; gap:10px;">
+      <button type="button" class="secondary" id="fetch-cert">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>
+        <span id="fetch-label">Fetch &amp; review certificate now</span>
+      </button>
+      <span class="muted" style="font-size:12px;">optional — review the fingerprint before saving</span>
+    </div>
+    <div id="cert-fp" class="fp" style="margin-top:11px;{{ '' if (gw and gw.cert_pem) else ' display:none;' }}">{% if gw and gw.cert_pem %}<b>Pinned</b> certificate saved with this gateway.{% endif %}</div>
+    <textarea name="cert_pem" id="gw_cert" style="min-height:88px; margin-top:11px;" placeholder="-----BEGIN CERTIFICATE-----  (leave blank to auto-pin on first connect)">{{ gw.cert_pem if gw else '' }}</textarea>
+  </div>
+
+  <hr>
+  <div class="row">
+    <button type="submit">{{ 'Save changes' if gw else 'Add gateway' }}</button>
+    <a class="btn secondary" href="/gateways" data-fm-cancel>Cancel</a>
+  </div>
+</form>
+
+<script>
+  (function () {
+    var btn = document.getElementById('fetch-cert');
+    if (!btn) return;
+    var label = document.getElementById('fetch-label');
+    btn.addEventListener('click', function () {
+      var host = document.getElementById('gw_host').value;
+      var fp = document.getElementById('cert-fp');
+      if (!host) { fp.style.display = ''; fp.textContent = 'Enter the gateway address first.'; return; }
+      var body = new URLSearchParams();
+      body.set('host', host); body.set('port', document.getElementById('gw_port').value || '443');
+      label.textContent = 'Fetching…'; btn.disabled = true;
+      fetch('/gateways/fetch-cert', { method: 'POST', body: body })
+        .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+        .then(function (res) {
+          label.textContent = 'Fetch & review certificate now'; btn.disabled = false;
+          fp.style.display = '';
+          if (!res.ok) { fp.textContent = res.j.error || 'Failed to fetch certificate.'; return; }
+          document.getElementById('gw_cert').value = res.j.pem;
+          fp.innerHTML = '<b>Pinned</b> · SHA-256 ' + res.j.fingerprint + ' — saved when you ' +
+            ({{ 'true' if gw else 'false' }} ? 'save changes.' : 'add the gateway.');
+        })
+        .catch(function () { label.textContent = 'Fetch & review certificate now'; btn.disabled = false; });
+    });
+  })();
+
+  // When auto-trust is on, the portal pins the cert for you, so the manual fetch/paste panel is
+  // irrelevant: collapse it entirely (untick to reveal it and paste your own). A hidden textarea still
+  // submits, so an already-pinned cert is preserved, not wiped.
+  (function () {
+    var auto = document.getElementById('auto_trust');
+    var panel = document.getElementById('tls-subpanel');
+    if (!auto || !panel) return;
+    function sync() { panel.style.display = auto.checked ? 'none' : ''; }
+    auto.addEventListener('change', sync);
+    sync();
+  })();
+</script>

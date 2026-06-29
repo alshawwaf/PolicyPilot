@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% import "_layers_view.html" as lv %}
+{% block title %}Apply history — {{ layer.name }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <span class="icon-chip lg"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg></span>
+  <div class="ph-main">
+    <h1>Apply history <span class="muted" style="font-weight:400;">— {{ layer.name }}</span></h1>
+    <p class="ph-sub">Every <code>set-dynamic-content</code> apply recorded for this layer. Expand a row for the full request / response trace.</p>
+  </div>
+  <div class="ph-actions">
+    <a class="btn secondary" href="/layers/{{ layer.id }}">← Back to layer</a>
+  </div>
+</div>
+
+{% if not tasks %}
+<div class="card"><p class="muted">No applies recorded yet for this layer. Apply it from the <a href="/layers/{{ layer.id }}">layer page</a> and the runs will appear here.</p></div>
+{% else %}
+<form method="post" action="/layers/{{ layer.id }}/history/delete" id="hist-form">
+  <div class="card" style="padding:0;">
+    <div class="row" style="align-items:center; padding:12px 16px; border-bottom:1px solid var(--line);">
+      <label class="check" style="margin:0;"><input type="checkbox" id="sel-all"> <span class="muted">Select all ({{ tasks|length }})</span></label>
+      <div class="grow"></div>
+      <button class="danger" type="submit" id="del-btn" disabled
+              data-confirm="Delete the selected apply record(s)? This cannot be undone.">Delete selected</button>
+    </div>
+    {% for v in tasks %}
+    <details class="itemrow" style="display:block; padding:10px 16px;">
+      <summary style="color:var(--text);">
+        <input type="checkbox" name="task_ids" value="{{ v.t.id }}" class="hist-cb" style="margin-right:8px;">
+        <span class="muted" style="font-family:ui-monospace,monospace; font-size:12px;">{{ v.t.at.strftime('%Y-%m-%d %H:%M:%S') }}</span>
+        <span class="pill">{{ v.t.target }}</span>
+        <span class="pill faint">{{ 'dry-run' if v.t.dry_run else 'apply' }}</span>
+        <span class="pill {{ 'ok' if v.t.status == 'succeeded' else 'bad' }}">{{ v.t.status }}</span>
+        <span class="muted">{{ v.rules_created }} rule(s) · {{ v.objects_created|length }} object(s){% if v.warnings %} · {{ v.warnings|length }} warning(s){% endif %}{% if v.errors %} · {{ v.errors|length }} error(s){% endif %}</span>
+      </summary>
+      {% if v.errors %}{% for e in v.errors %}<div class="err" style="margin:6px 0;">{{ e.message }}</div>{% endfor %}{% endif %}
+      {% if v.trace %}{{ lv.render_trace(v.trace) }}{% else %}<p class="muted">No trace captured.</p>{% endif %}
+    </details>
+    {% endfor %}
+  </div>
+</form>
+<script>
+  (function () {
+    var form = document.getElementById('hist-form');
+    var selAll = document.getElementById('sel-all');
+    var del = document.getElementById('del-btn');
+    function cbs() { return Array.prototype.slice.call(form.querySelectorAll('.hist-cb')); }
+    function sync() { del.disabled = !cbs().some(function (c) { return c.checked; }); }
+    // Clicking a row's checkbox should not also expand/collapse the <details>.
+    cbs().forEach(function (c) { c.addEventListener('click', function (e) { e.stopPropagation(); }); });
+    selAll.addEventListener('change', function () {
+      cbs().forEach(function (c) { c.checked = selAll.checked; });
+      sync();
+    });
+    form.addEventListener('change', function (e) {
+      if (e.target.classList.contains('hist-cb')) sync();
+    });
+    sync();
+  })();
+</script>
+{% endif %}
+{% endblock %}

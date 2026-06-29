@@ -1,0 +1,93 @@
+{# Inline quick-edit for detail pages. Include after a `#inline-edit-meta[data-quick-edit-url]` element.
+   Wires: `.cf-edit-name` (rename the `.dc-name` span) and every `.copyfield[data-cf-field] .cf-edit`
+   (a `.cf-secret` row → masked input). Each save POSTs {field, value} to the quick-edit URL and reloads. #}
+<script>
+  (function () {
+    var meta = document.getElementById('inline-edit-meta');
+    if (!meta) return;
+    var url = meta.dataset.quickEditUrl;
+    function save(field, value) {
+      // Never reject: a non-JSON response (session expiry -> login HTML, a 500, or a network drop)
+      // must surface a clean error and re-enable Save, not leave it stuck disabled.
+      return fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ field: field, value: value }) })
+        .then(function (r) {
+          return r.json().then(
+            function (j) { return { ok: r.ok, j: j }; },
+            function () { return { ok: false, j: { error: 'Unexpected response (HTTP ' + r.status + '). Your session may have expired — reload the page.' } }; });
+        }, function () { return { ok: false, j: { error: 'Network error — check your connection and retry.' } }; });
+    }
+    function mkbtn(t) { var b = document.createElement('button'); b.type = 'button'; b.className = 'copybtn'; b.textContent = t; return b; }
+    function showErr(c, m) {
+      var e = c.querySelector('.cf-err');
+      if (!e) { e = document.createElement('span'); e.className = 'cf-err'; e.style.cssText = 'color:var(--danger); font-size:12px;'; c.appendChild(e); }
+      e.textContent = m || 'Update failed';
+    }
+
+    document.querySelectorAll('.copyfield[data-cf-field] .cf-edit').forEach(function (editBtn) {
+      var row = editBtn.closest('.copyfield');
+      editBtn.addEventListener('click', function () {
+        if (row.querySelector('.cf-editor')) return;
+        var field = row.getAttribute('data-cf-field');
+        var secret = !!row.querySelector('.cf-secret');
+        var valEl = row.querySelector('.cf-val');
+        var cur = secret ? '' : (valEl ? valEl.textContent.trim() : '');
+        if (cur === 'any') cur = '';
+        var hidden = [];
+        Array.prototype.forEach.call(row.children, function (c) {
+          if (!c.classList.contains('cf-label')) { hidden.push(c); c.style.display = 'none'; }
+        });
+        var ed = document.createElement('span');
+        ed.className = 'cf-editor';
+        ed.style.cssText = 'display:flex; gap:6px; align-items:center; flex:1 1 auto; min-width:0; flex-wrap:wrap;';
+        var input = document.createElement('input');
+        input.type = secret ? 'password' : 'text';
+        input.value = cur;
+        if (secret) { input.placeholder = 'New value'; input.autocomplete = 'new-password'; }
+        input.style.cssText = 'flex:1 1 160px; min-width:0; margin:0;';
+        var saveB = mkbtn('Save'), cancelB = mkbtn('Cancel');
+        ed.appendChild(input); ed.appendChild(saveB); ed.appendChild(cancelB);
+        var clearB = secret ? mkbtn('Clear') : null;
+        if (clearB) ed.appendChild(clearB);
+        row.appendChild(ed);
+        input.focus();
+        function restore() { ed.remove(); hidden.forEach(function (c) { c.style.display = ''; }); }
+        function commit(v) { saveB.disabled = true; save(field, v).then(function (res) { if (res.ok) location.reload(); else { saveB.disabled = false; showErr(ed, res.j.error); } }); }
+        saveB.addEventListener('click', function () { commit(input.value.trim()); });
+        if (clearB) clearB.addEventListener('click', function () { commit(''); });
+        cancelB.addEventListener('click', restore);
+        input.addEventListener('keydown', function (e) {
+          if (e.key === 'Enter') { e.preventDefault(); commit(input.value.trim()); }
+          else if (e.key === 'Escape') { restore(); }
+        });
+      });
+    });
+
+    var nameBtn = document.querySelector('.cf-edit-name');
+    var nameEl = document.querySelector('.dc-name');
+    if (nameBtn && nameEl) {
+      nameBtn.addEventListener('click', function () {
+        if (document.querySelector('.dc-name-edit')) return;
+        var wrap = document.createElement('span');
+        wrap.className = 'dc-name-edit';
+        wrap.style.cssText = 'display:inline-flex; gap:6px; align-items:center; flex-wrap:wrap;';
+        var input = document.createElement('input');
+        input.type = 'text'; input.value = nameEl.textContent.trim();
+        input.style.cssText = 'font:inherit; max-width:380px; margin:0;';
+        var saveB = mkbtn('Save'), cancelB = mkbtn('Cancel');
+        wrap.appendChild(input); wrap.appendChild(saveB); wrap.appendChild(cancelB);
+        nameEl.style.display = 'none'; nameBtn.style.display = 'none';
+        nameEl.parentNode.insertBefore(wrap, nameEl);
+        input.focus(); input.select();
+        function restore() { wrap.remove(); nameEl.style.display = ''; nameBtn.style.display = ''; }
+        function commit() { saveB.disabled = true; save('name', input.value.trim()).then(function (res) { if (res.ok) location.reload(); else { saveB.disabled = false; showErr(wrap, res.j.error); } }); }
+        saveB.addEventListener('click', commit);
+        cancelB.addEventListener('click', restore);
+        input.addEventListener('keydown', function (e) {
+          if (e.key === 'Enter') { e.preventDefault(); commit(); }
+          else if (e.key === 'Escape') { restore(); }
+        });
+      });
+    }
+  })();
+</script>

@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} — Gaia config export{% endblock %}
+{% block main_class %}wide{% endblock %}
+{% block content %}
+<div class="page-head">
+  <span class="icon-chip lg"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></span>
+  <div class="ph-main">
+    <h1>{{ title }} <span class="pill">Gaia config</span></h1>
+    <p class="ph-sub">Pull the live <b>Gaia OS configuration</b> from <code>{{ host }}</code> over the <code>gaia_api</code> (hostname, DNS, NTP, timezone, interfaces, static routes, proxy) and generate <b>Terraform</b>, <b>Ansible</b> and a <b>clish</b> script — a backup-as-code of the appliance.</p>
+  </div>
+  <div class="ph-actions">
+    <a class="btn secondary" href="{{ back_url }}">← {{ back_label or 'Back' }}</a>
+  </div>
+</div>
+
+<div class="card" id="gaia-root" data-run="{{ run_url }}" style="padding:14px 18px;">
+  <div class="row" style="align-items:center; gap:10px; flex-wrap:wrap;">
+    <input type="password" id="gaia-pw" placeholder="{{ 'Password (blank = use saved)' if has_secret else 'Gaia/OS password' }}" autocomplete="off" style="min-width:240px;">
+    <button class="btn" id="gen-btn" type="button">Generate IaC</button>
+    <span id="gen-status" class="muted" style="font-size:13px;"></span>
+  </div>
+
+  <div id="results" hidden style="margin-top:16px;">
+    <div id="stats" class="muted" style="font-size:13px; margin-bottom:10px;"></div>
+    <div class="filterbar" style="margin:0 0 10px;">
+      <button class="chip active" type="button" data-tab="terraform">Terraform</button>
+      <button class="chip" type="button" data-tab="ansible">Ansible</button>
+      <button class="chip" type="button" data-tab="clish">clish</button>
+      <button class="chip" type="button" data-tab="web_api">web_api JSON</button>
+    </div>
+    <div class="row" style="gap:8px; margin-bottom:8px;">
+      <button class="copybtn" type="button" id="copy-btn">Copy</button>
+      <button class="copybtn" type="button" id="download-btn">Download</button>
+      <span class="muted" id="file-name" style="font-size:12px; align-self:center;"></span>
+    </div>
+    <pre id="code" style="max-height:60vh; overflow:auto; background:var(--subtle-bg); border:1px solid var(--line); border-radius:9px; padding:14px; font-size:12.5px; line-height:1.5; white-space:pre; margin:0;"></pre>
+  </div>
+</div>
+
+<script>
+  (function () {
+    var root = document.getElementById('gaia-root');
+    if (!root) return;
+    var runUrl = root.getAttribute('data-run');
+    var pw = document.getElementById('gaia-pw');
+    var genBtn = document.getElementById('gen-btn');
+    var status = document.getElementById('gen-status');
+    var results = document.getElementById('results');
+    var stats = document.getElementById('stats');
+    var code = document.getElementById('code');
+    var fileName = document.getElementById('file-name');
+    var data = {}, current = 'terraform';
+    var EXT = { terraform: '.gaia.tf', ansible: '.gaia.yml', clish: '.gaia.clish.sh', web_api: '.gaia.web_api.json' };
+    var BASE = {{ host|tojson }}.split(':')[0].replace(/[^0-9A-Za-z._-]+/g, '_') || 'gaia';
+
+    function esc(s) { var d = document.createElement('div'); d.textContent = (s == null ? '' : s); return d.innerHTML; }
+    function renderTab() { code.textContent = data[current] || ''; fileName.textContent = BASE + EXT[current]; }
+    function renderStats() {
+      var s = data.stats || {};
+      var secs = (s.sections || []).join(', ') || '—';
+      stats.innerHTML = 'Sections: <b>' + esc(secs) + '</b> · ' + esc(s.interfaces || 0) +
+        ' interface(s) · ' + esc(s.routes || 0) + ' route(s) · ' + esc(s.ntp_servers || 0) + ' NTP server(s)';
+    }
+
+    document.querySelectorAll('[data-tab]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        document.querySelectorAll('[data-tab]').forEach(function (c) { c.classList.remove('active'); });
+        b.classList.add('active'); current = b.getAttribute('data-tab'); renderTab();
+      });
+    });
+    document.getElementById('copy-btn').addEventListener('click', function () {
+      navigator.clipboard.writeText(data[current] || '').then(function () {
+        var b = document.getElementById('copy-btn'), t = b.textContent;
+        b.textContent = 'Copied ✓'; setTimeout(function () { b.textContent = t; }, 1200);
+      });
+    });
+    document.getElementById('download-btn').addEventListener('click', function () {
+      var blob = new Blob([data[current] || ''], { type: 'text/plain' });
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(blob); a.download = BASE + EXT[current];
+      document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(a.href);
+    });
+
+    genBtn.addEventListener('click', function () {
+      genBtn.disabled = true;
+      genBtn.dataset.t = genBtn.dataset.t || genBtn.textContent;
+      genBtn.innerHTML = '<span class="spin" style="margin-right:7px; vertical-align:-2px;"></span>Pulling…';
+      status.innerHTML = '<span class="muted">Reading the live Gaia config over <code>gaia_api</code> — ' +
+        'this can take a few seconds…</span>';
+      results.hidden = true;
+      function restore() { genBtn.disabled = false; genBtn.textContent = genBtn.dataset.t; }
+      var body = new URLSearchParams(); if (pw.value) body.set('password', pw.value);
+      fetch(runUrl, { method: 'POST', body: body })
+        .then(function (r) { return r.json(); })
+        .then(function (j) {
+          restore();
+          if (j.error) { status.innerHTML = '<span class="err">' + esc(j.error) + '</span>'; return; }
+          data = j; status.innerHTML = '<span class="ok">✓ Generated.</span>';
+          renderStats(); renderTab(); results.hidden = false;
+        })
+        .catch(function () { restore(); status.innerHTML = '<span class="err">Export failed.</span>'; });
+    });
+  })();
+</script>
+{% endblock %}

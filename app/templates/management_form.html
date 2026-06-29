@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Edit management server' if ms else 'New management server' }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <span class="icon-chip lg"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 5v14c0 1.66-4 3-9 3s-9-1.34-9-3V5"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/></svg></span>
+  <div class="ph-main">
+    <h1>{{ 'Edit management server' if ms else 'New management server' }}</h1>
+    <p class="ph-sub">A connection profile for a Check Point Management Server (or an MDS domain/CMA), used over the <code>web_api</code> to pull, view, edit and export policy. The login secret is optional — stored AES-256-encrypted, or entered per action.</p>
+  </div>
+</div>
+{% include "_management_form.html" %}
+{% endblock %}

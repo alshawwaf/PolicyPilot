@@ -1,0 +1,17 @@
+.venv/
+data/
+.git/
+.gitignore
+**/__pycache__/
+*.pyc
+.pytest_cache/
+tests/
+.env
+*.db
+*.db-wal
+*.db-shm
+*.sqlite3
+*.sqlite3-wal
+*.sqlite3-shm
+.DS_Store
+*.md

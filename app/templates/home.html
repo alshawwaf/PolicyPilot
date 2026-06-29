@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+{% block title %}Home{% endblock %}
+{% block content %}
+<style>
+  .hero { position:relative; overflow:hidden; border:1px solid var(--line); border-radius:20px;
+    padding:30px 32px; margin-bottom:22px;
+    background:radial-gradient(130% 150% at 0% 0%, var(--accent-soft) 0%, transparent 52%), var(--surface-2); }
+  .hero-blob { position:absolute; right:-44px; top:-54px; width:200px; height:200px; border-radius:46px;
+    background:linear-gradient(135deg, var(--accent), #7c3aed); opacity:.16; transform:rotate(18deg);
+    filter:blur(2px); pointer-events:none; }
+  .hero h1 { margin:0 0 6px; font-size:27px; letter-spacing:-.4px; }
+  .hero .sub { color:var(--muted); font-size:14px; max-width:560px; }
+  .hero-actions { margin-top:18px; display:flex; gap:10px; flex-wrap:wrap; }
+  .hero-stats { display:flex; gap:26px; margin-top:22px; flex-wrap:wrap; }
+  .hstat .n { font-size:24px; font-weight:800; line-height:1;
+    background:var(--accent-grad); -webkit-background-clip:text; background-clip:text;
+    -webkit-text-fill-color:transparent; color:transparent; }
+  .hstat .l { display:block; margin-top:5px; font-size:11px; font-weight:700; letter-spacing:.4px;
+    text-transform:uppercase; color:var(--faint); }
+
+  .home-section { font-size:11px; font-weight:800; letter-spacing:.6px; text-transform:uppercase;
+    color:var(--faint); margin:4px 2px 12px; }
+  .home-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(290px, 1fr)); gap:16px; }
+  a.hcard { display:block; text-decoration:none; color:inherit; background:var(--surface-2);
+    border:1px solid var(--line); border-radius:16px; padding:18px 18px 17px;
+    transition:transform .14s ease, border-color .14s ease, box-shadow .14s ease;
+    animation:hc-in .34s ease both; }
+  a.hcard:hover { transform:translateY(-3px); border-color:var(--accent); box-shadow:var(--shadow-lg); }
+  .hcard-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:13px; }
+  .hcard-ic { display:inline-flex; align-items:center; justify-content:center; width:44px; height:44px;
+    border-radius:13px; background:var(--accent-grad); color:#fff;
+    box-shadow:0 3px 12px rgba(123,63,242,.22); transition:transform .14s ease, box-shadow .14s ease; }
+  a.hcard:hover .hcard-ic { transform:scale(1.06); box-shadow:0 6px 18px rgba(123,63,242,.36); }
+  .hcard-count { font-size:22px; font-weight:800; line-height:1;
+    background:var(--accent-grad); -webkit-background-clip:text; background-clip:text;
+    -webkit-text-fill-color:transparent; color:transparent; }
+  .hcard-go { color:var(--faint); font-size:17px; transition:transform .14s ease, color .14s ease; }
+  a.hcard:hover .hcard-go { color:var(--accent); transform:translateX(3px); }
+  .hcard-title { font-size:15.5px; font-weight:700; color:var(--text); }
+  a.hcard:hover .hcard-title { color:var(--accent); }
+  .hcard-desc { margin-top:5px; font-size:12.5px; color:var(--muted); line-height:1.5; }
+  @keyframes hc-in { from { opacity:0; transform:translateY(7px); } to { opacity:1; transform:none; } }
+  .home-grid a.hcard:nth-child(2) { animation-delay:.03s; } .home-grid a.hcard:nth-child(3) { animation-delay:.06s; }
+  .home-grid a.hcard:nth-child(4) { animation-delay:.09s; } .home-grid a.hcard:nth-child(5) { animation-delay:.12s; }
+  .home-grid a.hcard:nth-child(6) { animation-delay:.15s; } .home-grid a.hcard:nth-child(n+7) { animation-delay:.18s; }
+</style>
+
+{% set ICONS = {
+  "feeds": '<path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1"/>',
+  "dc": '<rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/>',
+  "mgmt": '<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 5v14c0 1.66-4 3-9 3s-9-1.34-9-3V5"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/>',
+  "access": '<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>',
+  "gw": '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>',
+  "layers": '<polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/>',
+  "coverage": '<rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>',
+  "api": '<polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>',
+  "siem": '<polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>',
+  "activity": '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
+  "settings": '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>'
+} %}
+
+{% macro card(href, key, title, desc, count=none) %}
+  <a class="hcard" href="{{ href }}">
+    <div class="hcard-head">
+      <span class="hcard-ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">{{ ICONS[key]|safe }}</svg></span>
+      {% if count is not none %}<span class="hcard-count">{{ count }}</span>{% else %}<span class="hcard-go">&rarr;</span>{% endif %}
+    </div>
+    <div class="hcard-title">{{ title }}</div>
+    <div class="hcard-desc">{{ desc }}</div>
+  </a>
+{% endmacro %}
+
+<section class="hero">
+  <span class="hero-blob"></span>
+  <h1><span id="greet">Welcome back,</span> {{ user.first_name or user.username }}</h1>
+  <p class="sub">PolicyPilot — turn a plain-language access request into the correct, first-match-safe Check Point policy change: applied to a real management server or pushed straight to the gateway as a dynamic layer, and drivable by an agent over MCP.</p>
+  <div class="hero-actions">
+    <a class="btn" href="/access-automation">Open access automation</a>
+    <a class="btn secondary" href="/mcp-guide">Connect an agent (MCP)</a>
+  </div>
+  <div class="hero-stats">
+    <div class="hstat"><span class="n">{{ counts.management }}</span><span class="l">Mgmt Servers</span></div>
+    <div class="hstat"><span class="n">{{ counts.gateways }}</span><span class="l">Gateways</span></div>
+    <div class="hstat"><span class="n">{{ counts.layers }}</span><span class="l">Dynamic Layers</span></div>
+  </div>
+</section>
+
+<div class="home-section">Jump into a section</div>
+<div class="home-grid">
+  {{ card("/access-automation", "access", "Access automation", "Turn a plain-language request into the minimal correct rule change — no-op / widen / create, first-match-safe.") }}
+  {{ card("/mcp-guide", "api", "MCP for agents", "Connect n8n / an LLM agent over /mcp — one sentence becomes the right policy change.") }}
+  {{ card("/management", "mgmt", "Management Servers", "Pull, view, edit, and export real SMS policy over the web_api.", counts.management) }}
+  {{ card("/gateways", "gw", "Gateways", "Saved Gaia gateways + OS config export (interfaces, routes, DNS…).", counts.gateways) }}
+  {{ card("/layers", "layers", "Dynamic Layers", "Author an access rulebase and push it straight to the gateway via the Gaia API.", counts.layers) }}
+  {{ card("/api-explorer", "api", "API explorer", "Browse the live Management / Gaia API in an embedded Swagger UI.") }}
+  {{ card("/activity", "activity", "Activity", "Every API call the portal served — methods, status, timing.") }}
+  {{ card("/settings", "settings", "Settings", "Session reuse & policy cache, ticket write-back, API keys, base URL.") }}
+</div>
+
+<script>
+  (function () {
+    var h = new Date().getHours();
+    var g = h < 12 ? 'Good morning,' : (h < 18 ? 'Good afternoon,' : 'Good evening,');
+    var el = document.getElementById('greet');
+    if (el) el.textContent = g;
+  })();
+</script>
+{% endblock %}

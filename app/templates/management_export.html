@@ -1,0 +1,137 @@
+{% extends "base.html" %}
+{% block title %}{{ ms.name }} — export policy{% endblock %}
+{% block main_class %}wide{% endblock %}
+{% block content %}
+<div class="page-head">
+  <span class="icon-chip lg"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></span>
+  <div class="ph-main">
+    <h1>{{ ms.name }} <span class="pill">Export</span></h1>
+    <p class="ph-sub">Pull a layer's rulebase + objects from <code>{{ ms.host }}:{{ ms.port }}</code>{% if ms.domain %} · domain <b>{{ ms.domain }}</b>{% endif %} and generate <b>Terraform</b>, <b>Ansible</b> and a <b>mgmt_cli</b> script — a backup-as-code of the policy.</p>
+  </div>
+  <div class="ph-actions">
+    <a class="btn secondary" href="/management/{{ ms.id }}">← Policy viewer</a>
+  </div>
+</div>
+
+{% if not has_secret %}
+<div class="card"><p class="muted">No saved credential on this server, so policy can't be pulled. <a href="/management/{{ ms.id }}/edit">Add a password on Edit</a> (stored encrypted), then return here.</p></div>
+{% else %}
+<div class="card" id="export-root" data-id="{{ ms.id }}" data-layer="{{ layer }}" style="padding:14px 18px;">
+  <div class="row" style="align-items:center; gap:10px; flex-wrap:wrap;">
+    <span class="muted" style="font-size:11px; font-weight:700; letter-spacing:.5px;">ACCESS LAYER</span>
+    <select id="layer-select" style="min-width:220px;"><option>Loading layers…</option></select>
+    <button class="btn" id="gen-btn" type="button" disabled>Generate IaC</button>
+    <span id="gen-status" class="muted" style="font-size:13px;"></span>
+  </div>
+
+  <div id="results" hidden style="margin-top:16px;">
+    <div id="stats" class="muted" style="font-size:13px; margin-bottom:10px;"></div>
+    <div class="filterbar" style="margin:0 0 10px;">
+      <button class="chip active" type="button" data-tab="terraform">Terraform</button>
+      <button class="chip" type="button" data-tab="ansible">Ansible</button>
+      <button class="chip" type="button" data-tab="mgmt_cli">mgmt_cli</button>
+      <button class="chip" type="button" data-tab="web_api">web_api JSON</button>
+    </div>
+    <div class="row" style="gap:8px; margin-bottom:8px;">
+      <button class="copybtn" type="button" id="copy-btn">Copy</button>
+      <button class="copybtn" type="button" id="download-btn">Download</button>
+      <span class="muted" id="file-name" style="font-size:12px; align-self:center;"></span>
+    </div>
+    <pre id="code" style="max-height:60vh; overflow:auto; background:var(--subtle-bg); border:1px solid var(--line); border-radius:9px; padding:14px; font-size:12.5px; line-height:1.5; white-space:pre; margin:0;"></pre>
+  </div>
+</div>
+{% endif %}
+
+<script>
+  (function () {
+    var root = document.getElementById('export-root');
+    if (!root) return;
+    var id = root.getAttribute('data-id');
+    var preferred = root.getAttribute('data-layer') || '';
+    var select = document.getElementById('layer-select');
+    var genBtn = document.getElementById('gen-btn');
+    var status = document.getElementById('gen-status');
+    var results = document.getElementById('results');
+    var stats = document.getElementById('stats');
+    var code = document.getElementById('code');
+    var fileName = document.getElementById('file-name');
+    var data = {};           // { terraform, ansible, mgmt_cli, stats, layer }
+    var current = 'terraform';
+    var EXT = { terraform: '.tf', ansible: '.ansible.yml', mgmt_cli: '.mgmt_cli.sh', web_api: '.web_api.json' };
+
+    function esc(s) { var d = document.createElement('div'); d.textContent = (s == null ? '' : s); return d.innerHTML; }
+    function slug(s) { return (s || 'policy').replace(/[^0-9A-Za-z._-]+/g, '_').replace(/^_+|_+$/g, '') || 'policy'; }
+
+    function renderTab() {
+      code.textContent = data[current] || '';
+      fileName.textContent = slug(data.layer) + EXT[current];
+    }
+    function renderStats() {
+      var s = data.stats || {};
+      var skipped = s.skipped && Object.keys(s.skipped).length
+        ? ' · <span class="pill faint">skipped: ' + esc(Object.keys(s.skipped).map(function (t) { return t + '×' + s.skipped[t]; }).join(', ')) + '</span>'
+        : '';
+      stats.innerHTML = 'Layer <b>' + esc(data.layer) + '</b> · ' + esc(s.objects || 0) + ' object(s) · ' +
+        esc(s.rules || 0) + ' rule(s) · ' + esc(s.sections || 0) + ' section(s)' + skipped;
+    }
+
+    document.querySelectorAll('[data-tab]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        document.querySelectorAll('[data-tab]').forEach(function (c) { c.classList.remove('active'); });
+        btn.classList.add('active');
+        current = btn.getAttribute('data-tab');
+        renderTab();
+      });
+    });
+
+    document.getElementById('copy-btn').addEventListener('click', function () {
+      navigator.clipboard.writeText(data[current] || '').then(function () {
+        var b = document.getElementById('copy-btn'); var t = b.textContent;
+        b.textContent = 'Copied ✓'; setTimeout(function () { b.textContent = t; }, 1200);
+      });
+    });
+    document.getElementById('download-btn').addEventListener('click', function () {
+      var blob = new Blob([data[current] || ''], { type: 'text/plain' });
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(blob); a.download = slug(data.layer) + EXT[current];
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      URL.revokeObjectURL(a.href);
+    });
+
+    function generate() {
+      var layer = select.value;
+      if (!layer) return;
+      genBtn.disabled = true;
+      status.innerHTML = '<span class="muted">Pulling “' + esc(layer) + '” + objects over web_api…</span>';
+      results.hidden = true;
+      fetch('/management/' + id + '/export?name=' + encodeURIComponent(layer), { method: 'POST' })
+        .then(function (r) { return r.json(); })
+        .then(function (j) {
+          genBtn.disabled = false;
+          if (j.error) { status.innerHTML = '<span class="err">' + esc(j.error) + '</span>'; return; }
+          data = j; status.innerHTML = '<span class="ok">✓ Generated.</span>';
+          renderStats(); renderTab(); results.hidden = false;
+        })
+        .catch(function () { genBtn.disabled = false; status.innerHTML = '<span class="err">Export failed.</span>'; });
+    }
+    genBtn.addEventListener('click', generate);
+
+    fetch('/management/' + id + '/layers').then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (d.error) { select.innerHTML = '<option>' + esc(d.error) + '</option>'; return; }
+        var layers = d.layers || [];
+        if (!layers.length) { select.innerHTML = '<option>No access layers</option>'; return; }
+        select.innerHTML = '';
+        layers.forEach(function (l) {
+          var o = document.createElement('option');
+          o.value = l.name; o.textContent = l.name;
+          if (l.name === preferred) o.selected = true;
+          select.appendChild(o);
+        });
+        genBtn.disabled = false;
+        if (preferred) generate();   // came from the viewer with a layer chosen → run immediately
+      })
+      .catch(function () { select.innerHTML = '<option>Failed to load layers</option>'; });
+  })();
+</script>
+{% endblock %}

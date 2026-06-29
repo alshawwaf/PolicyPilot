@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% import "_layers_view.html" as lv %}
+{% block title %}{{ gw.name }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <span class="icon-chip lg"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></span>
+  <div class="ph-main">
+    <h1>{{ gw.name }} <span class="pill">gateway</span></h1>
+    <p class="ph-sub">Saved gateway connection profile.</p>
+  </div>
+  <div class="ph-actions">
+    <a class="btn secondary" href="/gateways/{{ gw.id }}/gaia-export">Export Gaia config →</a>
+    <a class="btn secondary" href="/gateways/{{ gw.id }}/edit" data-modal-form="/gateways/{{ gw.id }}/edit" data-modal-title="Edit gateway">Edit</a>
+    <form method="post" action="/gateways/{{ gw.id }}/delete">
+      <button class="danger" type="submit" data-confirm="Delete gateway “{{ gw.name }}”?">Delete</button>
+    </form>
+  </div>
+</div>
+
+<div class="card">
+  <h2 style="margin-top:0;">Connection</h2>
+  <p class="muted">Address <code>{{ gw.host }}:{{ gw.port }}</code> · Username <code>{{ gw.username or '—' }}</code> ·
+    TLS {% if gw.cert_pem %}<span class="pill ok">pinned certificate</span>{% elif gw.auto_trust %}<span class="pill">auto-trust · pins on first connect</span>{% else %}<span class="pill faint">system trust</span>{% endif %} ·
+    Password {% if has_password %}<span class="pill ok">saved (encrypted)</span>{% else %}<span class="pill faint">entered per apply</span>{% endif %}</p>
+  <p class="muted">Edit these on the <a href="/gateways/{{ gw.id }}/edit">gateway profile</a>.{% if not has_password %} The password is entered per fetch/apply; save one on the profile to skip retyping.{% endif %}</p>
+</div>
+
+<div class="card">
+  <div class="row"><h2 style="margin:0;" class="grow">Dynamic layers on this gateway</h2>
+    {% if snapshot %}<span class="muted">last fetched {{ snapshot.fetched_at.strftime('%Y-%m-%d %H:%M:%S') }} UTC</span>{% endif %}</div>
+  {% if snapshot and not snapshot.ok and snapshot.error %}<div class="err" style="margin:10px 0;">{{ snapshot.error }}</div>{% endif %}
+
+  <form method="post" action="/gateways/{{ gw.id }}/fetch" class="row endalign" style="gap:8px; margin:12px 0;">
+    <div class="grow" style="max-width:360px;"><label>Gateway password</label>
+      {% if has_password %}
+      <input name="password" type="password" placeholder="Using the saved password — leave blank, or type to override">
+      {% else %}
+      <input name="password" type="password" placeholder="Password (used for this call, never stored)" required>
+      {% endif %}</div>
+    <button type="submit">⤓ Fetch now</button>
+  </form>
+
+  {% if snapshot %}
+    {{ lv.render_layers(snapshot.layers) }}
+  {% else %}
+    <p class="muted">Not fetched yet. Enter the password and click <b>Fetch now</b> to pull this gateway's dynamic layers — the result is saved here so you can review it any time without re-fetching.</p>
+  {% endif %}
+</div>
+{% endblock %}

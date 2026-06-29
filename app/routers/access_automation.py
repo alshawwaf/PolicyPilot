@@ -1,0 +1,554 @@
+"""Ticket-driven access automation: turn an access request into the minimal correct change on a
+Check Point access layer (no-op / widen / create), over the ``web_api``.
+
+Three surfaces, all reusing the saved Management Server profiles + encrypted secret:
+  * the UI request form (preview, then dry-run validate or publish),
+  * JSON preview / apply endpoints the form calls,
+  * a token-authenticated ServiceNow webhook for end-to-end automation.
+
+The decision engine + API call sequence live in ``services.access_automation``; payload parsing and
+the optional write-back in ``services.ticketing``. Approvals are out of scope (your ITSM owns them).
+"""
+import hmac
+
+from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse
+from pydantic import BaseModel
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from ..config import get_settings
+from ..db import get_db
+from ..models import AppliedChange, ManagementServer, User, utcnow
+from ..security import get_user_or_none
+from ..services import access_automation as aa
+from ..services import api_keys, app_settings, applications, change_log, decision_tree, mgmt_api, mgmt_creds, services, table_prefs, ticketing, typed_objects
+from ..services.gaia_client import ensure_pinned
+from .ui import _pop_flash, templates
+
+router = APIRouter(include_in_schema=False)
+
+
+class AccessReqBody(BaseModel):
+    layer: str
+    source: str
+    destination: str
+    protocol: str = "tcp"
+    port: str = ""
+    application: str | None = None      # an application-site name (e.g. "Facebook") — overrides everything
+    service: str | None = None          # a named non-port service (e.g. "icmp", "GRE") — overrides port
+    source_kind: str = "ip"             # "ip" (default) or a typed kind: domain / access-role /
+    destination_kind: str = "ip"        # dynamic-object / updatable-object / security-zone
+    ticket_id: str = ""
+    publish: bool = False
+    package: str | None = None
+    # full-column support — a UI/API caller can set any column (all optional; defaults reproduce today's request)
+    action: str = "Accept"              # Accept / Drop / Reject / Ask / Inform / Apply Layer
+    inline_layer: str | None = None     # required iff action == "Apply Layer"
+    action_limit: str | None = None     # action-settings QoS/limit object name
+    captive_portal: bool = False        # action-settings enable-identity-captive-portal
+    content: list[str] | None = None    # Content Awareness data-type names
+    content_direction: str = "any"      # any | up | down
+    content_negate: bool = False
+    time_objects: list[str] | None = None   # time / time-group names
+    install_on: list[str] | None = None     # gateway/target names
+    vpn: list[str] | None = None            # VPN community names ([] = Any)
+
+
+def _owned(db: Session, sid: int, user: User) -> ManagementServer:
+    ms = db.get(ManagementServer, sid)
+    if ms is None or ms.owner_id != user.id:
+        raise HTTPException(status_code=404, detail="Management server not found")
+    return ms
+
+
+def _secret_or_error(db: Session, ms: ManagementServer):
+    """Resolve the stored secret for a live call, or a JSONResponse error if it can't run."""
+    if not ms.username:
+        return None, JSONResponse({"error": "This server has no username — set one on Edit."},
+                                  status_code=400)
+    secret = mgmt_creds.get_secret(db, ms)
+    if not secret:
+        return None, JSONResponse({"error": "No saved credential — store one on the Edit page to run "
+                                  "access automation."}, status_code=400)
+    ensure_pinned(db, ms)   # trust-on-first-use before the TLS handshake
+    return secret, None
+
+
+# --- UI -------------------------------------------------------------------------------------
+@router.get("/access-automation", response_class=HTMLResponse)
+def aa_list(request: Request, db: Session = Depends(get_db)):
+    user = get_user_or_none(request, db)
+    if user is None:
+        return RedirectResponse("/login", status_code=303)
+    servers = db.scalars(
+        select(ManagementServer).where(ManagementServer.owner_id == user.id)
+        .order_by(ManagementServer.created_at.desc())
+    ).all()
+    rows = [{"ms": m, "has_secret": mgmt_creds.has_secret(db, m)} for m in servers]
+    return templates.TemplateResponse(request, "access_automation_list.html",
+                                      {"rows": rows, "flash": _pop_flash(request),
+                                       "cols": table_prefs.spec("access-servers"),
+                                       "vis": table_prefs.visible_columns(db, user.id, "access-servers")})
+
+
+@router.get("/access-automation/decision-tree/{fmt}")
+def aa_decision_tree(fmt: str, request: Request, db: Session = Depends(get_db)):
+    """Download the decision tree as a portable diagram: .drawio (diagrams.net / → Visio), .mmd
+    (Mermaid), or .dot (Graphviz). Generated from the single source of truth in services.decision_tree
+    so it always matches the engine. Registered BEFORE /{sid} so the literal path wins over the int id."""
+    if get_user_or_none(request, db) is None:
+        return RedirectResponse("/login", status_code=303)
+    spec = decision_tree.RENDERERS.get(fmt)
+    if spec is None:
+        return PlainTextResponse("Unknown format.", status_code=404)
+    render, ctype, ext = spec
+    return PlainTextResponse(render(), media_type=ctype, headers={
+        "Content-Disposition": f'attachment; filename="policypilot-decision-tree.{ext}"'})
+
+
+@router.get("/access-automation/{sid}", response_class=HTMLResponse)
+def aa_detail(sid: int, request: Request, db: Session = Depends(get_db)):
+    user = get_user_or_none(request, db)
+    if user is None:
+        return RedirectResponse("/login", status_code=303)
+    ms = _owned(db, sid, user)
+    # The "how it decides" tree is rendered client-side from this engine graph (custom canvas, no Mermaid).
+    import json
+    return templates.TemplateResponse(request, "access_automation_detail.html",
+                                      {"ms": ms, "has_secret": mgmt_creds.has_secret(db, ms),
+                                       "decision_graph_json": json.dumps(
+                                           decision_tree.to_graph()).replace("<", "\\u003c"),
+                                       "aa_options_json": json.dumps(_aa_option_state()).replace("<", "\\u003c"),
+                                       "flash": _pop_flash(request)})
+
+
+_AA_OPTION_KEYS = ("aa_app_carveout", "aa_override_blocking_deny", "aa_prefer_widen",
+                   "aa_emit_notes", "aa_ignore_conditions")
+
+
+def _aa_option_state() -> dict:
+    """The current EFFECTIVE decision knobs (after the active profile resolves) + the active profile name —
+    drives the click-to-toggle pills on the decision diagram."""
+    o = aa._decide_options()
+    return {"profile": str(app_settings.get("aa_profile") or "custom"),
+            "values": {"aa_app_carveout": o.app_carveout, "aa_override_blocking_deny": o.override_blocking_deny,
+                       "aa_prefer_widen": o.prefer_widen, "aa_emit_notes": o.emit_notes,
+                       "aa_ignore_conditions": o.ignore_conditions}}
+
+
+class AAOptionBody(BaseModel):
+    key: str
+    value: bool
+
+
+@router.post("/access-automation/decision-option")
+def aa_decision_option(body: AAOptionBody, request: Request, db: Session = Depends(get_db)):
+    """Click-to-toggle a decision knob straight from the diagram. Sets the knob AND switches the profile to
+    Custom (so the toggle takes effect — a named profile would otherwise override it). Data-only (no code)."""
+    if get_user_or_none(request, db) is None:
+        raise HTTPException(status_code=401, detail="authentication required")
+    if body.key not in _AA_OPTION_KEYS:
+        return JSONResponse({"error": "unknown option"}, status_code=400)
+    app_settings.save({body.key: bool(body.value), "aa_profile": "custom"})
+    return {"ok": True, **_aa_option_state()}
+
+
+def _req_snapshot(body: AccessReqBody) -> dict:
+    """The request tuple as plain data — snapshotted on a recorded change for display + audit."""
+    return {"source": body.source, "destination": body.destination, "protocol": body.protocol,
+            "port": body.port, "service": body.service, "application": body.application,
+            "source_kind": body.source_kind, "destination_kind": body.destination_kind,
+            "action": body.action, "inline_layer": body.inline_layer,
+            "action_settings_limit": body.action_limit, "action_settings_captive_portal": body.captive_portal,
+            "content": body.content,
+            "content_direction": body.content_direction, "content_negate": body.content_negate,
+            "time_objects": body.time_objects, "install_on": body.install_on, "vpn": body.vpn}
+
+
+def _record_change_safe(db, **kw) -> None:
+    """Record a published change for rollback — BEST-EFFORT. The SMS write has already committed by the
+    time this runs, so an audit-log DB hiccup must never turn a successful publish into a 500 for the user."""
+    try:
+        change_log.record(db, **kw)
+    except Exception:  # noqa: BLE001
+        import logging
+        logging.getLogger("dcsim.access_automation").exception("recording change for rollback failed")
+
+
+def _run(db: Session, sid: int, user: User, body: AccessReqBody, *, do_apply: bool):
+    ms = _owned(db, sid, user)
+    secret, err = _secret_or_error(db, ms)
+    if err:
+        return err
+    try:
+        req = ticketing.build_request(body.source, body.destination, body.protocol, body.port,
+                                      body.application, body.service,
+                                      source_kind=body.source_kind, destination_kind=body.destination_kind,
+                                      action=body.action, inline_layer=body.inline_layer or "",
+                                      action_settings_limit=body.action_limit or "",
+                                      action_settings_captive_portal=body.captive_portal,
+                                      content=body.content, content_direction=body.content_direction,
+                                      content_negate=body.content_negate, time_objects=body.time_objects,
+                                      install_on=body.install_on, vpn=body.vpn)
+    except ValueError as exc:
+        return JSONResponse({"error": str(exc)}, status_code=400)
+    if not body.layer:
+        return JSONResponse({"error": "No layer specified."}, status_code=400)
+    if do_apply:
+        result = aa.execute(ms, secret, req, body.layer, package=body.package,
+                            ticket_id=body.ticket_id, publish=body.publish)
+        # record a PUBLISHED change so it can be rolled back (no-op for dry-runs / no-ops / reviews).
+        _record_change_safe(db, server=ms, result=result, request=_req_snapshot(body),
+                            layer=body.layer, package=body.package, ticket_id=body.ticket_id,
+                            actor=f"user:{user.username}")
+    else:
+        result = aa.preview(ms, secret, req, body.layer, package=body.package)
+    code = 200 if result.get("ok") else 400
+    return JSONResponse(result, status_code=code)
+
+
+@router.get("/access-automation/{sid}/app-search")
+def aa_app_search(sid: int, request: Request, q: str = "", db: Session = Depends(get_db)):
+    """Type-ahead: real Check Point applications matching ``q`` on this server (for the Application
+    field + the 'did you mean' chips). Best-effort — returns [] rather than erroring the UI."""
+    user = get_user_or_none(request, db)
+    if user is None:
+        return JSONResponse({"error": "Not authenticated"}, status_code=401)
+    ms = _owned(db, sid, user)
+    secret, err = _secret_or_error(db, ms)
+    if err:
+        return JSONResponse({"candidates": []})
+    try:
+        return JSONResponse({"candidates": applications.search_server(ms, secret, q)})
+    except Exception:  # noqa: BLE001
+        return JSONResponse({"candidates": []})
+
+
+@router.get("/access-automation/{sid}/svc-search")
+def aa_svc_search(sid: int, request: Request, q: str = "", kind: str = "", db: Session = Depends(get_db)):
+    """Type-ahead: real Check Point services matching ``q`` (icmp, GRE, GTP, …). ``kind`` (the picked
+    Service type: icmp/rpc/dce-rpc/gtp/other/…) narrows the suggestions to that object type so the right
+    object is offered. Best-effort -> []."""
+    user = get_user_or_none(request, db)
+    if user is None:
+        return JSONResponse({"error": "Not authenticated"}, status_code=401)
+    ms = _owned(db, sid, user)
+    secret, err = _secret_or_error(db, ms)
+    if err:
+        return JSONResponse({"candidates": []})
+    try:
+        return JSONResponse({"candidates": services.search_server(ms, secret, q, kind=kind)})
+    except Exception:  # noqa: BLE001
+        return JSONResponse({"candidates": []})
+
+
+@router.get("/access-automation/{sid}/object-search")
+def aa_object_search(sid: int, request: Request, q: str = "", kind: str = "",
+                     db: Session = Depends(get_db)):
+    """Type-ahead: real Check Point TYPED source/destination objects (domain / access-role / dynamic-
+    object / updatable-object / security-zone) matching ``q`` for the chosen endpoint ``kind`` — the
+    recommendations behind the Source/Destination value field. Best-effort -> [] (never errors the UI)."""
+    user = get_user_or_none(request, db)
+    if user is None:
+        return JSONResponse({"error": "Not authenticated"}, status_code=401)
+    ms = _owned(db, sid, user)
+    secret, err = _secret_or_error(db, ms)
+    if err:
+        return JSONResponse({"candidates": []})
+    try:
+        return JSONResponse({"candidates": typed_objects.search_server(ms, secret, kind, q)})
+    except Exception:  # noqa: BLE001
+        return JSONResponse({"candidates": []})
+
+
+@router.post("/access-automation/{sid}/preview")
+def aa_preview(sid: int, body: AccessReqBody, request: Request, db: Session = Depends(get_db)):
+    """JSON: load → decide → describe what would happen. Read-only, commits nothing."""
+    user = get_user_or_none(request, db)
+    if user is None:
+        return JSONResponse({"error": "Not authenticated"}, status_code=401)
+    return _run(db, sid, user, body, do_apply=False)
+
+
+class TakeOverBody(BaseModel):
+    session_uid: str
+
+
+@router.post("/access-automation/{sid}/take-over")
+def aa_take_over(sid: int, body: TakeOverBody, request: Request, db: Session = Depends(get_db)):
+    """Release a 'Locked for editing' conflict by taking over the offending session and discarding its
+    uncommitted changes. DESTRUCTIVE — the UI confirms first. Returns {ok} / {error}."""
+    user = get_user_or_none(request, db)
+    if user is None:
+        return JSONResponse({"error": "Not authenticated"}, status_code=401)
+    ms = _owned(db, sid, user)
+    secret, err = _secret_or_error(db, ms)
+    if err:
+        return err
+    if not (body.session_uid or "").strip():
+        return JSONResponse({"error": "No session id."}, status_code=400)
+    res = mgmt_api.take_over_session(ms, secret, body.session_uid.strip())
+    return JSONResponse(res, status_code=200 if res.get("ok") else 400)
+
+
+@router.post("/access-automation/{sid}/apply")
+def aa_apply(sid: int, body: AccessReqBody, request: Request, db: Session = Depends(get_db)):
+    """JSON: apply the change. ``publish:false`` validates then discards (zero commit);
+    ``publish:true`` commits it."""
+    user = get_user_or_none(request, db)
+    if user is None:
+        return JSONResponse({"error": "Not authenticated"}, status_code=401)
+    return _run(db, sid, user, body, do_apply=True)
+
+
+class RevertBody(BaseModel):
+    publish: bool = False     # symmetric with apply: a bodyless/defaulted call DRY-RUNS (the UI sends true)
+    disable: bool = False     # undo an added-rule change by DISABLING the rule (a reversible "disabled" state)
+    delete_rule: bool = False  # for a DISABLED rule: DELETE it outright (finalize, not undo)
+    reenable: bool = False    # for a DISABLED rule: turn it back ON (undo the disable)
+
+
+def _revert_state(r) -> str:
+    """The actionable state of a recorded change for the rollback panel:
+      * "resolved" — terminal: the rule was deleted, or the change was fully undone.
+      * "disabled" — the rule is turned OFF but still PRESENT (a removal that disabled it, or an added rule
+                     rolled back BY disabling it) → it can be re-enabled (undo) or deleted (finalize).
+      * "active"   — the change is in effect → it can be rolled back.
+    A "disabled" entry deliberately keeps ``reverted_at`` NULL: it is NOT terminal, so further actions stay
+    available (this was the gap — a created rule rolled back via Disable used to look fully resolved)."""
+    if r.reverted_at and r.resolution != "disabled":
+        return "resolved"
+    if r.resolution == "disabled" or (r.outcome == "disable" and not r.reverted_at):
+        return "disabled"
+    return "active"
+
+
+def _change_row(r) -> dict:
+    state = _revert_state(r)
+    return {"id": r.id, "at": r.created_at.isoformat() if r.created_at else "", "by": r.created_by,
+            "layer": r.layer, "action": r.action, "outcome": r.outcome, "summary": r.summary,
+            "ticket_id": r.ticket_id or "", "objects": list(r.objects_json or []),
+            "reverted": bool(r.reverted_at), "reverted_at": r.reverted_at.isoformat() if r.reverted_at else "",
+            "reverted_by": r.reverted_by or "", "revert_error": r.revert_error or "",
+            "resolution": r.resolution or "", "state": state,
+            "deletable_disabled": state == "disabled",
+            "revertable": state in ("active", "disabled") and bool(r.inverse_json)}
+
+
+@router.get("/access-automation/{sid}/changes")
+def aa_changes(sid: int, request: Request, db: Session = Depends(get_db)):
+    """Recent PUBLISHED changes on this server (newest first) — the data behind the rollback panel."""
+    user = get_user_or_none(request, db)
+    if user is None:
+        return JSONResponse({"error": "Not authenticated"}, status_code=401)
+    ms = _owned(db, sid, user)
+    rows = change_log.recent_for_server(db, ms.id, limit=25)
+    return JSONResponse({"changes": [_change_row(r) for r in rows]})
+
+
+@router.post("/access-automation/{sid}/changes/{cid}/revert")
+def aa_revert(sid: int, cid: int, body: RevertBody, request: Request, db: Session = Depends(get_db)):
+    """Roll back ONE recorded change by replaying its inverse op(s) in a single publish — surgical, not a
+    full-DB revision rollback. publish=true commits the undo (default for an explicit click); publish=false
+    validates then discards. Mirrors apply's lock/error handling."""
+    user = get_user_or_none(request, db)
+    if user is None:
+        return JSONResponse({"error": "Not authenticated"}, status_code=401)
+    ms = _owned(db, sid, user)
+    secret, err = _secret_or_error(db, ms)
+    if err:
+        return err
+    change = change_log.get(db, cid)
+    if change is None or change.server_id != ms.id:
+        return JSONResponse({"error": "Change not found for this server."}, status_code=404)
+    if not change.inverse_json:
+        return JSONResponse({"error": "This change has no recorded inverse to act on."}, status_code=400)
+    actor = f"user:{user.username}"
+    inv0 = (change.inverse_json or [{}])[0]
+    state = _revert_state(change)
+    if state == "resolved":
+        return JSONResponse({"error": "This change was already resolved."}, status_code=400)
+
+    # Decide the action -> (web_api ops, whether to DISABLE an added rule instead of deleting it, the new DB
+    # state to stamp on success). A "disabled" rule (present but off) can be RE-ENABLED or DELETED; an
+    # "active" change can be rolled back, and an added rule can be rolled back BY disabling it (reversible —
+    # it lands in the "disabled" state, NOT terminal, so it can still be deleted later).
+    if body.delete_rule:
+        if state != "disabled":
+            return JSONResponse({"error": "Delete-rule applies only to a disabled rule."}, status_code=400)
+        ops = [{"op": "delete-access-rule", "uid": inv0.get("uid"), "layer": inv0.get("layer")}]
+        disable_added = False
+        new_fields = {"reverted_at": utcnow(), "reverted_by": actor, "resolution": "deleted", "revert_error": ""}
+    elif body.reenable:
+        if state != "disabled":
+            return JSONResponse({"error": "Re-enable applies only to a disabled rule."}, status_code=400)
+        ops = [{"op": "set-access-rule", "uid": inv0.get("uid"), "layer": inv0.get("layer"), "enabled": True}]
+        disable_added = False
+        # undoing a REMOVAL that disabled a rule restores the access -> terminal; re-enabling an ADDED rule
+        # we'd disabled restores the created rule -> back to ACTIVE (it can be rolled back again).
+        new_fields = ({"reverted_at": utcnow(), "reverted_by": actor, "resolution": "reverted", "revert_error": ""}
+                      if change.outcome == "disable"
+                      else {"reverted_at": None, "reverted_by": actor, "resolution": "", "revert_error": ""})
+    elif body.disable:
+        if change.outcome not in ("create", "deny") or state != "active":
+            return JSONResponse({"error": "Disable applies only to an active added rule."}, status_code=400)
+        ops = list(change.inverse_json or [])      # rewritten to enabled=false by disable_added_rules below
+        disable_added = True
+        new_fields = {"reverted_at": None, "reverted_by": actor, "resolution": "disabled", "revert_error": ""}
+    else:
+        if state != "active":
+            return JSONResponse({"error": "This change was already resolved."}, status_code=400)
+        ops = list(change.inverse_json or [])
+        disable_added = False
+        new_fields = {"reverted_at": utcnow(), "reverted_by": actor, "resolution": "reverted", "revert_error": ""}
+
+    if body.publish:
+        # ATOMIC claim BEFORE touching the SMS so only ONE actor transitions the entry (no double publish, no
+        # spurious error stamped on an already-acted row). Every actionable state has reverted_at NULL; we
+        # also guard the current resolution so a concurrent action from a different state can't win. On SMS
+        # failure we restore the captured prior state below (a successful SMS op is never reported as failure).
+        prior = {"reverted_at": change.reverted_at, "reverted_by": change.reverted_by or "",
+                 "resolution": change.resolution or "", "revert_error": change.revert_error or ""}
+        claimed = (db.query(AppliedChange)
+                   .filter(AppliedChange.id == cid, AppliedChange.reverted_at.is_(None),
+                           AppliedChange.resolution == (change.resolution or ""))
+                   .update(new_fields, synchronize_session=False))
+        db.commit()
+        if not claimed:
+            return JSONResponse({"error": "This change was already resolved or changed."}, status_code=400)
+    result = aa.revert_execute(ms, secret, ops, publish=body.publish, disable_added_rules=disable_added)
+    if body.publish and not (result.get("ok") and result.get("reverted")):
+        try:
+            db.query(AppliedChange).filter(AppliedChange.id == cid).update(prior, synchronize_session=False)
+            db.commit()
+        except Exception:  # noqa: BLE001
+            db.rollback()
+            import logging
+            logging.getLogger("dcsim.access_automation").exception("releasing revert claim failed")
+    return JSONResponse({**result, "change_id": cid}, status_code=200 if result.get("ok") else 400)
+
+
+@router.post("/access-automation/{sid}/changes/{cid}/delete")
+def aa_delete_change(sid: int, cid: int, request: Request, db: Session = Depends(get_db)):
+    """Remove ONE audit/rollback entry from the list. Pure bookkeeping — NEVER touches live policy (it only
+    forgets the record). After this the change can no longer be rolled back from the panel."""
+    user = get_user_or_none(request, db)
+    if user is None:
+        return JSONResponse({"error": "Not authenticated"}, status_code=401)
+    ms = _owned(db, sid, user)
+    change = change_log.get(db, cid)
+    if change is None or change.server_id != ms.id:
+        return JSONResponse({"error": "Change not found for this server."}, status_code=404)
+    change_log.delete_entry(db, change)
+    return JSONResponse({"ok": True, "deleted": cid})
+
+
+@router.post("/access-automation/{sid}/changes/clear-resolved")
+def aa_clear_resolved(sid: int, request: Request, db: Session = Depends(get_db)):
+    """Bulk-remove the RESOLVED audit entries (rolled back / disabled-rule-deleted) for this server, leaving
+    open + failed ones (still actionable) in place. Bookkeeping only — never touches live policy."""
+    user = get_user_or_none(request, db)
+    if user is None:
+        return JSONResponse({"error": "Not authenticated"}, status_code=401)
+    ms = _owned(db, sid, user)
+    removed = change_log.clear_resolved(db, ms.id)
+    return JSONResponse({"ok": True, "removed": removed})
+
+
+# --- Generic ticketing webhook (no portal session; authenticated by a shared token) ----------
+def _allowed_server_ids() -> set:
+    """Optional allowlist (Settings → Ticketing webhook → 'Restrict the webhook to server ids', falling
+    back to DCSIM_WEBHOOK_SERVER_IDS), comma-separated server ids. UNSET = every saved server.
+    Set-but-unparseable FAILS CLOSED (raises): silently dropping a mistyped entry (e.g. "prod-3") would
+    yield an empty set, which the caller reads as "allow all" — widening the blast radius of the publish
+    token from a couple servers to every tenant. A scoping typo must be an error, not permission."""
+    raw = (app_settings.get_or_env("webhook_server_ids", get_settings().webhook_server_ids) or "").strip()
+    if not raw:
+        return set()                                   # unset -> documented allow-all
+    ids, bad = set(), []
+    for tok in raw.split(","):
+        tok = tok.strip()
+        if tok.isdigit():
+            ids.add(int(tok))
+        elif tok:
+            bad.append(tok)
+    if bad or not ids:
+        raise ValueError(f"the webhook server-id allowlist is malformed (bad entries: {bad or raw!r}); "
+                         f"expected a comma-separated list of numeric server ids")
+    return ids
+
+
+@router.post("/access-automation/webhook")
+async def aa_webhook(request: Request, db: Session = Depends(get_db)):
+    """End-to-end automation for ANY ticketing system (ServiceNow, Jira, Remedy, a custom portal,
+    curl …): the caller POSTs an access request → we decide + (optionally) apply → return the result
+    JSON, and push it back via the caller's ``callback_url`` or the built-in ServiceNow adapter.
+
+    Auth: the shared secret DCSIM_WEBHOOK_TOKEN must arrive as the X-DCSim-Token header. If the token
+    is unset the webhook is DISABLED (503) — it never runs unauthenticated. The token grants policy
+    publish on every allowed management server, so treat it as a top-tier secret; optionally scope it
+    with DCSIM_WEBHOOK_SERVER_IDS."""
+    # Auth: the X-DCSim-Token header must match the legacy webhook token (Settings/env) OR an active
+    # webhook-scoped API key (Settings → API keys). Either one enables the endpoint.
+    presented = request.headers.get("x-dcsim-token", "")
+    legacy = (app_settings.get_secret_or_env("webhook_token", get_settings().webhook_token) or "").strip()
+    if not (legacy or api_keys.any_active("webhook")):
+        return JSONResponse({"error": "Webhook disabled — add a webhook key in Settings → API keys, or "
+                                      "set a token in Settings → Ticketing webhook (or the "
+                                      "DCSIM_WEBHOOK_TOKEN env var) to enable it."},
+                            status_code=503)
+    ok = bool(presented) and ((legacy and hmac.compare_digest(presented, legacy))
+                              or api_keys.verify(presented, "webhook"))
+    if not ok:
+        return JSONResponse({"error": "Invalid or missing X-DCSim-Token."}, status_code=401)
+
+    try:
+        data = await request.json()
+    except Exception:  # noqa: BLE001
+        return JSONResponse({"error": "Body must be JSON."}, status_code=400)
+    try:
+        ticket = ticketing.parse_payload(data)
+    except ValueError as exc:
+        return JSONResponse({"error": str(exc)}, status_code=400)
+
+    try:
+        allow = _allowed_server_ids()
+    except ValueError as exc:                          # misconfigured allowlist -> fail closed, never allow-all
+        return JSONResponse({"error": "Webhook server allowlist is misconfigured; contact the admin.",
+                             "detail": str(exc)}, status_code=500)
+    if allow and ticket.server_id not in allow:
+        return JSONResponse({"error": f"server_id {ticket.server_id} is not in the webhook allowlist."},
+                            status_code=403)
+
+    ms = db.get(ManagementServer, ticket.server_id)
+    if ms is None:
+        return JSONResponse({"error": f"Management server {ticket.server_id} not found."},
+                            status_code=404)
+    if not ms.username:
+        return JSONResponse({"error": "Target server has no username configured."}, status_code=400)
+    secret = mgmt_creds.get_secret(db, ms)
+    if not secret:
+        return JSONResponse({"error": "Target server has no stored credential."}, status_code=400)
+    ensure_pinned(db, ms)
+
+    if ticket.apply:
+        result = aa.execute(ms, secret, ticket.request, ticket.layer, package=ticket.package,
+                            ticket_id=ticket.ticket_id, publish=True)
+        _record_change_safe(db, server=ms, result=result, request=change_log.snapshot_request(ticket.request),
+                            layer=ticket.layer, package=ticket.package, ticket_id=ticket.ticket_id,
+                            actor="webhook")
+    else:
+        result = aa.preview(ms, secret, ticket.request, ticket.layer, package=ticket.package)
+
+    # Push the result back to the originating system (generic callback_url, or the ServiceNow adapter).
+    callback = ticketing.notify(ticket, result)
+    # Report what actually HAPPENED, not the request's intent: a no_op / review / unresolved-object run
+    # commits nothing even when ticket.apply was true, so a consumer keying on the top-level flag must not
+    # read "access granted". `published` mirrors the real commit; `outcome` lets the caller branch precisely.
+    return JSONResponse({"ticket_id": ticket.ticket_id,
+                         "applied": bool(result.get("applied")),
+                         "published": bool(result.get("published")),
+                         "outcome": result.get("outcome"),
+                         "result": result, "callback": callback},
+                        status_code=200 if result.get("ok") else 400)

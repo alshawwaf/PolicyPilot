@@ -1,0 +1,17 @@
+# PolicyPilot — Check Point Integration Simulator.
+# Pinned for a reproducible 1.0.0 build. All deps are MIT / BSD / Apache-2.0 — no GPL (proprietary-safe).
+fastapi==0.137.1
+uvicorn==0.49.0
+pydantic==2.13.4
+pydantic-settings==2.14.1
+SQLAlchemy==2.0.51
+Jinja2==3.1.6
+python-multipart==0.0.32
+itsdangerous==2.2.0
+httpx==0.28.1
+# AES-256-GCM at-rest encryption for saved gateway / datacenter / management credentials (Apache-2.0/BSD).
+# Optional at runtime: if absent, the app boots and falls back to a per-apply password.
+cryptography==49.0.0
+# MCP server for n8n / LLM agents (MIT). Optional at runtime: if absent, the app boots and /mcp is simply
+# not mounted (import-guarded in app/mcp_server.py). Install via Artifactory.
+mcp==1.28.0

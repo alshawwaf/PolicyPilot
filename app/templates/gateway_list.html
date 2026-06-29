@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% from "_macros.html" import export_menu %}
+{% block title %}Gateways{% endblock %}
+{% block content %}
+{% from "_macros.html" import row_actions, columns_menu, empty_state %}
+<div class="page-head">
+  <span class="icon-chip lg"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></span>
+  <div class="ph-main">
+    <h1>Gateways</h1>
+    <p class="ph-sub">Saved gateway connection profiles. The password is optional — store it AES-256-encrypted for reuse, or leave it blank to enter each time you apply.</p>
+  </div>
+  <div class="ph-actions">
+    <a class="btn" href="/gateways/new" data-modal-form="/gateways/new" data-modal-title="New gateway">+ New gateway</a>
+  </div>
+</div>
+
+{% if not rows %}
+<div class="card">{{ empty_state('No gateways yet',
+   'Add one to reuse its address and credentials when applying Dynamic Layers.',
+   '+ New gateway', '/gateways/new', 'New gateway') }}</div>
+{% else %}
+<div class="statrow" style="margin:2px 0 20px;">
+  <div class="stat"><span class="n">{{ rows|length }}</span><span class="l">Gateways</span></div>
+</div>
+<div class="card" style="padding:6px 6px 2px;">
+<div class="tablewrap">
+<table data-paginate="10">
+  <thead><tr><th>Name</th>{% if 'address' in vis %}<th class="nowrap">Address</th>{% endif %}{% if 'username' in vis %}<th class="nowrap">Username</th>{% endif %}{% if 'tls' in vis %}<th class="nowrap">TLS</th>{% endif %}{% if 'layers' in vis %}<th class="nowrap num">Layers</th>{% endif %}{% if 'created' in vis %}<th class="nowrap">Created</th>{% endif %}<th style="text-align:right; padding-top:6px; padding-bottom:6px;"><span class="thead-tools">{{ export_menu('gateways') }}{{ columns_menu('gateways', cols, vis, '/gateways', compact=true) }}</span></th></tr></thead>
+  <tbody>
+  {% for r in rows %}
+    <tr>
+      <td><a class="feedname" href="/gateways/{{ r.gw.id }}">{{ r.gw.name }}</a></td>
+      {% if 'address' in vis %}<td class="nowrap mono"><code>{{ r.gw.host }}:{{ r.gw.port }}</code></td>{% endif %}
+      {% if 'username' in vis %}<td class="nowrap">{{ r.gw.username or '—' }}</td>{% endif %}
+      {% if 'tls' in vis %}<td class="nowrap">{% if r.gw.cert_pem %}<span class="pill ok">pinned cert</span>{% elif r.gw.auto_trust %}<span class="pill faint">auto-trust</span>{% else %}<span class="pill faint">system trust</span>{% endif %}</td>{% endif %}
+      {% if 'layers' in vis %}<td class="nowrap num">{{ r.layers }}</td>{% endif %}
+      {% if 'created' in vis %}<td class="nowrap"><time class="ts mono" data-ts="{{ r.gw.created_at.isoformat() }}">{{ r.gw.created_at.strftime('%Y-%m-%d') }}</time></td>{% endif %}
+      {{ row_actions(links=[{'label':'Edit','url':'/gateways/' ~ r.gw.id ~ '/edit', 'modal':'Edit gateway'}], delete={'url':'/gateways/' ~ r.gw.id ~ '/delete', 'name': r.gw.name}) }}
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+</div>
+{% endif %}
+{% endblock %}

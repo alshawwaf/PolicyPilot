@@ -1,0 +1,311 @@
+{% extends "base.html" %}
+{% import "_layers_view.html" as lv %}
+{% block title %}{{ layer.name }}{% endblock %}
+
+{% block content %}
+<div id="inline-edit-meta" data-quick-edit-url="/layers/{{ layer.id }}/quick-edit" hidden></div>
+<div class="page-head">
+  <span class="icon-chip lg"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg></span>
+  <div class="ph-main">
+    <h1><span class="dc-name">{{ layer.name }}</span> <span class="pill">dynamic layer</span> <button type="button" class="copybtn cf-edit-name" title="Rename this layer" style="vertical-align:middle; font-size:12px;">Rename</button></h1>
+    <p class="ph-sub">Gateway layer <code>{{ layer.layer_name }}</code>{% if layer.description %} · {{ layer.description }}{% endif %}</p>
+  </div>
+  <div class="ph-actions">
+    <a class="btn secondary" href="/layers/{{ layer.id }}/edit">Edit</a>
+    <form method="post" action="/layers/{{ layer.id }}/delete">
+      <button class="danger" type="submit" data-confirm="Delete “{{ layer.name }}”? This removes the layer and its apply history.">Delete</button>
+    </form>
+  </div>
+</div>
+
+<div class="card">
+  <h2 style="margin-top:0;">Apply</h2>
+  <form id="apply-form">
+    <div class="row">
+      <div class="check"><input type="checkbox" id="use-mock" name="use_mock" value="1"><label for="use-mock">Use built-in mock gateway</label></div>
+      <div class="check"><input type="checkbox" id="dry_run" name="dry_run" value="1"><label for="dry_run">Dry-run (validate only)</label></div>
+    </div>
+    <fieldset id="gw-fields">
+      {% if gateways %}
+      <label>Gateway</label>
+      <select name="gateway_id" id="gw-select">
+        {% for g in gateways %}<option value="{{ g.id }}">{{ g.name }} ({{ g.host }}:{{ g.port }})</option>{% endfor %}
+      </select>
+      <div id="gw-summary" class="muted" style="margin:6px 0 0; font-size:12.5px;"></div>
+      <p class="muted">Address, port, username, certificate <b>and password</b> all come from the selected <a href="/gateways">gateway profile</a>. Save a password on the gateway to apply — nothing is entered here.</p>
+      {% else %}
+      <p class="muted">No saved gateways yet. <a href="/gateways/new">Add a gateway</a> first (address, port, username, certificate), then select it here.</p>
+      {% endif %}
+    </fieldset>
+    <div style="margin-top:14px;"><button type="button" id="apply-btn">Apply</button>
+      <button type="button" class="secondary" id="fetch-btn" title="Read the dynamic layers and content this gateway currently has">⤓ Fetch from gateway</button>
+      <span class="err-inline" id="apply-err" style="display:none;"></span></div>
+  </form>
+</div>
+
+{% if layer.content.rulebase %}
+<div class="card">
+  <div class="row" style="align-items:center;"><h2 style="margin:0;" class="grow">Rulebase <span class="muted" style="font-weight:400;">— {{ layer.content.rulebase|length }} rule(s) in “{{ layer.layer_name }}”</span></h2>
+    {% if latest %}<span class="pill {{ 'ok' if latest.t.status == 'succeeded' else 'bad' }}">last apply: {{ latest.t.status }}</span>{% endif %}</div>
+  {{ lv.render_rulebase(layer.content.rulebase) }}
+  {% if layer.content.objects and (layer.content.objects.values() | map('length') | sum) %}
+  {{ lv.render_objects(layer.content.objects) }}
+  {% endif %}
+  {% if referenced %}{{ lv.render_referenced(referenced) }}{% endif %}
+
+  {% if latest %}
+  <div style="border-top:1px solid var(--line); margin-top:16px; padding-top:12px;">
+    <div class="trace-lbl">Last apply</div>
+    <p class="muted" style="margin:4px 0;">{{ latest.t.target }}{% if latest.t.dry_run %} · dry-run{% endif %} · {{ latest.t.at.strftime('%Y-%m-%d %H:%M:%S') }}{% if latest.t.gateway_host %} · {{ latest.t.gateway_host }}{% endif %} · task <code>{{ latest.t.task_id[:18] }}</code>{% if task_total %} · <a href="/layers/{{ layer.id }}/history">apply history ({{ task_total }}) →</a>{% endif %}</p>
+    {% if latest.errors %}{% for e in latest.errors %}<div class="err" style="margin:6px 0;">{{ e.message }}</div>{% endfor %}{% endif %}
+    {% if latest.warnings %}{% for w in latest.warnings %}<div class="muted" style="font-size:12.5px; margin:3px 0;">⚠ {{ w.message }}</div>{% endfor %}{% endif %}
+    {% if latest.trace %}<details style="margin-top:8px;"><summary>HTTP request / response trace ({{ latest.trace|length }} calls)</summary>{{ lv.render_trace(latest.trace) }}</details>{% endif %}
+  </div>
+  {% else %}
+  <p class="muted" style="margin-top:14px;">Not applied yet — click <b>Apply</b> above to push this layer to the gateway.</p>
+  {% endif %}
+</div>
+{% endif %}
+
+<details class="card">
+  <summary style="font-weight:650;">Behind the scenes — Gaia API calls &amp; payload</summary>
+  <div style="margin-top:14px;">
+    <p class="muted" style="margin:0 0 6px;">Apply (push) → layer <code>{{ layer.layer_name }}</code></p>
+    <div class="apiflow">
+      <span class="apicall"><span class="pill">POST</span>login</span><span class="apiarrow">→</span>
+      <span class="apicall"><span class="pill">POST</span>set-dynamic-content</span><span class="apiarrow">→</span>
+      <span class="apicall"><span class="pill">POST</span>show-task</span><span class="apiarrow">→</span>
+      <span class="apicall"><span class="pill">POST</span>logout</span>
+    </div>
+    <p class="muted" style="margin:16px 0 6px;">Fetch (read)</p>
+    <div class="apiflow">
+      <span class="apicall"><span class="pill">POST</span>login</span><span class="apiarrow">→</span>
+      <span class="apicall"><span class="pill">POST</span>show-dynamic-layers</span><span class="apiarrow">→</span>
+      <span class="apicall"><span class="pill">POST</span>show-dynamic-layer</span><span class="apiarrow">→</span>
+      <span class="apicall"><span class="pill">POST</span>logout</span>
+    </div>
+    <p class="muted" style="font-size:12px; margin-top:14px;">Base <code>https://&lt;gateway&gt;:{{ '{}'.format(gateways[0].port) if gateways else '443' }}/gaia_api/v1.9/</code> · session header <code>X-chkp-sid</code> · a returned <code>task-id</code> means accepted, <code>show-task</code> confirms the outcome · TLS verified (pinned cert for self-signed).</p>
+    <h3 style="margin-top:20px;">set-dynamic-content payload</h3>
+    <div class="row" style="gap:8px; align-items:center; flex-wrap:nowrap; margin-bottom:10px;">
+      <span class="muted grow">POST to the mock at <code>{{ mock_url }}/set-dynamic-content</code> — or your gateway's Gaia API.</span>
+      <button class="copybtn" type="button" data-copy="{{ payload_json }}">Copy JSON</button>
+    </div>
+    <pre style="max-height:360px;">{{ payload_json }}</pre>
+  </div>
+</details>
+
+<div class="modal-overlay" id="progress-modal" hidden>
+  <div class="modal wide">
+    <h3 id="progress-title">Applying…</h3>
+    <p class="muted" id="progress-sub">Running the Gaia API session.</p>
+    <ul class="stepper" id="stepper"></ul>
+    <div id="progress-result" style="display:none;"></div>
+    <div class="modal-actions">
+      <button type="button" class="secondary" id="progress-close" style="display:none;">Close</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="fetch-modal" hidden>
+  <div class="modal xwide">
+    <h3 id="fetch-title">Dynamic layers on the gateway</h3>
+    <p class="muted" id="fetch-sub">Reading current content…</p>
+    <div id="fetch-result"></div>
+    <div class="modal-actions">
+      <button type="button" class="secondary" id="fetch-close" style="display:none;">Close</button>
+    </div>
+  </div>
+</div>
+
+<script id="gw-data" type="application/json">{{ gateways | tojson }}</script>
+<script>
+  (function () {
+    var $ = function (id) { return document.getElementById(id); };
+    var LAYER_ID = {{ layer.id }};
+    var GATEWAYS = JSON.parse($('gw-data').textContent);
+    var LAYER_GW = {{ layer_gateway_id | tojson }};
+    var gwById = {}; GATEWAYS.forEach(function (g) { gwById[g.id] = g; });
+    function esc(s) { return String(s).replace(/[&<>]/g, function (c) { return {'&':'&amp;','<':'&lt;','>':'&gt;'}[c]; }); }
+    function formData() { return new URLSearchParams(new FormData($('apply-form'))); }
+
+    function gwSummary(g) {
+      var el = $('gw-summary'); if (!el) return;
+      el.textContent = !g ? '' :
+        (g.username || '⚠ no username set') + ' @ ' + g.host + ':' + g.port +
+        (g.cert_pem ? ' · 🔒 pinned certificate' : ' · no pinned cert') +
+        (g.has_password ? ' · 🔑 saved password' : ' · ⚠ no saved password — set one on the gateway profile');
+    }
+    var gwSel = $('gw-select');
+    if (gwSel) {
+      if (LAYER_GW && gwById[LAYER_GW]) gwSel.value = String(LAYER_GW);
+      gwSummary(gwById[gwSel.value]);
+      gwSel.addEventListener('change', function () { gwSummary(gwById[this.value]); });
+    }
+    $('use-mock').addEventListener('change', function () { $('gw-fields').disabled = this.checked; });
+
+    function renderStepper(stages, doneStages, current, status, failedStage) {
+      var ul = $('stepper'); ul.innerHTML = '';
+      stages.forEach(function (s) {
+        var li = document.createElement('li'); li.className = 'step'; var dot = '';
+        if (s.key === failedStage) { li.className += ' fail'; dot = '✕'; }
+        else if (doneStages.indexOf(s.key) !== -1) { li.className += ' done'; dot = '✓'; }
+        else if (s.key === 'done' && status === 'succeeded') { li.className += ' done'; dot = '✓'; }
+        else if (s.key === current && status === 'running') { li.className += ' active'; }
+        var dotHtml = (li.className.indexOf('active') !== -1) ? '<span class="spin"></span>' : '<span class="dot">' + dot + '</span>';
+        li.innerHTML = dotHtml + '<span>' + s.label + '</span>';
+        ul.appendChild(li);
+      });
+    }
+    function renderTrace(trace) {
+      if (!trace || !trace.length) return '';
+      var html = '<details style="margin-top:6px;"><summary>HTTP request / response trace (' + trace.length + ' calls)</summary>';
+      trace.forEach(function (s) {
+        var sp = s.status ? ' <span class="pill ' + (s.status === 200 ? 'ok' : 'bad') + '">' + s.status + '</span>' : '';
+        var ms = (s.ms != null) ? ' <span class="muted">' + s.ms + ' ms</span>' : '';
+        html += '<div class="trace-step"><div class="trace-head"><span class="pill">' + esc(s.step) + '</span> <code>' + esc(s.method + ' ' + s.url) + '</code>' + sp + ms + '</div>';
+        html += '<div class="trace-lbl">Request</div><pre>' + esc(JSON.stringify(s.request, null, 2)) + '</pre>';
+        html += '<div class="trace-lbl">Response</div><pre>' + esc(JSON.stringify(s.response, null, 2)) + '</pre></div>';
+      });
+      return html + '</details>';
+    }
+    function poll(pid) {
+      fetch('/layers/' + LAYER_ID + '/apply-status/' + pid).then(function (r) { return r.json(); }).then(function (p) {
+        renderStepper(p.stages || [], p.done_stages || [], p.stage, p.status, p.failed_stage);
+        if (p.status === 'running') { setTimeout(function () { poll(pid); }, 500); return; }
+        var ok = p.status === 'succeeded';
+        $('progress-title').textContent = ok ? 'Applied' : 'Apply failed';
+        $('progress-sub').style.display = 'none';
+        var box = $('progress-result'); box.style.display = ''; var html = '';
+        if (p.error) { html += '<div class="err" style="margin-top:10px;">' + esc(p.error) + '</div>'; }
+        else if (p.summary) {
+          var s = p.summary;
+          html += '<p class="muted" style="margin-top:10px;">Created ' + s.rules + ' rule(s), ' + s.objects + ' object(s)' +
+            (s.warnings ? ' · ' + s.warnings + ' warning(s)' : '') + (s.errors ? ' · ' + s.errors + ' error(s)' : '') + '.</p>';
+        }
+        html += renderTrace(p.trace);
+        box.innerHTML = html; $('progress-close').style.display = '';
+      }).catch(function () { setTimeout(function () { poll(pid); }, 800); });
+    }
+
+    $('apply-btn').addEventListener('click', function () {
+      $('apply-err').style.display = 'none';
+      fetch('/layers/' + LAYER_ID + '/apply-start', { method: 'POST', body: formData() })
+        .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+        .then(function (res) {
+          if (!res.ok) { var e = $('apply-err'); e.style.display = ''; e.textContent = res.j.error || 'Failed to start'; return; }
+          $('progress-title').textContent = $('use-mock').checked ? 'Applying to mock gateway…' : 'Applying to gateway…';
+          $('progress-sub').style.display = ''; $('progress-result').style.display = 'none'; $('progress-result').innerHTML = '';
+          $('progress-close').style.display = 'none'; $('progress-modal').hidden = false;
+          poll(res.j.progress_id);
+        });
+    });
+    function _cellVal(v) {
+      if (typeof v === 'string') return esc(v);
+      if (Array.isArray(v) && v.length) return v.map(esc).join(', ');
+      return 'Any';
+    }
+    function _actionPill(a) {
+      var al = String(a || '').toLowerCase();
+      var c = (al === 'accept') ? 'ok' : (al.indexOf('drop') === 0 || al === 'reject') ? 'bad' : '';
+      return '<span class="pill ' + c + '">' + esc(a || '—') + '</span>';
+    }
+    function renderRulebaseTable(rb) {
+      if (!rb || !rb.length) return '<p class="muted">No rules.</p>';
+      var rows = rb.map(function (r, i) {
+        var track = (r.track && typeof r.track === 'object') ? (r.track.type || 'None') : (r.track || 'None');
+        return '<tr><td class="muted">' + (i + 1) + '</td><td><b>' + esc(r.name || ('rule-' + (i + 1))) + '</b></td>' +
+          '<td>' + _cellVal(r.source) + '</td><td>' + _cellVal(r.destination) + '</td><td>' + _cellVal(r.service) + '</td>' +
+          '<td>' + _actionPill(r.action) + '</td><td class="muted">' + esc(track) + '</td></tr>';
+      }).join('');
+      return '<div class="tablewrap"><table class="rulebase"><thead><tr><th>#</th><th>Name</th><th>Source</th>' +
+        '<th>Destination</th><th>Service</th><th>Action</th><th>Track</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
+    }
+    function _objDetail(o) {
+      if (o['ip-address']) return o['ip-address'];
+      if (o.subnet4) return o.subnet4 + (o['mask-length4'] != null ? '/' + o['mask-length4'] : '');
+      if (o.subnet6) return o.subnet6 + (o['mask-length6'] != null ? '/' + o['mask-length6'] : '');
+      if (Array.isArray(o.members)) return o.members.join(', ');
+      if (o['ipv4-address-first']) return o['ipv4-address-first'] + ' – ' + (o['ipv4-address-last'] || '');
+      return '';
+    }
+    function renderObjects(objs) {
+      var types = Object.keys(objs || {}).filter(function (k) { return (objs[k] || []).length; });
+      if (!types.length) return '';
+      var html = '<div class="trace-lbl" style="margin-top:10px;">Objects</div>';
+      types.forEach(function (t) {
+        var items = (objs[t] || []).map(function (o) {
+          var d = _objDetail(o);
+          return '<span class="pill" style="margin:2px;">' + esc(o.name || '?') + (d ? ' · ' + esc(d) : '') + '</span>';
+        }).join('');
+        html += '<div style="margin:3px 0;"><span class="muted" style="font-size:11px; text-transform:uppercase; letter-spacing:.4px;">' + esc(t) + '</span> ' + items + '</div>';
+      });
+      return html;
+    }
+    function renderReferenced(names) {
+      if (!names || !names.length) return '';
+      var pills = names.map(function (n) {
+        return '<span class="pill faint" style="margin:2px;">' + esc(n) + '</span>';
+      }).join('');
+      return '<div class="trace-lbl" style="margin-top:10px;">Referenced objects ' +
+        '<span class="muted" style="font-weight:400; text-transform:none; letter-spacing:0;">— used by rules, resolved on the gateway</span></div>' +
+        '<div style="margin:3px 0;">' + pills + '</div>';
+    }
+    function renderLayers(layers) {
+      if (!layers || !layers.length) return '<p class="muted">No dynamic layers reported by the gateway.</p>';
+      var header = '<p class="muted" style="margin:0 0 8px;"><b>' + layers.length + '</b> dynamic layer' +
+        (layers.length === 1 ? '' : 's') + ' on the gateway — each with its own rulebase:</p>';
+      return header + layers.map(function (l) {
+        var objCount = 0;
+        try { Object.keys(l.objects || {}).forEach(function (k) { var a = l.objects[k]; objCount += (a && a.length) || 0; }); } catch (e) {}
+        var lc = l.last_change || {}, meta = '';
+        if (lc.administrator) {
+          var when = (lc.time && lc.time['iso-8601']) ? ' · ' + esc(lc.time['iso-8601']) : '';
+          meta = '<div class="muted" style="font-size:11px; margin-top:6px;">last change by ' + esc(lc.administrator) + when + '</div>';
+        }
+        return '<div class="card" style="margin:10px 0; box-shadow:none;">' +
+          '<b>' + esc(l.name || '(unnamed)') + '</b>' +
+          (l.display_name ? ' <span class="muted">— ' + esc(l.display_name) + '</span>' : '') +
+          '<div class="muted" style="margin:6px 0;">' + (l.rulebase || []).length + ' rule(s) · ' + objCount + ' object(s)' +
+            ((l.referenced && l.referenced.length) ? ' · ' + l.referenced.length + ' referenced' : '') + '</div>' +
+          renderRulebaseTable(l.rulebase) + renderObjects(l.objects) + renderReferenced(l.referenced) + meta + '</div>';
+      }).join('');
+    }
+    $('fetch-btn').addEventListener('click', function () {
+      $('fetch-title').textContent = $('use-mock').checked ? 'Dynamic layers on the mock gateway' : 'Dynamic layers on the gateway';
+      $('fetch-sub').style.display = ''; $('fetch-sub').textContent = 'Reading current content…';
+      $('fetch-result').innerHTML = ''; $('fetch-close').style.display = 'none'; $('fetch-modal').hidden = false;
+      fetch('/layers/' + LAYER_ID + '/fetch-content', { method: 'POST', body: formData() })
+        .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+        .then(function (res) {
+          $('fetch-sub').style.display = 'none';
+          var p = res.j, html = '';
+          if (!res.ok || p.error) {
+            // A failed read is NOT an empty result — show only the error (well-marked), never the
+            // contradictory "No dynamic layers reported". A fetch before anything is pushed is the
+            // common cause, so say so.
+            html += '<div class="err" style="margin-bottom:10px;"><b>Couldn’t read dynamic layers.</b> ' +
+              esc(p.error || 'Failed to read from gateway.') +
+              '<div style="margin-top:7px; font-weight:400; font-size:12.5px; opacity:.9;">If no dynamic ' +
+              'layer has been pushed to this gateway yet, this is expected — <b>Apply</b> one first, then fetch.</div></div>';
+          } else {
+            html += renderLayers(p.layers);
+          }
+          html += renderTrace(p.trace);
+          $('fetch-result').innerHTML = html; $('fetch-close').style.display = '';
+        })
+        .catch(function () {
+          $('fetch-sub').style.display = 'none';
+          $('fetch-result').innerHTML = '<div class="err">Request failed.</div>'; $('fetch-close').style.display = '';
+        });
+    });
+    $('fetch-close').addEventListener('click', function () { $('fetch-modal').hidden = true; });
+    $('fetch-modal').addEventListener('click', function (e) { if (e.target === $('fetch-modal')) $('fetch-modal').hidden = true; });
+    $('progress-close').addEventListener('click', function () { window.location.reload(); });
+    $('progress-modal').addEventListener('click', function (e) {
+      if (e.target === $('progress-modal') && $('progress-close').style.display !== 'none') window.location.reload();
+    });
+  })();
+</script>
+
+{% include "_inline_edit_js.html" %}
+{% endblock %}

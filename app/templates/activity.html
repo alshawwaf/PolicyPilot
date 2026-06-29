@@ -1,0 +1,253 @@
+{% extends "base.html" %}
+{% from "_macros.html" import export_menu %}
+{% block title %}Activity log{% endblock %}
+{% block main_class %}wide{% endblock %}
+{% block content %}
+<style>
+  .acttable th.act-del-col, .acttable td.act-del-col { width:34px; text-align:center; padding-left:0; padding-right:8px; }
+  .acttable .rowdel { opacity:0; border:0; background:transparent; color:var(--muted); cursor:pointer;
+    padding:4px; border-radius:7px; display:inline-flex; align-items:center; justify-content:center;
+    transition:opacity .12s, background .12s, color .12s; }
+  .acttable .rowdel svg { display:block; }
+  .act-row:hover .rowdel, .rowdel:focus-visible { opacity:1; }
+  .acttable .rowdel:hover { background:var(--bad-bg, #fde8ec); color:var(--bad-fg, #c4314b); }
+  @media (hover: none) { .acttable .rowdel { opacity:1; } }   /* touch: no hover, so always show */
+</style>
+<div class="page-head">
+  <span class="icon-chip lg"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span>
+  <div class="ph-main">
+    <h1>Activity log</h1>
+    <p class="ph-sub">Every API call the portal served — methods, status, timing and source. Filter by status, type or data center, then expand a row for the full request/response record.</p>
+  </div>
+</div>
+<form method="post" action="/activity/delete" id="act-form">
+  <input type="hidden" name="page_size" id="ps-hidden" value="{{ page_size }}">
+  <input type="hidden" name="q" id="q-hidden" value="{{ q }}">
+
+  <div class="card cmdbar">
+    <div class="cmdrow">
+      <div class="searchbox">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+        <input type="search" id="q-input" value="{{ q }}" autocomplete="off"
+               placeholder="Search path, method, status, source IP…">
+      </div>
+      <label class="ctl">Show
+        <select id="page-size">{% for n in page_sizes %}<option value="{{ n }}" {{ 'selected' if n == page_size else '' }}>{{ n }}</option>{% endfor %}</select>
+      </label>
+      <label class="ctl" title="Only the newest page auto-refreshes — pause or page back to read without rows shifting">Refresh
+        <select id="refresh-rate">
+          <option value="0">Off</option><option value="2000">2s</option><option value="5000" selected>5s</option>
+          <option value="10000">10s</option><option value="30000">30s</option>
+        </select>
+      </label>
+      <span class="livewrap" style="margin-left:2px;"><span class="livedot on" id="livedot"></span><span id="livetext">Live</span></span>
+    </div>
+    <div class="cmdrow" style="margin-top:11px;">
+      <div class="msel" id="msel-status">
+        <button type="button" class="msel-btn">Status <span class="msel-badge" hidden></span><span class="msel-caret">▾</span></button>
+        <div class="msel-panel">
+          {% for s in status_classes %}
+          <label class="msel-opt"><input type="checkbox" name="status" value="{{ s }}" class="status-cb" {{ 'checked' if s in selected_status else '' }}>{{ s }}</label>
+          {% endfor %}
+        </div>
+      </div>
+      <div class="msel" id="msel-type">
+        <button type="button" class="msel-btn">Type <span class="msel-badge" hidden></span><span class="msel-caret">▾</span></button>
+        <div class="msel-panel">
+          {% for k, label in kind_labels.items() %}
+          <label class="msel-opt"><input type="checkbox" name="kinds" value="{{ k }}" class="kind-cb" {{ 'checked' if k in selected else '' }}>{{ label }} <span class="fcount">{{ counts.get(k, 0) }}</span></label>
+          {% endfor %}
+        </div>
+      </div>
+      <div class="msel" id="msel-dc">
+        <button type="button" class="msel-btn">Data center <span class="msel-badge" hidden></span><span class="msel-caret">▾</span></button>
+        <div class="msel-panel">
+          {% for prov, plabel in provider_labels.items() %}
+          <label class="msel-opt"><input type="checkbox" name="dc" value="{{ prov }}" class="dc-cb" {{ 'checked' if prov in selected_dc else '' }}>{{ plabel }} <span class="fcount">{{ dc_counts.get(prov, 0) }}</span></label>
+          {% endfor %}
+        </div>
+      </div>
+      <button type="button" class="linkbtn" id="reset-filters" hidden>↺ Reset</button>
+      <span class="grow"></span>
+      {{ export_menu('activity') }}
+      <button class="secondary" type="submit" formaction="/activity/clear" id="clear-btn" style="padding:8px 13px;"
+              data-confirm="Clear all log entries matching the current view? This cannot be undone.">Clear all</button>
+      <button class="danger" type="submit" id="del-btn" disabled style="padding:8px 11px;"
+              title="Delete selected" aria-label="Delete selected"
+              data-confirm="Delete the selected log record(s)? This cannot be undone.">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <div class="card" style="padding:6px 18px 14px;"><div id="rows"><p class="muted">Loading…</p></div></div>
+</form>
+
+<div class="modal-overlay" id="rec-modal" hidden>
+  <div class="modal xwide">
+    <div class="row" style="align-items:center;"><h3 class="grow" style="margin:0;">Log record</h3>
+      <button type="button" class="copybtn" id="rec-close">Close</button></div>
+    <div id="rec-body" style="margin-top:14px;">Loading…</div>
+  </div>
+</div>
+
+<script>
+  (function () {
+    var $ = function (id) { return document.getElementById(id); };
+    var form = $('act-form'), rowsEl = $('rows'), psSel = $('page-size'), psHidden = $('ps-hidden');
+    var qInput = $('q-input'), qHidden = $('q-hidden');
+    var refreshSel = $('refresh-rate'), liveDot = $('livedot'), liveText = $('livetext');
+    var delBtn = $('del-btn'), clearBtn = $('clear-btn');
+    var modal = $('rec-modal'), recBody = $('rec-body');
+    var page = 1, timer = null;
+
+    function setHTML(el, html) { el.replaceChildren(document.createRange().createContextualFragment(html)); }
+    function checkedVals(cls) {
+      return Array.prototype.slice.call(form.querySelectorAll('.' + cls + ':checked')).map(function (c) { return c.value; });
+    }
+    function selectedKinds() { return checkedVals('kind-cb'); }
+    function selectedDc() { return checkedVals('dc-cb'); }
+    function selectedStatus() { return checkedVals('status-cb'); }
+    function searchText() { return (qInput.value || '').trim(); }
+    function rowCbs() { return Array.prototype.slice.call(rowsEl.querySelectorAll('.row-cb')); }
+    function syncDel() {
+      var all = rowCbs(), n = all.filter(function (c) { return c.checked; }).length;
+      delBtn.disabled = n === 0;
+      var sa = rowsEl.querySelector('.sel-all');  // header checkbox lives in the (reloaded) fragment
+      if (sa) { sa.checked = n > 0 && n === all.length; sa.indeterminate = n > 0 && n < all.length; }
+    }
+    function query(extra) {
+      var p = new URLSearchParams();
+      selectedKinds().forEach(function (k) { p.append('kinds', k); });
+      selectedDc().forEach(function (d) { p.append('dc', d); });
+      selectedStatus().forEach(function (s) { p.append('status', s); });
+      p.set('page_size', psSel.value);
+      if (searchText()) p.set('q', searchText());
+      if (extra) Object.keys(extra).forEach(function (k) { p.set(k, extra[k]); });
+      return p;
+    }
+    function updateBadges() {
+      document.querySelectorAll('.msel').forEach(function (m) {
+        var n = m.querySelectorAll('input:checked').length, b = m.querySelector('.msel-badge');
+        b.textContent = n; b.hidden = !n;
+      });
+    }
+    function syncState() {
+      var p = query();
+      history.replaceState(null, '', '/activity' + (p.toString() ? '?' + p.toString() : ''));
+      psHidden.value = psSel.value;            // keep the delete/clear form in sync with the view
+      qHidden.value = searchText();
+      updateBadges();
+      var anyFilter = selectedKinds().length || selectedDc().length || selectedStatus().length || searchText();
+      clearBtn.textContent = anyFilter ? 'Clear filtered' : 'Clear all';
+      $('reset-filters').hidden = !anyFilter;
+      updateExportLinks();                       // keep CSV / PDF export matching the current filters
+    }
+    function updateExportLinks() {
+      var qs = query().toString();
+      var csv = $('exp-csv-activity'), pdf = $('exp-pdf-activity');
+      if (csv) csv.href = '/export/activity.csv' + (qs ? '?' + qs : '');
+      if (pdf) pdf.href = '/export/activity/print?' + (qs ? qs + '&' : '') + 'auto=1';
+    }
+    // Relative timestamps ("12s ago"), refreshed with each load + on a timer.
+    function rel(iso) {
+      var d = new Date(iso), s = (Date.now() - d.getTime()) / 1000;
+      if (s < 0) s = 0;
+      if (s < 60) return Math.floor(s) + 's ago';
+      if (s < 3600) return Math.floor(s / 60) + 'm ago';
+      if (s < 86400) return Math.floor(s / 3600) + 'h ago';
+      return d.toLocaleDateString();
+    }
+    function updateTimes() {
+      rowsEl.querySelectorAll('.act-time[data-ts]').forEach(function (el) { el.textContent = rel(el.getAttribute('data-ts')); });
+    }
+    function load() {
+      fetch('/activity/rows?' + query({ page: page }).toString())
+        .then(function (r) { return r.text(); })
+        .then(function (html) { setHTML(rowsEl, html); syncDel(); updateTimes(); })
+        .catch(function () {});
+    }
+    function reload() { page = 1; syncState(); load(); }
+    window.gotoPage = function (n) { page = Math.max(1, n); load(); window.scrollTo({ top: 0, behavior: 'smooth' }); };
+
+    function deleteOne(id) {
+      if (!window.confirm('Delete this log record? This cannot be undone.')) return;
+      var body = query();          // current view (kinds / dc / status / page_size / q)
+      body.append('ids', id);
+      body.set('ajax', '1');
+      fetch('/activity/delete', {
+        method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: body.toString()
+      }).then(function () { load(); }).catch(function () {});
+    }
+
+    rowsEl.addEventListener('click', function (e) {
+      var pg = e.target.closest ? e.target.closest('[data-page]') : null;
+      if (pg) { e.preventDefault(); window.gotoPage(parseInt(pg.getAttribute('data-page'), 10) || 1); return; }
+      var del = e.target.closest ? e.target.closest('.rowdel') : null;   // per-row hover delete — before row-open
+      if (del) { e.preventDefault(); e.stopPropagation(); deleteOne(del.getAttribute('data-del')); return; }
+      if (e.target.classList.contains('row-cb')) { syncDel(); return; }
+      var row = e.target.closest('.act-row');
+      if (row) openRecord(row.getAttribute('data-id'));
+    });
+    rowsEl.addEventListener('change', function (e) {
+      if (e.target.classList.contains('sel-all')) {  // header checkbox toggles every row on the page
+        var on = e.target.checked;
+        rowCbs().forEach(function (c) { c.checked = on; });
+        syncDel();
+      } else if (e.target.classList.contains('row-cb')) {
+        syncDel();
+      }
+    });
+
+    // Any filter checkbox (Status / Type / Data center) re-queries.
+    form.addEventListener('change', function (e) {
+      var t = e.target;
+      if (t.classList.contains('kind-cb') || t.classList.contains('dc-cb') || t.classList.contains('status-cb')) reload();
+    });
+    psSel.addEventListener('change', reload);
+
+    // (.msel open/close + badge paint is handled globally in base.html)
+
+    $('reset-filters').addEventListener('click', function () {
+      form.querySelectorAll('.kind-cb, .dc-cb, .status-cb').forEach(function (c) { c.checked = false; });
+      qInput.value = '';
+      reload();
+    });
+
+    // Debounced live search; Enter must not submit the (delete) form.
+    var qTimer = null;
+    qInput.addEventListener('keydown', function (e) { if (e.key === 'Enter') e.preventDefault(); });
+    qInput.addEventListener('input', function () { clearTimeout(qTimer); qTimer = setTimeout(reload, 300); });
+
+    function openRecord(id) {
+      setHTML(recBody, '<p class="muted">Loading…</p>');
+      modal.hidden = false;
+      fetch('/activity/' + id).then(function (r) { return r.text(); })
+        .then(function (html) { setHTML(recBody, html); })
+        .catch(function () { setHTML(recBody, '<p class="err">Failed to load this record.</p>'); });
+    }
+    $('rec-close').addEventListener('click', function () { modal.hidden = true; });
+    modal.addEventListener('click', function (e) { if (e.target === modal) modal.hidden = true; });
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape') modal.hidden = true; });
+
+    // Auto-refresh at the configured rate (Off = paused). Newest page only, never while reading.
+    function setLive() {
+      var ms = parseInt(refreshSel.value, 10) || 0;
+      liveDot.className = 'livedot ' + (ms > 0 ? 'on' : 'off');
+      liveText.textContent = ms > 0 ? 'Live · ' + (ms / 1000) + 's' : 'Paused';
+    }
+    function applyRefresh() {
+      if (timer) { clearInterval(timer); timer = null; }
+      var ms = parseInt(refreshSel.value, 10) || 0;
+      if (ms > 0) timer = setInterval(function () { if (page === 1 && modal.hidden) load(); }, ms);
+      setLive();
+    }
+    refreshSel.addEventListener('change', applyRefresh);
+
+    syncState();
+    load();
+    applyRefresh();
+    setInterval(updateTimes, 15000);
+  })();
+</script>
+{% endblock %}

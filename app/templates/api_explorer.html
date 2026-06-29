@@ -1,0 +1,334 @@
+{% extends "base.html" %}
+{% block title %}API explorer{% endblock %}
+{% block main_class %}wide{% endblock %}
+{% block content %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.17.14/swagger-ui.css">
+<style>
+  .ax-tabs { display:flex; gap:8px; margin:4px 0 12px; }
+  .ax-tabs a { padding:8px 18px; border:1px solid var(--line); border-radius:10px; text-decoration:none;
+    color:var(--text); font-weight:600; font-size:13px; background:var(--surface-2); transition:all .15s; }
+  .ax-tabs a:hover { transform:translateY(-1px); }
+  .ax-tabs a.active { color:#fff; border-color:transparent;
+    background:var(--accent-grad); box-shadow:0 3px 12px rgba(123,63,242,.30); }
+  /* Two API tabs, two colour identities (the design system's primary pink + secondary cyan→blue) so they
+     never read as the same control: active = full gradient, inactive = a tinted outline. */
+  .ax-tabs a[href*="api=management"]:not(.active) { color:var(--accent-2); border-color:var(--accent-soft); }
+  .ax-tabs a[href*="api=gaia"]:not(.active) { color:#22d3ee; border-color:rgba(34,211,238,.40); }
+  .ax-tabs a[href*="api=gaia"].active { background:var(--accent-grad-2);
+    box-shadow:0 3px 12px rgba(6,182,212,.32); }
+  .ax-bar { display:flex; gap:14px; align-items:flex-end; flex-wrap:wrap; margin:6px 0 10px; font-size:13px; }
+  .ax-bar label { display:flex; flex-direction:column; gap:3px; font-size:11px; color:var(--subtle-fg);
+    text-transform:uppercase; letter-spacing:.03em; }
+  .ax-bar select, .ax-bar input { padding:6px 9px; min-width:180px; }
+  .ax-bar input.url { min-width:340px; font-family:ui-monospace,monospace; }
+  .ax-bar button { padding:7px 16px; font-weight:600; }
+  /* The proxy toggle is a checkbox — exclude it from the field sizing above (and the global
+     input{width:100%}) so it renders as a small box, not a full-width bar. */
+  .ax-bar input[type="checkbox"] { width:auto; min-width:0; padding:0; margin:0; accent-color:var(--accent);
+    flex:0 0 auto; width:15px; height:15px; cursor:pointer; }
+  /* One collapsed "how it works" disclosure instead of two big always-on explainer blocks. */
+  .ax-help { max-width:980px; margin:2px 0 14px; border:1px solid var(--line); border-radius:9px;
+    background:var(--surface-2); font-size:12.5px; overflow:hidden; }
+  .ax-help > summary { cursor:pointer; padding:9px 14px; color:var(--text-2); font-weight:600;
+    list-style:none; display:flex; align-items:center; gap:8px; }
+  .ax-help > summary::-webkit-details-marker { display:none; }
+  .ax-help > summary::after { content:"▾"; margin-left:auto; color:var(--muted); transition:transform .15s; }
+  .ax-help[open] > summary { border-bottom:1px solid var(--line); }
+  .ax-help[open] > summary::after { transform:rotate(180deg); }
+  .ax-help-body { padding:11px 14px 13px; line-height:1.6; color:var(--text-2); }
+  .ax-help-body p { margin:0 0 9px; } .ax-help-body p:last-child { margin:0; }
+  .ax-help-body code { font-family:ui-monospace,monospace; }
+  .ax-help-body b { color:var(--text); }
+  #ax-status { font-size:12.5px; margin:8px 0; min-height:1.2em; }
+  #ax-status.err { color:var(--bad-fg,#c4314b); font-weight:600; }
+  /* --- Theme Swagger UI onto the portal's own variables (follows dark/light automatically) --------- */
+  #swagger-ui { background:var(--surface); border:1px solid var(--line); border-radius:12px;
+    padding:6px 16px 16px; }
+  #swagger-ui .swagger-ui, #swagger-ui .swagger-ui .info .title { color:var(--text); }
+  #swagger-ui .topbar { display:none; }
+  /* Hide Swagger's own info block (title + the long raw spec URL + description) — the page-head, the
+     API tabs, and the version picker already say what this is, so it's pure noise + an ugly URL line. */
+  #swagger-ui .information-container { display:none; }
+  #swagger-ui .info { margin:14px 0; }
+  #swagger-ui .info .title small.version-stamp { background:var(--chip-bg); }
+  #swagger-ui .info .title small { background:var(--accent); }
+  #swagger-ui .info p, #swagger-ui .info li, #swagger-ui .info table td,
+  #swagger-ui .renderedMarkdown p, #swagger-ui .markdown p { color:var(--text-2); }
+  #swagger-ui .info a, #swagger-ui a.nostyle, #swagger-ui .info a:hover { color:var(--accent); }
+  /* server / authorize bar */
+  /* Only the Authorize button remains (servers hidden below), so shrink the container to wrap just the
+     button and float it right — otherwise Swagger renders a tall, full-width, mostly-empty bar. */
+  #swagger-ui .scheme-container { background:var(--surface-2); box-shadow:none;
+    border:1px solid var(--line); border-radius:10px; margin:0 0 16px auto; padding:8px 12px;
+    width:fit-content; display:flex; }
+  #swagger-ui .scheme-container .schemes.wrapper { width:auto; padding:0; margin:0; }
+  #swagger-ui .scheme-container .auth-wrapper { margin:0; }
+  #swagger-ui .scheme-container .schemes-title, #swagger-ui label { color:var(--text-2); }
+  /* The portal's own TARGET SERVER picker (above) already sets the base URL — hide Swagger's redundant
+     server line so the target isn't shown twice. Authorize stays. */
+  #swagger-ui .scheme-container .servers, #swagger-ui .scheme-container .servers-title { display:none; }
+  /* command-group headers */
+  #swagger-ui .opblock-tag { color:var(--text); border-bottom:1px solid var(--line); }
+  #swagger-ui .opblock-tag:hover { background:var(--hover); }
+  #swagger-ui .opblock-tag small, #swagger-ui .opblock-tag .info__tgdescription { color:var(--muted); }
+  #swagger-ui .opblock-tag svg { fill:var(--muted); }
+  /* operation blocks (CP API is all POST) */
+  #swagger-ui .opblock { background:var(--surface-2); border:1px solid var(--line);
+    box-shadow:none; border-radius:9px; margin:0 0 10px; }
+  #swagger-ui .opblock .opblock-summary { border-color:var(--line); }
+  #swagger-ui .opblock .opblock-summary-method { background:var(--accent); color:var(--on-accent);
+    text-shadow:none; }
+  #swagger-ui .opblock .opblock-summary-path,
+  #swagger-ui .opblock .opblock-summary-path__deprecated { color:var(--text); }
+  #swagger-ui .opblock .opblock-summary-description { color:var(--text-2); }
+  #swagger-ui .opblock.opblock-post { border-color:var(--line); background:var(--surface-2); }
+  #swagger-ui .opblock.opblock-post .opblock-summary { border-color:var(--line); }
+  #swagger-ui .opblock-description-wrapper p, #swagger-ui .opblock-title_normal p,
+  #swagger-ui .opblock-external-docs-wrapper p { color:var(--text-2); }
+  #swagger-ui .opblock-section-header { background:var(--surface-3); box-shadow:none;
+    border-bottom:1px solid var(--line); }
+  #swagger-ui .opblock-section-header h4, #swagger-ui .opblock-section-header > label,
+  #swagger-ui .tab li { color:var(--text); }
+  #swagger-ui .opblock-section-header h4 span, #swagger-ui .tab li.active { color:var(--text); }
+  /* tables: parameters + responses */
+  #swagger-ui table thead tr td, #swagger-ui table thead tr th { color:var(--muted);
+    border-bottom:1px solid var(--line); }
+  #swagger-ui .parameters-col_description, #swagger-ui .response-col_description,
+  #swagger-ui .response-col_status, #swagger-ui .responses-inner > div > p { color:var(--text-2); }
+  #swagger-ui .parameter__name, #swagger-ui .parameter__type,
+  #swagger-ui .parameter__in, #swagger-ui .prop-type { color:var(--text-2); }
+  #swagger-ui .parameter__name.required::after { color:var(--accent); }
+  #swagger-ui .responses-inner h4, #swagger-ui .responses-inner h5,
+  #swagger-ui .response-col_links { color:var(--text); }
+  #swagger-ui .response .response-col_status { color:var(--text); }
+  /* inputs */
+  #swagger-ui input[type=text], #swagger-ui input[type=password], #swagger-ui input[type=email],
+  #swagger-ui input[type=search], #swagger-ui input[type=number], #swagger-ui textarea,
+  #swagger-ui select { background:var(--input-bg); color:var(--text);
+    border:1px solid var(--line); box-shadow:none; }
+  #swagger-ui .filter .operation-filter-input { border:1px solid var(--line); background:var(--input-bg);
+    color:var(--text); }
+  /* buttons */
+  #swagger-ui .btn { color:var(--text); background:var(--surface-3); border:1px solid var(--line-strong);
+    box-shadow:none; }
+  #swagger-ui .btn:hover { background:var(--hover); }
+  #swagger-ui .btn.execute { background:var(--accent); color:var(--on-accent); border-color:var(--accent); }
+  #swagger-ui .btn.cancel { color:var(--accent); border-color:var(--accent); background:transparent; }
+  #swagger-ui .btn.authorize { color:var(--ok); border-color:var(--ok-line); background:var(--ok-bg); }
+  #swagger-ui .btn.authorize svg { fill:var(--ok); }
+  #swagger-ui .try-out__btn { background:var(--surface-3); }
+  /* models / schemas */
+  #swagger-ui section.models { border:1px solid var(--line); background:var(--surface); }
+  #swagger-ui section.models.is-open h4 { border-bottom:1px solid var(--line); }
+  #swagger-ui section.models h4 { color:var(--text); }
+  #swagger-ui section.models .model-container { background:var(--surface-2); }
+  #swagger-ui .model, #swagger-ui .model-title, #swagger-ui .model .property,
+  #swagger-ui .prop-format { color:var(--text-2); }
+  #swagger-ui .model-toggle:after { background:none; }
+  /* the Authorize modal */
+  #swagger-ui .dialog-ng .modal-ux { background:var(--surface); border:1px solid var(--line); }
+  #swagger-ui .dialog-ng .modal-ux-header { border-bottom:1px solid var(--line); }
+  #swagger-ui .dialog-ng .modal-ux-header h3,
+  #swagger-ui .dialog-ng .modal-ux-content h4, #swagger-ui .dialog-ng p { color:var(--text); }
+  #swagger-ui .backdrop-ux { background:var(--overlay); }
+  /* responses: example/schema code blocks, media-type select, sub-tabs */
+  #swagger-ui .responses-inner { background:transparent; }
+  #swagger-ui table.responses-table td, #swagger-ui table.responses-table th { background:transparent; }
+  #swagger-ui .model-example { background:transparent; border:0; }
+  /* Read-only code blocks (curl, Request URL, request/response body, Example Value, Schema). Swagger's
+     per-token inline highlight colors are a MIX tuned for the wrong background — some tokens (JSON keys)
+     go near-invisible and the highlighter paints patchy little token boxes. Rather than fight it
+     per-token, force ONE legible colour that follows the portal theme (dark text on light in light mode,
+     light on dark in dark mode) and strip the per-token boxes. Monochrome, but always crisp. */
+  #swagger-ui .microlight, #swagger-ui pre.microlight, #swagger-ui .highlight-code,
+  #swagger-ui .body-param__example, #swagger-ui .example, #swagger-ui .curl-command,
+  #swagger-ui .request-url, #swagger-ui .request-url pre, #swagger-ui .responses-inner pre {
+    background:var(--input-bg) !important; color:var(--text) !important;
+    border:1px solid var(--line); border-radius:8px; }
+  #swagger-ui .microlight *, #swagger-ui .highlight-code *, #swagger-ui .body-param__example *,
+  #swagger-ui .example *, #swagger-ui .curl-command *, #swagger-ui .request-url pre *,
+  #swagger-ui .responses-inner pre *, #swagger-ui .renderedMarkdown pre code {
+    color:var(--text) !important; background:transparent !important; text-shadow:none !important; }
+  #swagger-ui select, #swagger-ui .content-type, #swagger-ui .examples-select select {
+    background:var(--input-bg); color:var(--text); border:1px solid var(--line); }
+  /* the "Example Value | Schema" / "Model | Example" sub-tabs */
+  #swagger-ui .tab li { color:var(--muted); }
+  #swagger-ui .tab li.active, #swagger-ui .tab li button.tablinks.active { color:var(--text); }
+  #swagger-ui .tab li button.tablinks { color:var(--muted); }
+  #swagger-ui .response-control-media-type__title,
+  #swagger-ui .response-control-media-type__accept-message,
+  #swagger-ui .response-control-examples__title { color:var(--muted); }
+  #swagger-ui .response-control-media-type--accept-controller select { border-color:var(--accent); }
+  #swagger-ui .copy-to-clipboard { background:var(--surface-3); border-radius:6px; }
+  #swagger-ui .copy-to-clipboard button { background:var(--surface-3); }
+  #swagger-ui svg.arrow { fill:var(--muted); }
+</style>
+
+<div class="page-head">
+  <span class="icon-chip lg"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg></span>
+  <div class="ph-main">
+    <h1>API explorer</h1>
+    <p class="ph-sub">
+      Live, interactive reference for the Check Point <strong>Management</strong> and <strong>Gaia</strong> APIs —
+      every command, schema, and example, generated in-portal from Check Point's docs. Pick a version and
+      target, then <em>Try it out</em>.
+    </p>
+  </div>
+</div>
+
+<div class="ax-tabs">
+  <a href="/api-explorer?api=management" class="{{ 'active' if api_type=='management' else '' }}">Management API</a>
+  <a href="/api-explorer?api=gaia" class="{{ 'active' if api_type=='gaia' else '' }}">Gaia API</a>
+</div>
+
+<div class="ax-bar">
+  <label>API version
+    <select id="ax-version">
+      <option value="">Latest (auto)</option>
+      {% for v in versions.get(api_type, []) %}
+      <option value="{{ v }}" {{ 'selected' if v==version else '' }}>{{ v }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Target server
+    <select id="ax-server">
+      <option value="" {{ 'selected' if not default_server else '' }}>Default (from docs)</option>
+      {% for s in servers.get(api_type, []) %}
+      <option value="{{ s.url }}" {{ 'selected' if s.url==default_server else '' }}>{{ s.name }} — {{ s.url }}</option>
+      {% endfor %}
+      <option value="__custom__">Custom URL…</option>
+    </select>
+  </label>
+  <label id="ax-custom-wrap" style="display:none;">Custom URL
+    <input id="ax-custom" class="url" type="text"
+           placeholder="https://mgmt.example.com:443/{{ 'web_api' if api_type=='management' else 'gaia_api' }}">
+  </label>
+  <button id="ax-load" class="btn">Load</button>
+  <button id="ax-export" class="btn secondary" type="button"
+          title="Download an OpenAPI 3.0 file — import it into Postman or Bruno">⤓ Export for Postman / Bruno</button>
+  <label style="flex-direction:row; align-items:center; gap:7px; text-transform:none; letter-spacing:0;
+                font-size:12.5px; color:var(--text-2); cursor:pointer;">
+    <input type="checkbox" id="ax-proxy" checked> Run calls through the portal <span class="muted">(avoids CORS)</span>
+  </label>
+</div>
+
+<details class="ax-help">
+  <summary>How “Try it out” &amp; Export work</summary>
+  <div class="ax-help-body">
+    <p><b>Try it out</b> runs <b>through the portal</b> by default (server-side), so it reaches your
+    <b>saved</b> servers without the browser's CORS block — just <b>Authorize</b> with a session id (sid,
+    auto-captured after you run login) and execute. The proxy only reaches servers you've added, and TLS is
+    verified server-side. Untick <b>“Run calls through the portal”</b> to call straight from the browser
+    (handy for the copy-paste <code>curl</code>; a real server then shows “Failed to fetch — CORS”, which is
+    expected). For governed changes, use the gated editor on <b>Management Servers</b> (preview → publish).</p>
+    <p><b>Export for Postman / Bruno</b> downloads this version's OpenAPI 3.0 file with your target baked in.
+    Postman: <em>Import → File</em>. Bruno: <em>Import Collection → OpenAPI V3</em>. Re-export after switching
+    the version or target.</p>
+  </div>
+</details>
+
+<div id="ax-status">Loading {{ api_type }} {{ version or 'latest' }} spec…</div>
+<div id="swagger-ui"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.17.14/swagger-ui-bundle.js"></script>
+<script>
+(function () {
+  // Swagger UI 5.17 logs a benign "Error persisting cookie based apiKey" on every preauthorizeApiKey
+  // (an internal cookie-persist bug) even though the header auth applies fine. Drop just that one line so
+  // it doesn't look like a real failure to someone watching the console during a demo.
+  var _cerr = console.error.bind(console);
+  console.error = function (m) {
+    if (typeof m === 'string' && m.indexOf('persisting cookie based apiKey') !== -1) return;
+    return _cerr.apply(null, arguments);
+  };
+  var API = {{ api_type | tojson }};
+  var verSel = document.getElementById('ax-version');
+  var srvSel = document.getElementById('ax-server');
+  var custWrap = document.getElementById('ax-custom-wrap');
+  var custInp = document.getElementById('ax-custom');
+  var statusEl = document.getElementById('ax-status');
+
+  srvSel.addEventListener('change', function () {
+    custWrap.style.display = (srvSel.value === '__custom__') ? 'flex' : 'none';
+  });
+
+  function targetUrl() {
+    if (srvSel.value === '__custom__') return custInp.value.trim();
+    return srvSel.value;
+  }
+
+  function specUrl() {
+    var p = new URLSearchParams({ api: API, version: verSel.value });
+    var t = targetUrl();
+    if (t) p.set('server_url', t);
+    return '/api-explorer/openapi.json?' + p.toString();
+  }
+
+  function load() {
+    statusEl.className = '';
+    statusEl.textContent = 'Loading ' + API + ' ' + (verSel.value || 'latest') +
+      ' spec… (first load fetches the docs — a few seconds)';
+    document.getElementById('swagger-ui').innerHTML = '';
+    window.ui = SwaggerUIBundle({
+      url: specUrl(),
+      dom_id: '#swagger-ui',
+      presets: [SwaggerUIBundle.presets.apis],
+      layout: 'BaseLayout',
+      docExpansion: 'none',
+      defaultModelsExpandDepth: 0,
+      filter: true,
+      tryItOutEnabled: true,
+      // Per-session auth (no cross-reload persist) — the sid is short-lived and re-captured on the next
+      // login anyway, and this avoids restoring a stale sid on reload.
+      persistAuthorization: false,
+      requestInterceptor: function (req) {
+        // Route the live call through the portal's same-origin proxy so the browser's CORS block
+        // doesn't stop it. The proxy only reaches your saved servers (see /api-explorer/proxy).
+        try {
+          var proxy = document.getElementById('ax-proxy');
+          if (proxy && proxy.checked && /^https?:\/\//i.test(req.url) &&
+              req.url.indexOf('/api-explorer/proxy') === -1) {
+            req.headers['X-Dcsim-Target'] = req.url;
+            req.url = location.origin + '/api-explorer/proxy';
+          }
+        } catch (e) { /* fall back to a direct browser call */ }
+        return req;
+      },
+      onComplete: function () { statusEl.textContent = ''; },
+      responseInterceptor: function (res) {
+        if (res && res.status === 0) {
+          statusEl.className = 'err';
+          statusEl.textContent = 'The browser blocked that live call (likely CORS / TLS to the target). ' +
+            'The generated request and curl above are still valid.';
+          return res;
+        }
+        // Auto-capture the Check Point session id (sid) from a login response, so every subsequent
+        // call sends it as the X-chkp-sid header (the "sessionId" apiKey auth) with no manual Authorize.
+        try {
+          var sid = null;
+          var t = res && (res.text || res.data);
+          if (t) { var j = JSON.parse(t); if (j && typeof j.sid === 'string') sid = j.sid; }
+          if (!sid && res) { var b = res.obj || res.body; if (b && typeof b.sid === 'string') sid = b.sid; }
+          if (sid && window.ui && window.ui.preauthorizeApiKey) {
+            window.ui.preauthorizeApiKey('sessionId', sid);
+            statusEl.className = 'ok';
+            statusEl.textContent = 'Session captured — subsequent calls are authorized automatically ' +
+              '(X-chkp-sid). Re-run login any time to refresh it.';
+          }
+        } catch (e) { /* response wasn't JSON or had no sid — nothing to capture */ }
+        return res;
+      }
+    });
+  }
+
+  document.getElementById('ax-load').addEventListener('click', load);
+  document.getElementById('ax-export').addEventListener('click', function () {
+    var p = new URLSearchParams({ api: API, version: verSel.value, download: '1' });
+    var t = targetUrl();
+    if (t) p.set('server_url', t);
+    window.location = '/api-explorer/openapi.json?' + p.toString();   // Content-Disposition → file download
+  });
+  load();
+})();
+</script>
+{% endblock %}

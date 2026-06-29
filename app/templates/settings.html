@@ -1,0 +1,328 @@
+{% extends "base.html" %}
+{% block title %}Settings{% endblock %}
+{% block content %}
+<div class="page-head">
+  <span class="icon-chip lg"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span>
+  <div class="ph-main">
+    <h1>Settings</h1>
+    <p class="ph-sub">Control how the portal talks to your Check Point management servers. Real integrations don't log in and re-pull the whole policy on every request — Check Point throttles remote logins (3 per admin per minute) and caps concurrent sessions, so these defaults keep the tool well inside those limits. Changes take effect immediately, across the whole portal.</p>
+  </div>
+</div>
+
+<div class="settings-layout">
+  <nav class="settings-nav" aria-label="Settings sections">
+    {% for group in groups.keys() %}
+    <a href="#grp-{{ group | lower | replace(' & ','-') | replace(' / ','-') | replace(' ','-') }}">{{ group }}</a>
+    {% endfor %}
+    <a href="#grp-api-keys">API keys</a>
+  </nav>
+  <div class="settings-main">
+
+<form method="post" action="/settings" id="settings-form">
+{% for group, items in groups.items() %}
+  <div class="card" id="grp-{{ group | lower | replace(' & ','-') | replace(' / ','-') | replace(' ','-') }}">
+    <h2 style="margin-top:0;">{{ group }}</h2>
+    {% if group == 'Ticket write-back' %}
+    <p class="muted small" style="margin:-4px 0 2px;max-width:800px;">Write-back is vendor-neutral — if a
+      ticket includes a <code>callback_url</code>, the result is POSTed there (ServiceNow, Jira, Slack,
+      anything). The fields below configure the optional built-in <b>ServiceNow</b> Table API adapter, used
+      only when no <code>callback_url</code> is supplied.</p>
+    {% endif %}
+    {% for s in items %}
+      <div class="setrow" style="padding:12px 0;border-top:1px solid var(--line);">
+        {% if s.kind == 'bool' %}
+          <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-weight:600;">
+            <input type="checkbox" name="{{ s.key }}" {% if vals[s.key] %}checked{% endif %}>
+            {{ s.label }}
+          </label>
+        {% elif s.kind == 'secret' %}
+          <label style="display:flex;align-items:center;gap:10px;font-weight:600;flex-wrap:wrap;">
+            <span style="min-width:260px;">{{ s.label }}
+              {% if secrets.get(s.key) %}<span class="pill ok" style="font-size:11px;">set</span>
+              {% else %}<span class="pill" style="font-size:11px;background:var(--surface-2);color:var(--muted);">not set</span>{% endif %}
+            </span>
+            {% if crypto_ok %}
+              <input type="password" name="{{ s.key }}" value="" autocomplete="new-password" spellcheck="false"
+                     placeholder="{% if secrets.get(s.key) %}•••• stored — type to replace{% else %}enter a value to set{% endif %}"
+                     style="min-width:240px;font-family:ui-monospace,monospace;">
+              {% if s.generate %}
+                <button type="button" class="btn secondary gen-secret" data-gen="{{ s.key }}"
+                        title="Generate a strong random token" style="padding:6px 13px;font-size:12px;font-weight:600;">Generate</button>
+              {% endif %}
+              {% if secrets.get(s.key) %}
+                <label style="display:inline-flex;align-items:center;gap:6px;font-weight:500;font-size:12px;color:var(--muted);">
+                  <input type="checkbox" name="{{ s.key }}__clear"> clear
+                </label>
+              {% endif %}
+            {% else %}
+              <span class="small" style="color:var(--warn);max-width:420px;">At-rest encryption unavailable —
+                set DCSIM_ENCRYPTION_KEY or DCSIM_SESSION_SECRET to store this in the portal, or keep using
+                the env var.</span>
+            {% endif %}
+          </label>
+        {% elif s.kind == 'choice' %}
+          <label style="display:flex;align-items:center;gap:10px;font-weight:600;flex-wrap:wrap;">
+            <span style="min-width:260px;">{{ s.label }}</span>
+            <select name="{{ s.key }}" style="min-width:300px;padding:6px 10px;">
+              {% for val, lbl in s.choices %}
+              <option value="{{ val }}" {% if vals[s.key] == val %}selected{% endif %}>{{ lbl }}</option>
+              {% endfor %}
+            </select>
+          </label>
+        {% elif s.kind == 'str' %}
+          <label style="display:flex;align-items:center;gap:10px;font-weight:600;flex-wrap:wrap;">
+            <span style="min-width:260px;">{{ s.label }}</span>
+            <input type="text" name="{{ s.key }}" value="{{ vals[s.key] }}"
+                   maxlength="{{ s.max or 200 }}" spellcheck="false" autocomplete="off"
+                   style="min-width:240px;font-family:ui-monospace,monospace;">
+          </label>
+        {% elif s.kind == 'text' %}
+          <div style="font-weight:600;">{{ s.label }}</div>
+          <textarea name="{{ s.key }}" rows="4" maxlength="{{ s.max or 4000 }}" spellcheck="false"
+                    style="display:block;width:100%;margin-top:6px;font-family:ui-monospace,monospace;
+                           font-size:12.5px;padding:8px 10px;box-sizing:border-box;">{{ vals[s.key] }}</textarea>
+        {% else %}
+          <label style="display:flex;align-items:center;gap:10px;font-weight:600;flex-wrap:wrap;">
+            <span style="min-width:260px;">{{ s.label }}</span>
+            <input type="number" name="{{ s.key }}" value="{{ vals[s.key] }}"
+                   min="{{ s.min }}" max="{{ s.max }}" step="1" style="width:120px;">
+            <span class="muted small">({{ s.min }}–{{ s.max }})</span>
+          </label>
+        {% endif %}
+        <div class="muted small" style="margin-top:5px;max-width:760px;">{{ s.help }}</div>
+        {% if s.key == 'base_url' and detected_base_url %}
+        <div class="small" style="margin-top:6px;">Detected from this session:
+          <code>{{ detected_base_url }}</code>
+          <button type="button" class="btn secondary" data-url="{{ detected_base_url }}"
+                  style="padding:2px 10px;font-size:12px;margin-left:6px;"
+                  onclick="var i=document.querySelector('input[name=base_url]'); i.value=this.dataset.url; i.focus();">Use</button>
+        </div>
+        {% endif %}
+      </div>
+    {% endfor %}
+  </div>
+{% endfor %}
+
+</form>
+
+<div class="row" style="gap:10px;align-items:center;margin-top:14px;">
+  <button class="btn" type="submit" form="settings-form">Save settings</button>
+  <form method="post" action="/settings/reset" style="margin:0;">
+    <button class="btn secondary" type="submit" data-confirm="Restore all settings to their defaults?">Restore defaults</button>
+  </form>
+</div>
+
+<div class="card" id="grp-api-keys" style="margin-top:18px;">
+  <h2 style="margin-top:0;">API keys</h2>
+  <p class="muted small" style="max-width:820px;margin-top:0;">Named, revocable keys for the machine
+    endpoints. An <b>MCP</b> key is sent as <code>Authorization: Bearer &lt;key&gt;</code> to /mcp; a
+    <b>webhook</b> key is sent as the <code>X-DCSim-Token</code> header. Keys are stored hashed and shown
+    <b>once</b> at creation — copy it then. Revoking is immediate. (The single shared token in MCP / agent
+    and Ticketing webhook above still works too, as a fallback.)</p>
+
+  {% if new_key %}
+  <div style="border:1px solid var(--ok,#2e9e6b);background:var(--ok-bg,rgba(46,158,107,.08));
+              border-radius:11px;padding:12px 14px;margin:0 0 14px;">
+    <div style="font-weight:700;margin-bottom:6px;">New {{ new_key.scope }} key “{{ new_key.name }}” — copy it now (shown once) · expires {{ new_key.expires }}</div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+      <input id="new-key-val" type="text" readonly value="{{ new_key.key }}"
+             style="flex:1;min-width:320px;font-family:ui-monospace,monospace;font-size:13px;"
+             onclick="this.select();">
+      <button type="button" class="btn" onclick="var i=document.getElementById('new-key-val');i.select();navigator.clipboard&&navigator.clipboard.writeText(i.value);this.textContent='Copied';">Copy</button>
+    </div>
+  </div>
+  {% endif %}
+
+  {% if api_keys %}
+  <table class="data" style="width:100%;border-collapse:collapse;margin-bottom:14px;">
+    <thead>
+      <tr style="text-align:left;border-bottom:1px solid var(--line);">
+        <th style="padding:7px 8px;">Name</th><th style="padding:7px 8px;">Scope</th>
+        <th style="padding:7px 8px;">Key</th><th style="padding:7px 8px;">Created</th>
+        <th style="padding:7px 8px;">Last used</th><th style="padding:7px 8px;">Expires</th>
+        <th style="padding:7px 8px;"></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for k in api_keys %}
+      <tr style="border-bottom:1px solid var(--line);{% if k.status == 'expired' %}opacity:.6;{% endif %}">
+        <td style="padding:7px 8px;font-weight:600;">{{ k.name }}
+          {% if k.status == 'expired' %}<span class="pill" style="font-size:10px;background:var(--danger-bg);color:var(--danger);">expired</span>
+          {% elif k.status == 'soon' %}<span class="pill" style="font-size:10px;background:var(--warn-bg);color:var(--warn);">expires soon</span>
+          {% elif k.status == 'unused' %}<span class="pill" style="font-size:10px;background:var(--surface-2);color:var(--muted);">unused 30d+</span>{% endif %}
+        </td>
+        <td style="padding:7px 8px;"><span class="pill" style="font-size:11px;">{{ k.scope }}</span></td>
+        <td style="padding:7px 8px;font-family:ui-monospace,monospace;color:var(--muted);">…{{ k.hint }}</td>
+        <td style="padding:7px 8px;" class="small muted">{{ k.created.strftime('%Y-%m-%d') if k.created else '—' }}</td>
+        <td style="padding:7px 8px;" class="small muted">{{ k.last_used.strftime('%Y-%m-%d %H:%M') if k.last_used else 'never' }}</td>
+        <td style="padding:7px 8px;" class="small muted">
+          <div style="font-weight:600;color:var(--text);">{{ k.expires.strftime('%Y-%m-%d') if k.expires else 'never' }}</div>
+          <form method="post" action="/settings/api-keys/{{ k.id }}/expiry"
+                style="display:flex;gap:4px;align-items:center;margin-top:4px;flex-wrap:wrap;">
+            <input type="date" name="expires_date" title="Set a specific expiry date"
+                   style="font-size:11px;padding:2px 4px;">
+            <select name="expires" title="…or a preset" style="font-size:11px;padding:2px 4px;">
+              <option value="">— change —</option>
+              <option value="30">30 days</option>
+              <option value="90">90 days</option>
+              <option value="365">1 year</option>
+              <option value="never">never</option>
+            </select>
+            <button class="btn secondary" type="submit" style="padding:2px 9px;font-size:11px;">Update</button>
+          </form>
+        </td>
+        <td style="padding:7px 8px;text-align:right;">
+          <form method="post" action="/settings/api-keys/{{ k.id }}/revoke" style="margin:0;">
+            <button class="btn secondary" type="submit" style="padding:4px 12px;font-size:12px;"
+                    data-confirm="Revoke “{{ k.name }}”? Clients using it will get 401 immediately.">Revoke</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="muted small">No API keys yet.</p>
+  {% endif %}
+
+  <form method="post" action="/settings/api-keys" style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;">
+    <label style="font-weight:600;font-size:13px;">Name
+      <input type="text" name="name" placeholder="e.g. n8n-prod" maxlength="120" required
+             style="display:block;min-width:200px;margin-top:3px;">
+    </label>
+    <label style="font-weight:600;font-size:13px;">Scope
+      <select name="scope" style="display:block;margin-top:3px;">
+        {% for sc in api_scopes %}<option value="{{ sc }}">{{ sc }}</option>{% endfor %}
+      </select>
+    </label>
+    <label style="font-weight:600;font-size:13px;">Expires
+      <select name="expires" style="display:block;margin-top:3px;">
+        {% for val, lbl in expiry_presets %}<option value="{{ val }}" {% if val == '90' %}selected{% endif %}>{{ lbl }}</option>{% endfor %}
+      </select>
+    </label>
+    <label style="font-weight:600;font-size:13px;">or on date
+      <input type="date" name="expires_date" style="display:block;margin-top:3px;">
+    </label>
+    <button class="btn" type="submit">+ New key</button>
+  </form>
+  <p class="muted small" style="margin-top:8px;max-width:820px;">Best practice: give each client its own
+    named key, set an expiry (default 90 days), and revoke keys that show <b>unused</b> or that you no
+    longer recognise. Keys are least-privilege by <b>scope</b> — an <code>mcp</code> key can't call the
+    REST API and vice-versa.</p>
+</div>
+  </div><!-- /.settings-main -->
+</div><!-- /.settings-layout -->
+
+<script>
+  // "Generate" buttons for the random-token secrets (MCP / webhook) — fill a strong random value,
+  // reveal + copy it, then Save stores it encrypted. (Type your own to change; tick "clear" to revoke.)
+  (function () {
+    function token() {
+      var a = new Uint8Array(24);
+      (window.crypto || window.msCrypto).getRandomValues(a);
+      var s = btoa(String.fromCharCode.apply(null, a)).replace(/[^A-Za-z0-9]/g, '');
+      return 'dcsim_' + s.slice(0, 32);
+    }
+    document.querySelectorAll('.gen-secret').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var key = btn.getAttribute('data-gen');
+        var inp = document.querySelector('input[name="' + key + '"]');
+        if (!inp) return;
+        inp.value = token();
+        inp.type = 'text';                     // reveal so it can be copied
+        var clr = document.querySelector('input[name="' + key + '__clear"]'); if (clr) clr.checked = false;
+        inp.focus(); inp.select();
+        try { navigator.clipboard && navigator.clipboard.writeText(inp.value); } catch (e) {}
+        btn.textContent = 'Copied — Save to store';
+        setTimeout(function () { btn.textContent = 'Generate'; }, 2500);
+      });
+    });
+  })();
+
+  // Scrollspy: highlight the section nav link for whatever group is currently in view.
+  (function () {
+    var nav = document.querySelector('.settings-nav'); if (!nav) return;
+    var links = {};
+    nav.querySelectorAll('a').forEach(function (a) { links[a.getAttribute('href').slice(1)] = a; });
+    var secs = document.querySelectorAll('.settings-main [id^="grp-"]');
+    if (!('IntersectionObserver' in window) || !secs.length) return;
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) {
+        if (!e.isIntersecting) return;
+        Object.keys(links).forEach(function (k) { links[k].classList.remove('active'); });
+        if (links[e.target.id]) links[e.target.id].classList.add('active');
+      });
+    }, { rootMargin: '-72px 0px -55% 0px', threshold: 0 });
+    secs.forEach(function (s) { io.observe(s); });
+  })();
+
+  // Access-automation behavior profile: selecting a named profile (not "Custom") MIRRORS its knob values
+  // onto the toggles (read-only preview, greyed) so the user SEES what the profile does; "Custom" restores
+  // the user's own saved values and makes them editable. The toggles stay enabled (not `disabled`) so they
+  // still submit — when a profile is active they submit the profile's values (which is what's used anyway).
+  (function () {
+    var sel = document.querySelector('select[name="aa_profile"]'); if (!sel) return;
+    var KNOBS = ['aa_app_carveout', 'aa_override_blocking_deny', 'aa_prefer_widen', 'aa_emit_notes',
+                 'aa_ignore_conditions'];
+    // mirror of access_automation._PROFILES — keep in lock-step with the server bundles
+    var PROFILES = {
+      conservative: { aa_app_carveout: false, aa_override_blocking_deny: false, aa_prefer_widen: false, aa_emit_notes: true,  aa_ignore_conditions: false },
+      balanced:     { aa_app_carveout: true,  aa_override_blocking_deny: true,  aa_prefer_widen: true,  aa_emit_notes: true,  aa_ignore_conditions: false },
+      aggressive:   { aa_app_carveout: true,  aa_override_blocking_deny: true,  aa_prefer_widen: true,  aa_emit_notes: true,  aa_ignore_conditions: true }
+    };
+    var boxes = {}, rows = [];
+    KNOBS.forEach(function (k) {
+      var el = document.querySelector('input[name="' + k + '"]');
+      if (el) { boxes[k] = el; var r = el.closest('.setrow'); if (r) rows.push(r); }
+    });
+    // capture the user's own (saved) values BEFORE any profile mirror overwrites the checkboxes
+    var customVals = {};
+    KNOBS.forEach(function (k) { if (boxes[k]) customVals[k] = boxes[k].checked; });
+    KNOBS.forEach(function (k) {                       // edits in Custom mode update the remembered values
+      if (boxes[k]) boxes[k].addEventListener('change', function () { if (sel.value === 'custom') customVals[k] = boxes[k].checked; });
+    });
+    var hint = document.createElement('div');
+    hint.className = 'muted small';
+    hint.style.cssText = 'margin-top:6px;color:var(--accent);';
+    var selRow = sel.closest('.setrow'); if (selRow) selRow.appendChild(hint);
+    function sync() {
+      var prof = sel.value, custom = prof === 'custom', vals = PROFILES[prof];
+      hint.textContent = custom ? '' :
+        'Showing the “' + sel.options[sel.selectedIndex].text.split(' —')[0] +
+        '” profile (read-only). Switch to Custom to edit these individually.';
+      KNOBS.forEach(function (k) {
+        if (!boxes[k]) return;
+        if (custom) boxes[k].checked = customVals[k];        // restore the user's own values (editable)
+        else if (vals) boxes[k].checked = !!vals[k];          // mirror the profile so its effect is VISIBLE
+      });
+      rows.forEach(function (r) {
+        r.style.opacity = custom ? '' : '0.6';
+        r.style.pointerEvents = custom ? '' : 'none';
+      });
+    }
+    sel.addEventListener('change', sync);
+    sync();
+
+    // One-click "Autopilot (lab demo)" preset: Aggressive engine posture + agent publish + the one-turn
+    // autopilot blessing (all live in the form, just across two groups), then save in one go.
+    var apBtn = document.createElement('button');
+    apBtn.type = 'button';
+    apBtn.textContent = '⚡ Autopilot (lab demo)';
+    apBtn.style.cssText = 'margin-top:10px; padding:7px 14px; font-weight:600; font-size:12.5px;' +
+      'border:1px solid var(--line); border-radius:9px; background:var(--accent-grad); color:#fff; cursor:pointer;';
+    apBtn.title = 'Set Aggressive + enable agent publish + one-turn autopilot, then save (lab/demo only)';
+    apBtn.addEventListener('click', function () {
+      if (!confirm('Autopilot lab demo: set the Aggressive profile, let the MCP agent PUBLISH to live ' +
+                   'policy, and pre-authorize one-turn apply+publish (no confirmation). For lab/demo use. Continue?')) return;
+      sel.value = 'aggressive'; sync();
+      var pub = document.querySelector('input[name="mcp_allow_publish"]');
+      var auto = document.querySelector('input[name="aa_autopilot"]');
+      if (pub) pub.checked = true;
+      if (auto) auto.checked = true;
+      var f = sel.form || document.querySelector('form');
+      if (f) { if (f.requestSubmit) f.requestSubmit(); else f.submit(); }
+    });
+    if (selRow) selRow.appendChild(apBtn);
+  })();
+</script>
+{% endblock %}

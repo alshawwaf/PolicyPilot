@@ -1,0 +1,230 @@
+{% extends "base.html" %}
+{% block title %}MCP for agents{% endblock %}
+{% block content %}
+<style>
+  .mcp-hero h1 { margin:0 0 4px; }
+  .mcp-sub { color:var(--muted); max-width:900px; line-height:1.55; margin:0 0 14px; }
+  .mcp-status { display:flex; gap:8px; flex-wrap:wrap; margin:0 0 16px; }
+  .mcp-status .pill { font-size:12px; }
+  .mcp-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:10px; }
+  .mcp-tool { border:1px solid var(--line); border-radius:11px; padding:12px 13px; background:var(--surface-2); }
+  .mcp-tool code { font-size:13px; font-weight:700; color:var(--accent); }
+  .mcp-tool p { margin:5px 0 0; font-size:12.5px; color:var(--muted); line-height:1.5; }
+  .mcp-tabs { display:flex; gap:6px; flex-wrap:wrap; margin:6px 0 10px; }
+  .mcp-tabs button { padding:7px 15px; border:1px solid var(--line); border-radius:9px; background:transparent;
+    color:var(--text); font-weight:600; font-size:13px; cursor:pointer; }
+  .mcp-tabs button.active { background:var(--accent); color:#fff; border-color:var(--accent); }
+  .mcp-field { margin:0 0 12px; }
+  .mcp-field-lab { font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.03em; margin:0 0 4px; }
+  .mcp-cfg { position:relative; }
+  .mcp-cfg pre { background:var(--surface-2); border:1px solid var(--line); border-radius:11px; padding:14px 70px 14px 14px;
+    overflow:auto; font-size:12.5px; line-height:1.5; margin:0; color:var(--text);
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace; }
+  .mcp-cfg pre.one { white-space:pre-wrap; word-break:break-all; }   /* single-line value wraps, never scrolls */
+  .mcp-cfg pre.wrap { white-space:pre-wrap; overflow-wrap:break-word; padding:14px; }   /* prose: wrap, no h-scroll */
+  .mcp-sys-actions { display:flex; gap:8px; flex-wrap:wrap; }
+  .mcp-keyhead { font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.03em; margin:0 0 4px; }
+  .mcp-tokrow { display:flex; align-items:center; gap:10px; margin:0 0 10px; flex-wrap:wrap; }
+  /* override the global input{width:100%} so the field doesn't eat the row and wrap the buttons */
+  .mcp-tokrow input { font-family:ui-monospace,monospace; flex:0 1 360px; width:auto; min-width:0; padding:8px 10px; margin:0; }
+  .mcp-tokrow .copybtn { flex:0 0 auto; padding:8px 14px; }   /* button height matches the input; stays on the row */
+  .endpoint { font-size:12px; }
+  #mcp-url { cursor:pointer; border-bottom:1px dashed var(--line); }   /* click to copy */
+  .copybtn.copied { background:var(--accent); color:#fff; border-color:var(--accent); }
+  .mcp-note { font-size:12.5px; color:var(--muted); line-height:1.55; max-width:900px; }
+  .mcp-note code { font-family:ui-monospace,monospace; }
+</style>
+
+<div class="mcp-hero">
+  <h1><span class="icon-chip lg"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v1H7a2 2 0 0 0-2 2v3H4a2 2 0 1 0 0 4h1v3a2 2 0 0 0 2 2h3v1a3 3 0 1 0 6 0v-1h3a2 2 0 0 0 2-2v-3h1a2 2 0 1 0 0-4h-1V8a2 2 0 0 0-2-2h-2V5a3 3 0 0 0-3-3z"/></svg></span> MCP for agents</h1>
+</div>
+<p class="mcp-sub">Drive PolicyPilot from an LLM agent (n8n, Claude Desktop, Cursor, VS Code) over the Model
+Context Protocol. The agent gets typed tools to <b>reason about and act on</b> Check Point access
+policy — decide on a request, correlate a service/app name, analyse a layer, and (gated) apply a change.
+Same idea as <a href="https://mcp.checkpoint.com/" target="_blank" rel="noopener">Check Point's MCP servers</a>,
+focused on the access-automation engine.</p>
+
+<div class="mcp-status">
+  {% if sdk_installed %}<span class="pill ok">MCP SDK installed</span>{% else %}<span class="pill" style="background:var(--warn-bg);color:var(--warn);">MCP SDK not installed — <code>pip install mcp</code> (Artifactory)</span>{% endif %}
+  <span id="mcp-enabled-pill" class="pill {% if token_set %}ok{% endif %}"{% if not token_set %} style="background:var(--warn-bg);color:var(--warn);"{% endif %}>{% if token_set %}Endpoint enabled{% else %}Disabled — generate an MCP key below to enable /mcp{% endif %}</span>
+  {% if allow_publish %}<span class="pill" style="background:var(--danger-bg);color:var(--danger);">Agent publish: ON (commits to live policy)</span>{% else %}<span class="pill ok">Agent publish: OFF (dry-run only)</span>{% endif %}
+</div>
+
+<div class="card">
+  <h3 style="margin:0 0 6px;">Connect a client</h3>
+  <div class="mcp-keyhead">MCP API key</div>
+  <div class="mcp-tokrow">
+    <input id="mcp-tok" placeholder="generate a key, or paste an mcp-scope key" autocomplete="off">
+    <button type="button" class="copybtn" id="mcp-gen">⚡ Generate key</button>
+    <button type="button" class="copybtn" id="mcp-tok-copy" title="Copy the key">Copy key</button>
+    <span class="muted endpoint">Endpoint: <code id="mcp-url" title="Click to copy"></code></span>
+  </div>
+  <p class="mcp-note" id="mcp-genhint" style="margin:-2px 0 10px;"><b>Generate key</b> creates a revocable
+    <b>mcp</b>-scope API key and drops it straight into the config below — it enables <code>/mcp</code> and is
+    shown only once, so copy the config now. Manage or revoke keys in
+    <a href="/settings#grp-api-keys">Settings → API keys</a>.</p>
+  <div class="mcp-tabs" id="mcp-tabs">
+    <button data-c="claude" class="active">Claude Desktop</button>
+    <button data-c="cursor">Cursor</button>
+    <button data-c="vscode">VS Code</button>
+    <button data-c="n8n">n8n</button>
+  </div>
+  <div id="mcp-fields"></div>
+  <p class="mcp-note" id="mcp-clienthint" style="margin-top:8px;"></p>
+</div>
+
+<div class="card">
+  <h3 style="margin:0 0 6px;">Suggested agent system prompt</h3>
+  <p class="mcp-note" style="margin:0 0 10px;">Paste this into your agent's <b>system message</b>. It teaches the order —
+    <b>pick the management server &amp; layer → decide (read-only) → apply on your OK</b> — so a smaller model doesn't guess
+    a server/layer or loop. Written for n8n's <b>built-in MCP Client Tool</b> (and Claude Desktop / Cursor / VS Code),
+    where each PolicyPilot tool is exposed to the agent directly (it calls <code>list_management_servers</code>,
+    <code>decide_access</code>, … by name).</p>
+  <div class="mcp-sys-actions">
+    <button type="button" class="copybtn" id="mcp-sys-toggle" aria-expanded="false">Show prompt</button>
+    <button type="button" class="copybtn" id="mcp-sys-copy">Copy</button>
+  </div>
+  <div class="mcp-cfg" id="mcp-sys-box" hidden style="margin-top:10px;">
+    <pre id="mcp-sysprompt" class="wrap"></pre>
+  </div>
+</div>
+
+<div class="card">
+  <h3 style="margin:0 0 8px;">Tools the agent gets ({{ tools|length }})</h3>
+  <div class="mcp-grid">
+    {% for t in tools %}
+    <div class="mcp-tool"><code>{{ t.name }}</code><p>{{ t.summary }}</p></div>
+    {% endfor %}
+  </div>
+</div>
+
+<div class="card">
+  <h3 style="margin:0 0 8px;">Safety</h3>
+  <p class="mcp-note">Every call needs <code>Authorization: Bearer &lt;key&gt;</code>, where the bearer is an
+  active <b>MCP-scope API key</b> (generated above, or in <b>Settings → API keys</b> — individually
+  revocable, SHA-256-hashed at rest). Create or revoke takes effect with no redeploy — no active key →
+  <b>503</b> (endpoint disabled), wrong/missing key → <b>401</b>. <b>decide_access</b>, the analyse tools,
+  and the correlate/coverage tools are read-only. <b>apply_access</b> with <code>publish=false</code>
+  dry-runs (validate then discard); <code>publish=true</code> is <b>refused</b> unless an admin enables
+  <b>Settings → MCP / agent → "Let the MCP agent publish to live policy"</b>. The engine's own guarantees
+  still hold — an unknown/ambiguous service returns a review + suggestions, never a wrong call to the SMS.</p>
+</div>
+
+<script>
+  (function () {
+    var url = location.origin + '/mcp/';   // trailing slash = the canonical endpoint; a bare /mcp would
+    var urlEl = document.getElementById('mcp-url');                       // 307-redirect and some clients
+    urlEl.textContent = url;                                             // drop the auth header on it
+    var tokEl = document.getElementById('mcp-tok'),
+        fieldsEl = document.getElementById('mcp-fields'),
+        hint = document.getElementById('mcp-clienthint'), tabs = document.getElementById('mcp-tabs');
+    var current = 'claude';
+    function tok() { return tokEl.value.trim() || '<your-mcp-key>'; }
+    function flash(btn, label) {
+      var keep = btn.getAttribute('data-label') || btn.textContent;
+      btn.setAttribute('data-label', keep);
+      btn.textContent = label; btn.classList.add('copied');
+      setTimeout(function () { btn.textContent = keep; btn.classList.remove('copied'); }, 1200);
+    }
+    function copyText(btn, text) { if (navigator.clipboard) navigator.clipboard.writeText(text); flash(btn, 'Copied'); }
+    function cfg() {
+      var t = tok(), auth = 'Bearer ' + t;
+      if (current === 'claude') {
+        return { fields: [{ label: 'claude_desktop_config.json', pre: true, value: JSON.stringify({ mcpServers: { policypilot: {
+          command: 'npx', args: ['mcp-remote', url, '--header', 'Authorization: ' + auth] } } }, null, 2) }],
+          hint: 'Claude Desktop speaks stdio, so it bridges to our HTTP server via <code>mcp-remote</code>. Paste this into <code>claude_desktop_config.json</code>, then restart Claude Desktop.' };
+      }
+      if (current === 'cursor') {
+        return { fields: [{ label: '~/.cursor/mcp.json', pre: true, value: JSON.stringify({ mcpServers: { policypilot: {
+          url: url, headers: { Authorization: auth } } } }, null, 2) }],
+          hint: 'Paste this into <code>~/.cursor/mcp.json</code> (or the project <code>.cursor/mcp.json</code>).' };
+      }
+      if (current === 'vscode') {
+        return { fields: [{ label: '.vscode/mcp.json', pre: true, value: JSON.stringify({ servers: { policypilot: {
+          type: 'http', url: url, headers: { Authorization: auth } } } }, null, 2) }],
+          hint: 'Paste this into <code>.vscode/mcp.json</code> (GitHub Copilot Chat → MCP).' };
+      }
+      return { fields: [
+          { label: 'HTTP Stream URL', value: url },
+          { label: 'Bearer token (Authentication = Bearer Auth)', value: t } ],
+        hint: 'Use n8n\'s <b>built-in MCP Client Tool</b> node: <b>Server Transport = HTTP Streamable</b>, the <b>trailing-slash</b> URL above, ' +
+              '<b>Authentication = Bearer Auth</b>, and paste the <b>token</b> above as the credential\'s token (n8n sends ' +
+              '<code>Authorization: Bearer &lt;key&gt;</code> for you). Set <b>Tools to Include = All</b> so the agent gets every PolicyPilot tool.' };
+    }
+    function render() {
+      var c = cfg();
+      fieldsEl.textContent = '';
+      c.fields.forEach(function (f) {
+        var wrap = document.createElement('div'); wrap.className = 'mcp-field';
+        var lab = document.createElement('div'); lab.className = 'mcp-field-lab'; lab.textContent = f.label;
+        var box = document.createElement('div'); box.className = 'mcp-cfg';
+        var btn = document.createElement('button'); btn.type = 'button'; btn.className = 'copybtn';
+        btn.textContent = 'Copy'; btn.style.cssText = 'position:absolute;right:8px;top:8px;';
+        btn.addEventListener('click', function () { copyText(btn, f.value); });
+        var pre = document.createElement('pre'); pre.textContent = f.value; if (!f.pre) pre.className = 'one';
+        box.appendChild(btn); box.appendChild(pre);
+        wrap.appendChild(lab); wrap.appendChild(box);
+        fieldsEl.appendChild(wrap);
+      });
+      hint.innerHTML = c.hint;
+    }
+    tabs.addEventListener('click', function (e) {
+      var b = e.target.closest('button[data-c]'); if (!b) return;
+      current = b.getAttribute('data-c');
+      tabs.querySelectorAll('button').forEach(function (x) { x.classList.toggle('active', x === b); });
+      render();
+    });
+    tokEl.addEventListener('input', render);
+    urlEl.addEventListener('click', function () { copyText(this, url); });
+    document.getElementById('mcp-tok-copy').addEventListener('click', function () {
+      var v = tokEl.value.trim(); if (!v) { flash(this, 'No key'); return; } copyText(this, v);
+    });
+
+    var SYS_BUILTIN = `You are PolicyPilot, a Check Point access-automation agent. You turn a plain-language access request into the correct policy change via MCP tools. decide_access does the policy reasoning (no_op | widen | create + first-match placement); you orchestrate and confirm. You have conversation memory — use it.
+
+HARD RULES (obey over anything below):
+1. Rely on memory. Never re-run a call that already succeeded — reuse its result. Do not re-list servers/layers or re-correlate the same name. Repeating calls causes max-iteration loops.
+2. Never guess a server_id, layer name, service, or application — resolve each with a tool first. Layer names differ per server; no default "Network". server_id accepts a numeric id OR a name/host.
+3. If the user NAMES the server (its name, host, or id), use that directly as server_id — do NOT list or ask; the tools resolve a name/host and return the server list if it doesn't match. ONLY when the server is ambiguous or unstated and several exist: call list_management_servers ONCE, PRESENT it as id + name + host, ask which one, then STOP this turn and wait — call no more tools until they answer.
+4. Report exactly what each tool returns (outcome, reason, target rule, errors) verbatim. CRITICAL: "ok": true only means the CHECK RAN — it is NOT "access is allowed". For a "can X reach Y / does X have access?" question, answer from currently_allowed + answer (the ready-made sentence): true -> Yes, already allowed; false -> No, not currently (then state the change — create or widen); null/review -> can't confirm, needs review. NEVER answer "yes" for a create or widen — that means the access does NOT exist yet. State only IPs / object names the tool RETURNED (the resolved source/destination/service, each with an exists flag — exists:false means the object doesn't exist yet); never invent, assume, or "correct" a host's IP or identity. Never fabricate results, rule names, or any incident/ticket id. On ok:false or any error, STOP and report it; do not retry.
+5. decide_access is READ-ONLY (your reasoning step). If the request ALREADY authorizes the change — it says apply/create/publish (e.g. "allow X and publish") — treat that as approval and go decide -> apply in the SAME turn. Otherwise decide first, summarize the change, and wait for a yes before applying. apply_access defaults to publish=false (dry-run: validate then discard); set publish=true ONLY when the user explicitly said publish/commit (admin-gated; if refused, dry-run and report).
+6. AUTOPILOT: if a tool result includes "autopilot": true, lab Autopilot mode is ON for that server+layer — you are pre-authorized to run the WHOLE flow in ONE turn and call apply_access OR remove_access with publish=true WITHOUT asking for confirmation (still resolve the server / layer / service first; report verbatim; if publish is refused because it's admin-gated, say so). The flag is scope-aware and is carried on decide_access, apply_access, AND remove_access results, so a revoke-and-publish is also one turn. When "autopilot" is false or absent, follow rule 5.
+
+PLACE THE TARGET RIGHT (this is where requests go wrong): an APPLICATION (Facebook, Office365, YouTube) goes in the application field with destination="Any" — NOT in destination, and NEVER as a domain (the engine auto-sets an app request's destination to the predefined Internet object; report it as Internet, don't "fix" it). A port/service goes in service or port. A web SITE/domain (facebook.com, .example.com) goes in destination with destination_kind="domain". A host/subnet (10.1.2.5, 10.0.0.0/24) goes in destination as-is (default kind ip). An IDENTITY OBJECT as the source or destination — an access role, security zone, dynamic object, or updatable object — goes in source/destination with the matching source_kind/destination_kind = access-role | security-zone | dynamic-object | updatable-object, and the value is the object's NAME (e.g. source_kind="security-zone", source="InternalZone"). A bare zone/role NAME left as kind=ip will fail to resolve. "to Facebook" = the app; "to facebook.com" = a domain; "the InternalZone" = a security-zone source/destination.
+
+ORDER (skip a step only if its value is already known): 1 resolve server (rule 3). 2 list_access_layers(server_id) once; pick the meant layer, if unclear ask. 3 correlate_service for a protocol/port word, correlate_application for an app; on candidates, present and ask, never pick silently. 4 decide_access with the resolved server, layer, source, destination, and service/port/application placed per the rule above; report outcome, reason, target rule. 5 if the request did NOT already authorize it, summarize and get a yes (skip when it did). 6 apply_access — publish=true only if the user said publish, else publish=false to dry-run; report.
+
+REMOVE / REVOKE access ("remove/revoke/block X to Y", "stop X reaching Y"): call remove_access with the SAME resolved args as decide_access (server, layer, source, destination, service/application placed per the rule above). It walks first-match to the rule that grants the flow and returns one of: disable (a rule grants EXACTLY this -> it disables that rule), deny (a broader rule grants it -> it inserts a least-privilege Drop ABOVE that rule so ONLY this flow is blocked, leaving the broad rule intact), no_op (not currently permitted -> nothing to do), review (granted via an opaque/inline/multi-rule path -> report it, do not force). Confirm + publish exactly as rules 5-6 (remove_access is the destructive write; dry-run unless publish was asked, or Autopilot).
+
+ROLL BACK / UNDO ("undo that", "roll back the last change", "revert change 12"): call list_changes to see recent PUBLISHED changes (newest first, each with an id, what it did, and whether it's already reverted), then revert_change with the id. It replays the recorded inverse — deletes the rule that was added, re-enables the rule that was disabled, or removes the object that was widened in — surgically. For a change that ADDED a rule (create, or a Drop from a removal), pass disable_instead_of_delete=true to DISABLE that rule rather than delete it — the gentler, reversible undo (Check Point keeps the rule, greyed out). Same publish/confirm rules (5-6): revert_change with publish=true commits the undo, else it dry-runs. It refuses if the change was already rolled back; objects the change created are left in place.
+
+EDIT / RENAME a rule ("name that rule X", "add a comment/tag", "turn on logging for that rule", "I forgot the rule name"): call amend_access_rule. It changes ONLY a rule's METADATA — name, comment, tags, and/or track (logging; track is a type name "Log"/"None"/"Detailed Log"/"Extended Log") — never its source/destination/service/action (use apply_access/remove_access to change what a rule matches). Identify the rule by change_id (from list_changes — the change that CREATED it; preferred, it also supplies the layer) OR by rule_uid + layer (+ server_id). The created rule's uid is in apply_access's result (created_uid) and via list_changes. Same publish/confirm rules (5-6): publish=true commits, else dry-run. The edit is itself recorded + reversible (revert_change restores the previous name/comment/tags/track).
+
+EXAMPLES: (a) "Allow 10.1.1.5 to the DNS servers on the SMS" -> resolve server, list_access_layers -> "Standard Security", correlate_service "dns" -> domain-udp, decide_access -> widen. (b) "allow 10.1.2.250 to Facebook" -> correlate_application "facebook" -> Facebook, then decide_access with source=10.1.2.250, destination="Any", application="Facebook" (NOT destination="Facebook", NOT a domain). Confirm, then apply_access publish=false. (c) "name that rule ‘Allow win_client → Facebook’ and publish" -> amend_access_rule with the created rule's change_id (from list_changes) + name="Allow win_client → Facebook", publish=true.`;
+    document.getElementById('mcp-sysprompt').textContent = SYS_BUILTIN;
+    document.getElementById('mcp-sys-copy').addEventListener('click', function () { copyText(this, SYS_BUILTIN); });
+    var sysBox = document.getElementById('mcp-sys-box'), sysToggle = document.getElementById('mcp-sys-toggle');
+    sysToggle.addEventListener('click', function () {
+      var opening = sysBox.hasAttribute('hidden');
+      if (opening) sysBox.removeAttribute('hidden'); else sysBox.setAttribute('hidden', '');
+      this.textContent = opening ? 'Hide prompt' : 'Show prompt';
+      this.setAttribute('aria-expanded', String(opening));
+    });
+    var genBtn = document.getElementById('mcp-gen'), genHint = document.getElementById('mcp-genhint');
+    genBtn.addEventListener('click', function () {
+      genBtn.disabled = true; var old = genBtn.textContent; genBtn.textContent = 'Generating…';
+      fetch('/mcp-guide/key', { method: 'POST', credentials: 'same-origin' })
+        .then(function (r) { return r.ok ? r.json() : r.json().then(function (j) { throw new Error(j.error || 'failed'); }); })
+        .then(function (j) {
+          tokEl.value = j.key; render();                       // drop the new key straight into the config
+          var pill = document.getElementById('mcp-enabled-pill');
+          if (pill) { pill.className = 'pill ok'; pill.removeAttribute('style'); pill.textContent = 'Endpoint enabled'; }
+          genHint.innerHTML = 'Key <b>' + (j.name || 'mcp-agent') + '</b> created and filled in below — <b>copy the config now, the key is shown only once</b>. Manage or revoke keys in <a href="/settings#grp-api-keys">Settings → API keys</a>.';
+        })
+        .catch(function (e) { genHint.innerHTML = '<span style="color:var(--danger);">Could not generate a key: ' + (e.message || e) + '</span>'; })
+        .finally(function () { genBtn.disabled = false; genBtn.textContent = old; });
+    });
+    render();
+  })();
+</script>
+{% endblock %}

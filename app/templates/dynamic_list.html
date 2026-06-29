@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% from "_macros.html" import export_menu %}
+{% block title %}Dynamic Layers{% endblock %}
+{% block content %}
+{% from "_macros.html" import row_actions, columns_menu, empty_state %}
+<div class="page-head">
+  <span class="icon-chip lg"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg></span>
+  <div class="ph-main">
+    <h1>Dynamic Layers</h1>
+    <p class="ph-sub">Author Access Control rules here, then push them to a gateway with <code>set-dynamic-content</code> — saved on the portal, reflected on the gateway (no policy install).</p>
+  </div>
+  <div class="ph-actions">
+    <a class="btn" href="/layers/new">+ New Dynamic Layer</a>
+  </div>
+</div>
+
+{% if not rows %}
+<div class="card">{{ empty_state('No dynamic layers yet',
+   'Create one to author a rulebase and apply it to the built-in mock or a real R82 gateway.',
+   '+ New Dynamic Layer', '/layers/new') }}</div>
+{% else %}
+<div class="statrow" style="margin:2px 0 20px;">
+  <div class="stat"><span class="n">{{ rows|length }}</span><span class="l">Dynamic Layers</span></div>
+</div>
+{% if gw_filters %}
+<div class="filterbar">
+  <button class="chip active" type="button" data-filter="all">All <span class="chipcount">{{ rows|length }}</span></button>
+  {% for f in gw_filters %}
+    <button class="chip" type="button" data-filter="{{ f.key }}">{{ f.name }} <span class="chipcount">{{ f.count }}</span></button>
+  {% endfor %}
+</div>
+{% endif %}
+<div class="card" style="padding:6px 6px 2px;">
+<div class="tablewrap">
+<table id="layertable" data-paginate="10">
+  <thead><tr>
+    <th>Name</th>{% if 'gateway' in vis %}<th class="nowrap">Gateway</th>{% endif %}{% if 'gwlayer' in vis %}<th class="nowrap">Gateway layer</th>{% endif %}{% if 'objects' in vis %}<th class="nowrap num">Objects</th>{% endif %}{% if 'rules' in vis %}<th class="nowrap num">Rules</th>{% endif %}{% if 'lastapply' in vis %}<th>Last apply</th>{% endif %}{% if 'created' in vis %}<th class="nowrap">Created</th>{% endif %}<th style="text-align:right; padding-top:6px; padding-bottom:6px;"><span class="thead-tools">{{ export_menu('layers') }}{{ columns_menu('layers', cols, vis, '/layers', compact=true) }}</span></th>
+  </tr></thead>
+  <tbody>
+  {% for r in rows %}
+    <tr data-gw="{{ r.gw_key }}">
+      <td>
+        <a class="feedname" href="/layers/{{ r.layer.id }}">{{ r.layer.name }}</a>
+        {% if r.layer.description %}<div class="subsel">{{ r.layer.description }}</div>{% endif %}
+      </td>
+      {% if 'gateway' in vis %}<td class="nowrap">{% if r.gateway %}<span class="pill faint">{{ r.gateway }}</span>{% else %}<span class="pill faint">—</span>{% endif %}</td>{% endif %}
+      {% if 'gwlayer' in vis %}<td class="nowrap"><code class="mono">{{ r.layer.layer_name }}</code></td>{% endif %}
+      {% if 'objects' in vis %}<td class="nowrap num">{{ r.objects }}</td>{% endif %}
+      {% if 'rules' in vis %}<td class="nowrap num">{{ r.rules }}</td>{% endif %}
+      {% if 'lastapply' in vis %}<td class="nowrap">
+        {% if r.last %}
+          <span class="pill {{ 'ok' if r.last.status == 'succeeded' else 'bad' }}">{{ r.last.status }}</span>
+          <span class="muted" style="font-size:11px;">{{ r.last.target }}{% if r.last.dry_run %} · dry-run{% endif %} · <time class="ts mono" data-ts="{{ r.last.at.isoformat() }}">{{ r.last.at.strftime('%Y-%m-%d %H:%M') }}</time></span>
+        {% else %}<span class="pill faint">never applied</span>{% endif %}
+      </td>{% endif %}
+      {% if 'created' in vis %}<td class="nowrap"><time class="ts mono" data-ts="{{ r.layer.created_at.isoformat() }}">{{ r.layer.created_at.strftime('%Y-%m-%d') }}</time></td>{% endif %}
+      {{ row_actions(links=[{'label':'Open','url':'/layers/' ~ r.layer.id}]) }}
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+</div>
+
+<script>
+  (function () {
+    var bar = document.querySelector('.filterbar');
+    if (!bar) return;
+    bar.addEventListener('click', function (e) {
+      var chip = e.target.closest('.chip');
+      if (!chip) return;
+      bar.querySelectorAll('.chip').forEach(function (c) { c.classList.remove('active'); });
+      chip.classList.add('active');
+      var f = chip.getAttribute('data-filter');
+      document.querySelectorAll('#layertable tbody tr').forEach(function (tr) {
+        tr.style.display = (f === 'all' || tr.getAttribute('data-gw') === f) ? '' : 'none';
+      });
+    });
+  })();
+</script>
+{% endif %}
+{% endblock %}

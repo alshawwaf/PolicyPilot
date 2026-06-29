@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% from "_macros.html" import export_menu %}
+{% block title %}Management Servers{% endblock %}
+{% block content %}
+{% from "_macros.html" import row_actions, columns_menu, empty_state %}
+<div class="page-head">
+  <span class="icon-chip lg"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 5v14c0 1.66-4 3-9 3s-9-1.34-9-3V5"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/></svg></span>
+  <div class="ph-main">
+    <h1>Management Servers{% if rows %} <span class="ph-count">{{ rows|length }}</span>{% endif %}</h1>
+    <p class="ph-sub">Pull, view, edit and export policy from a Management Server or MDS domain over the <code>web_api</code> — secrets AES-256-encrypted, TLS always verified.</p>
+  </div>
+  <div class="ph-actions">
+    <a class="btn" href="/management/new" data-modal-form="/management/new" data-modal-title="New management server">+ New management server</a>
+  </div>
+</div>
+
+{% if not rows %}
+<div class="card">{{ empty_state('No management servers yet',
+   "Add one to pull a layer's rulebase + objects, then view, edit or export them as Terraform / Ansible.",
+   '+ New management server', '/management/new', 'New management server') }}</div>
+{% else %}
+<div class="card" style="padding:6px 6px 2px;">
+<div class="tablewrap">
+<table data-paginate="10">
+  <thead><tr><th>Name</th>{% if 'address' in vis %}<th class="nowrap">Address</th>{% endif %}{% if 'domain' in vis %}<th class="nowrap">Domain</th>{% endif %}{% if 'username' in vis %}<th class="nowrap">Username</th>{% endif %}{% if 'tls' in vis %}<th class="nowrap">TLS</th>{% endif %}{% if 'secret' in vis %}<th class="nowrap">Secret</th>{% endif %}{% if 'created' in vis %}<th class="nowrap">Created</th>{% endif %}<th style="text-align:right; padding-top:6px; padding-bottom:6px;"><span class="thead-tools">{{ export_menu('management') }}{{ columns_menu('management', cols, vis, '/management', compact=true) }}</span></th></tr></thead>
+  <tbody>
+  {% for r in rows %}
+    <tr>
+      <td><a class="feedname cellclip" href="/management/{{ r.ms.id }}" title="{{ r.ms.name }}">{{ r.ms.name }}</a></td>
+      {% if 'address' in vis %}<td><code class="cellclip mono" title="{{ r.ms.host }}:{{ r.ms.port }}">{{ r.ms.host }}:{{ r.ms.port }}</code></td>{% endif %}
+      {% if 'domain' in vis %}<td class="nowrap">{{ r.ms.domain or '—' }}</td>{% endif %}
+      {% if 'username' in vis %}<td class="nowrap">{{ r.ms.username or '—' }}</td>{% endif %}
+      {% if 'tls' in vis %}<td class="nowrap">{% if r.ms.cert_pem %}<span class="pill ok">pinned cert</span>{% elif r.ms.auto_trust %}<span class="pill faint">auto-trust</span>{% else %}<span class="pill faint">system trust</span>{% endif %}</td>{% endif %}
+      {% if 'secret' in vis %}<td class="nowrap">{% if r.has_secret %}<span class="pill ok">saved</span>{% else %}<span class="pill faint">none</span>{% endif %}</td>{% endif %}
+      {% if 'created' in vis %}<td class="nowrap"><time class="ts mono" data-ts="{{ r.ms.created_at.isoformat() }}">{{ r.ms.created_at.strftime('%Y-%m-%d') }}</time></td>{% endif %}
+      {{ row_actions(
+           links=[{'label':'Edit','url':'/management/' ~ r.ms.id ~ '/edit', 'modal':'Edit management server'}],
+           menu=[{'label':'Test connection','attrs':'data-test="/management/'|safe ~ r.ms.id ~ '/test" data-name="'|safe ~ (r.ms.name | e) ~ '"'|safe}],
+           delete={'url':'/management/' ~ r.ms.id ~ '/delete', 'name': r.ms.name}
+         ) }}
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+</div>
+{% endif %}
+
+<div class="modal-overlay" id="test-modal" hidden>
+  <div class="modal">
+    <div class="row" style="align-items:center;"><h3 class="grow" style="margin:0;" id="test-title">Test connection</h3>
+      <button type="button" class="copybtn" id="test-close">Close</button></div>
+    <div id="test-body" style="margin-top:14px;">Testing…</div>
+  </div>
+</div>
+
+<script>
+  (function () {
+    var modal = document.getElementById('test-modal');
+    var body = document.getElementById('test-body');
+    var title = document.getElementById('test-title');
+    if (!modal) return;
+    function esc(s) { var d = document.createElement('div'); d.textContent = (s == null ? '' : s); return d.innerHTML; }
+    function close() { modal.hidden = true; }
+    document.getElementById('test-close').addEventListener('click', close);
+    modal.addEventListener('click', function (e) { if (e.target === modal) close(); });
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape') close(); });
+
+    document.querySelectorAll('[data-test]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        title.textContent = 'Test connection — ' + (btn.getAttribute('data-name') || '');
+        body.innerHTML = '<p class="muted">Connecting over web_api…</p>';
+        modal.hidden = false;
+        fetch(btn.getAttribute('data-test'), { method: 'POST' })
+          .then(function (r) { return r.json(); })
+          .then(function (j) {
+            if (j.ok) {
+              var domains = (j.domains && j.domains.length) ? j.domains.map(esc).join(', ') : '—';
+              body.innerHTML =
+                '<div class="ok" style="margin-bottom:10px;">✓ Connected.</div>' +
+                '<table class="acttable"><tbody>' +
+                '<tr><td><b>API version</b></td><td><code>' + esc(j.version || '—') + '</code></td></tr>' +
+                '<tr><td><b>Access layers</b></td><td>' + (j.layers || 0) + '</td></tr>' +
+                '<tr><td><b>Domains</b></td><td>' + domains + '</td></tr>' +
+                '</tbody></table>';
+            } else {
+              body.innerHTML = '<div class="err">' + esc(j.message || j.error || 'Connection failed.') + '</div>';
+            }
+          })
+          .catch(function () { body.innerHTML = '<div class="err">Request failed.</div>'; });
+      });
+    });
+  })();
+</script>
+{% endblock %}

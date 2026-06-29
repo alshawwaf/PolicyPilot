@@ -1,0 +1,25 @@
+<p class="muted" style="margin:0 0 12px;">
+  <span style="font-family:ui-monospace,monospace;">{{ r.at.strftime('%Y-%m-%d %H:%M:%S') }} UTC</span> ·
+  <span class="pill">{{ kind_labels.get(r.kind, r.kind) }}</span>
+  <code>{{ r.method }} {{ r.path }}</code>
+  {% if r.source_ip %} · from {{ r.source_ip }}{% endif %}
+  {% if r.status %} · <span class="pill {{ 'ok' if r.status == 200 else ('bad' if r.status >= 400 else '') }}">{{ r.status }}</span>{% endif %}
+  · {{ r.duration_ms }} ms
+</p>
+{% set d = r.detail or {} %}
+{% if r.kind in ['layer_apply', 'gateway_read'] %}
+  {% if d.get('trace') %}
+    {% for s in d.get('trace', []) %}
+    <div class="trace-step">
+      <div class="trace-head"><span class="pill">{{ s.step }}</span> <code>{{ s.method }} {{ s.url }}</code>
+        {% if s.status %}<span class="pill {{ 'ok' if s.status == 200 else 'bad' }}">{{ s.status }}</span>{% endif %}
+        {% if s.ms is not none %}<span class="muted">{{ s.ms }} ms</span>{% endif %}</div>
+      <div class="trace-lbl">Request</div><pre>{{ s.request | tojson(indent=2) }}</pre>
+      <div class="trace-lbl">Response</div><pre>{{ s.response | tojson(indent=2) }}</pre>
+    </div>
+    {% endfor %}
+  {% else %}<p class="muted">No trace captured.</p>{% endif %}
+{% else %}
+  <div class="trace-lbl">Request</div><pre>{{ d.get('request') | tojson(indent=2) }}</pre>
+  <div class="trace-lbl">Response</div><pre>{{ d.get('response') | tojson(indent=2) }}</pre>
+{% endif %}

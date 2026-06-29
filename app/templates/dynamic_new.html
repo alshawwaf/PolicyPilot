@@ -1,0 +1,286 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Edit Dynamic Layer' if is_edit else 'New Dynamic Layer' }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <span class="icon-chip lg"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg></span>
+  <div class="ph-main">
+    <h1>{{ 'Edit Dynamic Layer' if is_edit else 'New Dynamic Layer' }}</h1>
+    <p class="ph-sub">Author objects and a rulebase; the portal builds the exact <code>set-dynamic-content</code> payload.{% if is_edit %} Save your changes, then <b>Apply</b> on the layer page to re-push.{% else %} Apply it to the built-in mock or a real R82 gateway.{% endif %}</p>
+  </div>
+</div>
+{% if error %}<div class="err" style="margin:12px 0;">{{ error }}</div>{% endif %}
+
+<form method="post" action="{{ action }}" id="layer-form">
+  <input type="hidden" name="objects_json" id="objects_json">
+  <input type="hidden" name="rules_json" id="rules_json">
+  <input type="hidden" name="referenced_json" id="referenced_json">
+
+  <div class="card">
+    <h2 style="margin-top:0;">Layer settings</h2>
+    <div class="row">
+      <div class="grow"><label>Name</label><input name="name" value="{{ form.name }}" required></div>
+      <div class="grow"><label>Gateway layer name</label><input name="layer_name" id="layer_name" value="{{ form.layer_name }}" placeholder="dynamic_layer"></div>
+    </div>
+    <label>Description (optional)</label>
+    <input name="description" value="{{ form.description }}">
+    <label>Gateway (optional)</label>
+    <select name="gateway_id">
+      <option value="">— choose at apply time —</option>
+      {% for g in gateways %}<option value="{{ g.id }}" {{ 'selected' if selected_gateway_id and (selected_gateway_id|string) == (g.id|string) else '' }}>{{ g.name }} ({{ g.host }}:{{ g.port }})</option>{% endfor %}
+    </select>
+    {% if not gateways %}<p class="muted" style="margin-top:6px;">No saved gateways yet — <a href="/gateways/new">add one</a> to associate this layer with a gateway.</p>{% endif %}
+    <div class="row">
+      <div class="grow"><label>Comments (optional)</label><input name="comments" value="{{ form.comments }}"></div>
+      <div class="grow"><label>Tags (comma-separated)</label><input name="tags" value="{{ form.tags }}" placeholder="ticket-14354, urgent"></div>
+    </div>
+    <p class="muted" style="margin-top:10px;">The layer must already exist on the gateway, marked <i>"Set as a Dynamic Layer"</i> (sk182252). <code>operation: replace</code> swaps the whole layer's content.</p>
+  </div>
+
+  <div class="card">
+    <div class="row"><h2 style="margin:0;" class="grow">Objects</h2><button type="button" class="secondary" id="open-obj">+ Add object</button></div>
+    <p class="muted">Definitions created on the gateway by this apply — temporary and gateway-scoped.</p>
+    <div id="obj-list"></div>
+  </div>
+
+  <div class="card">
+    <div class="row"><h2 style="margin:0;" class="grow">Referenced objects</h2></div>
+    <p class="muted">Names defined elsewhere on the gateway (e.g. <code>Facebook</code>, <code>ssh</code>) that your rules use. <code>any</code>, <code>internet</code>, <code>_GW_</code> are always available.</p>
+    <div class="row endalign">
+      <div><label>Category</label><select id="ref-type">{% for t in ref_types %}<option>{{ t }}</option>{% endfor %}</select></div>
+      <div class="grow"><label>Names (comma-separated)</label><input id="ref-names" placeholder="Facebook, Social Networking"></div>
+      <div><button type="button" class="secondary" id="add-ref">Add</button></div>
+    </div>
+    <div id="ref-list" style="margin-top:12px;"></div>
+  </div>
+
+  <div class="card">
+    <div class="row"><h2 style="margin:0;" class="grow">Rules</h2><button type="button" class="secondary" id="open-rule">+ Add rule</button></div>
+    <p class="muted">Applied top-to-bottom. Source / Destination / Service accept <code>any</code>, defined object names, or referenced names.</p>
+    <div id="rule-list"></div>
+  </div>
+
+  <div class="card">
+    <h2 style="margin-top:0;">Generated <code>set-dynamic-content</code> payload</h2>
+    <pre id="preview" style="max-height:320px;">{}</pre>
+  </div>
+
+  <div class="row" style="margin:4px 0 48px;">
+    <button type="submit">{{ 'Save changes' if is_edit else 'Save layer' }}</button>
+    <a class="btn secondary" href="{{ cancel_url }}">Cancel</a>
+  </div>
+</form>
+
+<!-- Add-object modal -->
+<div class="modal-overlay" id="obj-modal" hidden>
+  <div class="modal wide">
+    <h3>Add object</h3>
+    <label>Type</label>
+    <select id="obj-type">{% for t in object_types %}<option value="{{ t }}">{{ specs[t].label }}</option>{% endfor %}</select>
+    <div id="obj-fields"></div>
+    <div class="err-inline" id="obj-err" style="display:none;"></div>
+    <div class="modal-actions">
+      <button type="button" class="secondary" id="obj-cancel">Cancel</button>
+      <button type="button" id="obj-add">Add object</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add-rule modal -->
+<div class="modal-overlay" id="rule-modal" hidden>
+  <div class="modal wide">
+    <h3>Add rule</h3>
+    <label>Name</label><input id="r-name" placeholder="rule name">
+    <div class="row">
+      <div class="grow"><label>Action</label><select id="r-action">{% for a in actions %}<option>{{ a }}</option>{% endfor %}</select></div>
+      <div class="grow"><label>Track</label><select id="r-track">{% for t in tracks %}<option {{ 'selected' if t == 'Log' else '' }}>{{ t }}</option>{% endfor %}</select></div>
+    </div>
+    <label>Source</label><input id="r-source" value="any">
+    <label>Destination</label><input id="r-dest" value="any">
+    <label>Service</label><input id="r-service" value="any">
+    <div class="check" style="margin-top:12px;"><input type="checkbox" id="r-negate"><label>Negate service</label></div>
+    <div class="err-inline" id="rule-err" style="display:none;"></div>
+    <div class="modal-actions">
+      <button type="button" class="secondary" id="rule-cancel">Cancel</button>
+      <button type="button" id="rule-add">Add rule</button>
+    </div>
+  </div>
+</div>
+
+<script id="specs" type="application/json">{{ specs | tojson }}</script>
+<script id="default-content" type="application/json">{{ default_content | tojson }}</script>
+<script>
+  (function () {
+    var SPECS = JSON.parse(document.getElementById('specs').textContent);
+    var DEFAULT = JSON.parse(document.getElementById('default-content').textContent);
+    var objects = DEFAULT.objects || {};
+    var rules = DEFAULT.rulebase || [];
+    var refs = DEFAULT.referenced_objects || {};
+
+    var $ = function (id) { return document.getElementById(id); };
+    function el(tag, cls, html) { var e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; }
+    function esc(s) { return String(s).replace(/[&<>]/g, function (c) { return {'&':'&amp;','<':'&lt;','>':'&gt;'}[c]; }); }
+    function flash(id, msg) { var e = $(id); e.textContent = msg; e.style.display = ''; setTimeout(function () { e.style.display = 'none'; }, 2600); }
+    function openModal(id) { $(id).hidden = false; }
+    function closeModal(id) { $(id).hidden = true; }
+
+    // Long-list ergonomics: show a count and (past a threshold) a filter box; the list body
+    // scrolls within a capped height so a customer with 300+ objects never blows up the page.
+    var LIST_FILTER_AT = 8, LIST_MAX_H = '340px';
+    function listHeader(box, count, noun, onFilter) {
+      var head = el('div'); head.style.cssText = 'display:flex; align-items:center; gap:10px; margin-bottom:8px;';
+      head.appendChild(el('span', 'muted', count + ' ' + noun + (count === 1 ? '' : 's')));
+      if (count > LIST_FILTER_AT) {
+        var f = el('input'); f.type = 'search'; f.placeholder = 'Filter ' + noun + 's…';
+        f.style.cssText = 'flex:1; max-width:280px;';
+        f.addEventListener('input', function () { onFilter(this.value.trim().toLowerCase()); });
+        head.appendChild(f);
+      }
+      box.appendChild(head);
+    }
+
+    // ----- Add object modal -----
+    function renderObjFields() {
+      var spec = SPECS[$('obj-type').value];
+      var box = $('obj-fields'); box.innerHTML = '';
+      spec.fields.forEach(function (f) {
+        box.appendChild(el('label', null, esc(f.label) + (f.required ? ' *' : '')));
+        var input;
+        if (f.kind === 'bool') { input = el('select'); input.innerHTML = '<option value="false">No</option><option value="true">Yes</option>'; }
+        else { input = el('input'); input.placeholder = f.kind; }
+        input.setAttribute('data-field', f.name); input.setAttribute('data-kind', f.kind);
+        box.appendChild(input);
+      });
+    }
+    function coerce(kind, v) {
+      v = (v || '').trim();
+      if (kind === 'int') return v === '' ? undefined : Number(v);
+      if (kind === 'bool') return v === 'true';
+      if (kind === 'list') return v === '' ? [] : v.split(',').map(function (s) { return s.trim(); }).filter(Boolean);
+      if (kind === 'json') { if (v === '') return undefined; try { return JSON.parse(v); } catch (e) { return v; } }
+      return v === '' ? undefined : v;
+    }
+    function fieldVal(v) { return Array.isArray(v) ? v.join(', ') : (typeof v === 'object' ? JSON.stringify(v) : v); }
+    function parseRuleField(v) { v = (v || '').trim(); if (v === '' || v.toLowerCase() === 'any') return 'any'; return v.split(',').map(function (s) { return s.trim(); }).filter(Boolean); }
+
+    $('open-obj').addEventListener('click', function () { renderObjFields(); openModal('obj-modal'); });
+    $('obj-cancel').addEventListener('click', function () { closeModal('obj-modal'); });
+    $('obj-type').addEventListener('change', renderObjFields);
+    $('obj-add').addEventListener('click', function () {
+      var type = $('obj-type').value, obj = {};
+      $('obj-fields').querySelectorAll('[data-field]').forEach(function (i) {
+        var val = coerce(i.getAttribute('data-kind'), i.value);
+        if (val !== undefined && !(Array.isArray(val) && val.length === 0)) obj[i.getAttribute('data-field')] = val;
+      });
+      if (!obj.name) { flash('obj-err', 'Name is required.'); return; }
+      (objects[type] = objects[type] || []).push(obj);
+      closeModal('obj-modal'); sync();
+    });
+
+    // ----- Add rule modal -----
+    $('open-rule').addEventListener('click', function () { openModal('rule-modal'); });
+    $('rule-cancel').addEventListener('click', function () { closeModal('rule-modal'); });
+    $('rule-add').addEventListener('click', function () {
+      var name = $('r-name').value.trim();
+      if (!name) { flash('rule-err', 'Rule name is required.'); return; }
+      var rule = { name: name, action: $('r-action').value, track: { type: $('r-track').value },
+        source: parseRuleField($('r-source').value), destination: parseRuleField($('r-dest').value),
+        service: parseRuleField($('r-service').value) };
+      if ($('r-negate').checked) rule['service-negate'] = true;
+      rules.push(rule);
+      $('r-name').value = ''; $('r-source').value = 'any'; $('r-dest').value = 'any'; $('r-service').value = 'any'; $('r-negate').checked = false;
+      closeModal('rule-modal'); sync();
+    });
+
+    // ----- Referenced objects -----
+    $('add-ref').addEventListener('click', function () {
+      var type = $('ref-type').value;
+      var names = $('ref-names').value.split(',').map(function (s) { return s.trim(); }).filter(Boolean);
+      if (!names.length) return;
+      refs[type] = (refs[type] || []).concat(names); $('ref-names').value = ''; sync();
+    });
+
+    // ----- Renderers -----
+    function renderObjects() {
+      var box = $('obj-list'); box.textContent = '';
+      var flat = [];
+      Object.keys(objects).forEach(function (type) {
+        (objects[type] || []).forEach(function (o, i) { flat.push({ type: type, o: o, i: i }); });
+      });
+      if (!flat.length) { box.appendChild(el('p', 'muted', 'No objects yet.')); return; }
+      var wrap = el('div'); wrap.style.cssText = 'max-height:' + LIST_MAX_H + '; overflow:auto;';
+      listHeader(box, flat.length, 'object', function (q) {
+        wrap.querySelectorAll('.itemrow').forEach(function (r) {
+          r.style.display = (!q || r.getAttribute('data-q').indexOf(q) !== -1) ? '' : 'none';
+        });
+      });
+      flat.forEach(function (it) {
+        var o = it.o, type = it.type;
+        var summary = Object.keys(o).filter(function (k) { return k !== 'name'; }).map(function (k) { return k + '=' + fieldVal(o[k]); }).join(', ');
+        var row = el('div', 'itemrow', '<span class="pill">' + esc(SPECS[type].label) + '</span> <b>' + esc(o.name) + '</b> <span class="muted">' + esc(summary) + '</span>');
+        row.setAttribute('data-q', (o.name + ' ' + summary + ' ' + SPECS[type].label).toLowerCase());
+        var rm = el('button', 'minibtn', 'Remove'); rm.type = 'button';
+        rm.addEventListener('click', function () { objects[type].splice(it.i, 1); if (!objects[type].length) delete objects[type]; sync(); });
+        row.appendChild(rm); wrap.appendChild(row);
+      });
+      box.appendChild(wrap);
+    }
+    function renderRules() {
+      var box = $('rule-list'); box.textContent = '';
+      if (!rules.length) { box.appendChild(el('p', 'muted', 'No rules yet.')); return; }
+      var wrap = el('div', 'tablewrap'); wrap.style.cssText = 'max-height:' + LIST_MAX_H + '; overflow:auto;';
+      var t = el('table');
+      t.appendChild(el('thead', null, '<tr><th>#</th><th>Name</th><th>Action</th><th>Source</th><th>Destination</th><th>Service</th><th></th></tr>'));
+      var tb = el('tbody');
+      rules.forEach(function (r, i) {
+        var tr = el('tr', null, '<td>' + (i + 1) + '</td><td><b>' + esc(r.name) + '</b></td><td>' + esc(r.action) + '</td><td>' + esc(fieldVal(r.source)) + '</td><td>' + esc(fieldVal(r.destination)) + '</td><td>' + esc(fieldVal(r.service)) + (r['service-negate'] ? ' <span class="pill">negate</span>' : '') + '</td>');
+        tr.setAttribute('data-q', (r.name + ' ' + r.action + ' ' + fieldVal(r.source) + ' ' + fieldVal(r.destination) + ' ' + fieldVal(r.service)).toLowerCase());
+        var td = el('td'); var rm = el('button', 'minibtn', 'Remove'); rm.type = 'button';
+        rm.addEventListener('click', function () { rules.splice(i, 1); sync(); });
+        td.appendChild(rm); tr.appendChild(td); tb.appendChild(tr);
+      });
+      t.appendChild(tb);
+      listHeader(box, rules.length, 'rule', function (q) {
+        tb.querySelectorAll('tr').forEach(function (row) {
+          row.style.display = (!q || row.getAttribute('data-q').indexOf(q) !== -1) ? '' : 'none';
+        });
+      });
+      wrap.appendChild(t); box.appendChild(wrap);
+    }
+    function renderRefs() {
+      var box = $('ref-list'); box.innerHTML = '';
+      var keys = Object.keys(refs).filter(function (k) { return (refs[k] || []).length; });
+      if (!keys.length) { box.innerHTML = '<p class="muted">No referenced objects.</p>'; return; }
+      keys.forEach(function (type) {
+        var row = el('div', 'itemrow', '<span class="pill">' + esc(type) + '</span> <span>' + esc(refs[type].join(', ')) + '</span>');
+        var rm = el('button', 'minibtn', 'Remove'); rm.type = 'button';
+        rm.addEventListener('click', function () { delete refs[type]; sync(); });
+        row.appendChild(rm); box.appendChild(row);
+      });
+    }
+    function buildPayload() {
+      var ln = ($('layer_name').value || 'dynamic_layer').trim();
+      var ro = {}; Object.keys(refs).forEach(function (k) { if ((refs[k] || []).length) ro[k] = refs[k]; });
+      var al = (ro['access-layers'] || []).slice(); if (al.indexOf(ln) < 0) al.push(ln); ro['access-layers'] = al;
+      var objs = {}; Object.keys(objects).forEach(function (k) { if ((objects[k] || []).length) objs[k] = objects[k]; });
+      return { 'dry-run': false, 'referenced-objects': ro, objects: objs,
+        'access-layers-content': [{ name: ln, operation: 'replace', rulebase: rules }] };
+    }
+    function sync() {
+      $('objects_json').value = JSON.stringify(objects);
+      $('rules_json').value = JSON.stringify(rules);
+      $('referenced_json').value = JSON.stringify(refs);
+      $('preview').textContent = JSON.stringify(buildPayload(), null, 2);
+      renderObjects(); renderRules(); renderRefs();
+    }
+
+    // Close modals on overlay click / Escape.
+    ['obj-modal', 'rule-modal'].forEach(function (id) {
+      $(id).addEventListener('click', function (e) { if (e.target === $(id)) closeModal(id); });
+    });
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape') { closeModal('obj-modal'); closeModal('rule-modal'); } });
+
+    $('layer_name').addEventListener('input', sync);
+    sync();
+  })();
+</script>
+{% endblock %}

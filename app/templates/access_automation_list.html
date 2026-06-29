@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% from "_macros.html" import export_menu %}
+{% block title %}Access automation{% endblock %}
+{% block content %}
+{% from "_macros.html" import row_actions, columns_menu %}
+<div class="page-head">
+  <span class="icon-chip lg"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></span>
+  <div class="ph-main">
+    <h1>Access automation</h1>
+    <p class="ph-sub">Turn a ticket request — <code>source → destination : service</code> — into the minimal correct change on a layer: reuse a rule that already permits it, widen one that almost does, or create a least-privilege rule at the right position. Pick a management server to start. Approvals stay in your ticketing system; this is the technical apply.</p>
+  </div>
+  <div class="ph-actions">
+    <a class="btn secondary" href="/management">Manage servers →</a>
+  </div>
+</div>
+
+{% if not rows %}
+<div class="card"><p class="muted">No management servers yet. <a href="/management/new">Add one</a> (with a stored credential), then return here to run access automation against its layers.</p></div>
+{% else %}
+<div class="statrow" style="margin:2px 0 20px;">
+  <div class="stat"><span class="n">{{ rows|length }}</span><span class="l">Management Servers</span></div>
+</div>
+<div class="card" style="padding:6px 6px 2px;">
+<div class="tablewrap">
+<table data-paginate="10">
+  <thead><tr><th>Name</th>{% if 'address' in vis %}<th class="nowrap">Address</th>{% endif %}{% if 'domain' in vis %}<th class="nowrap">Domain</th>{% endif %}{% if 'secret' in vis %}<th class="nowrap">Secret</th>{% endif %}<th style="text-align:right; padding-top:6px; padding-bottom:6px;"><span class="thead-tools">{{ export_menu('access-servers') }}{{ columns_menu('access-servers', cols, vis, '/access-automation', compact=true) }}</span></th></tr></thead>
+  <tbody>
+  {% for r in rows %}
+    <tr>
+      <td><a class="feedname cellclip" href="/access-automation/{{ r.ms.id }}" title="{{ r.ms.name }}">{{ r.ms.name }}</a></td>
+      {% if 'address' in vis %}<td><code class="cellclip mono" title="{{ r.ms.host }}:{{ r.ms.port }}">{{ r.ms.host }}:{{ r.ms.port }}</code></td>{% endif %}
+      {% if 'domain' in vis %}<td class="nowrap">{{ r.ms.domain or '—' }}</td>{% endif %}
+      {% if 'secret' in vis %}<td class="nowrap">{% if r.has_secret %}<span class="pill ok">saved</span>{% else %}<span class="pill faint">none</span>{% endif %}</td>{% endif %}
+      {{ row_actions(links=[{'label':'Request access','url':'/access-automation/' ~ r.ms.id}]) }}
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+</div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,130 @@
+{
+  "artifacts": [
+    {
+      "api_type": "gaia",
+      "version": "v1",
+      "file": "gaia-v1.json",
+      "object_count": 19
+    },
+    {
+      "api_type": "gaia",
+      "version": "v1.1",
+      "file": "gaia-v1.1.json",
+      "object_count": 24
+    },
+    {
+      "api_type": "gaia",
+      "version": "v1.2",
+      "file": "gaia-v1.2.json",
+      "object_count": 27
+    },
+    {
+      "api_type": "gaia",
+      "version": "v1.3",
+      "file": "gaia-v1.3.json",
+      "object_count": 32
+    },
+    {
+      "api_type": "gaia",
+      "version": "v1.4",
+      "file": "gaia-v1.4.json",
+      "object_count": 36
+    },
+    {
+      "api_type": "gaia",
+      "version": "v1.5",
+      "file": "gaia-v1.5.json",
+      "object_count": 50
+    },
+    {
+      "api_type": "gaia",
+      "version": "v1.6",
+      "file": "gaia-v1.6.json",
+      "object_count": 56
+    },
+    {
+      "api_type": "gaia",
+      "version": "v1.7",
+      "file": "gaia-v1.7.json",
+      "object_count": 65
+    },
+    {
+      "api_type": "gaia",
+      "version": "v1.8",
+      "file": "gaia-v1.8.json",
+      "object_count": 136
+    },
+    {
+      "api_type": "gaia",
+      "version": "v1.9",
+      "file": "gaia-v1.9.json",
+      "object_count": 140
+    },
+    {
+      "api_type": "management",
+      "version": "v1.6",
+      "file": "management-v1.6.json",
+      "object_count": 61
+    },
+    {
+      "api_type": "management",
+      "version": "v1.6.1",
+      "file": "management-v1.6.1.json",
+      "object_count": 71
+    },
+    {
+      "api_type": "management",
+      "version": "v1.7",
+      "file": "management-v1.7.json",
+      "object_count": 78
+    },
+    {
+      "api_type": "management",
+      "version": "v1.7.1",
+      "file": "management-v1.7.1.json",
+      "object_count": 81
+    },
+    {
+      "api_type": "management",
+      "version": "v1.8",
+      "file": "management-v1.8.json",
+      "object_count": 84
+    },
+    {
+      "api_type": "management",
+      "version": "v1.8.1",
+      "file": "management-v1.8.1.json",
+      "object_count": 85
+    },
+    {
+      "api_type": "management",
+      "version": "v1.9",
+      "file": "management-v1.9.json",
+      "object_count": 95
+    },
+    {
+      "api_type": "management",
+      "version": "v1.9.1",
+      "file": "management-v1.9.1.json",
+      "object_count": 96
+    },
+    {
+      "api_type": "management",
+      "version": "v2",
+      "file": "management-v2.json",
+      "object_count": 120
+    },
+    {
+      "api_type": "management",
+      "version": "v2.0.1",
+      "file": "management-v2.0.1.json",
+      "object_count": 130
+    },
+    {
+      "api_type": "management",
+      "version": "v2.1",
+      "file": "management-v2.1.json",
+      "object_count": 138
+    }
+  ]
+}

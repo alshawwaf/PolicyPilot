@@ -1,0 +1,26 @@
+Copyright (c) 2026 Check Point Software Technologies Ltd. All rights reserved.
+
+Drawbridge is proprietary software of Check Point Software Technologies Ltd.
+("Check Point"), provided for internal use and for Proof-of-Value (PoV)
+evaluation and demonstration by Check Point and its authorized partners and
+customers.
+
+No part of this software may be copied, modified, distributed, sublicensed, or
+used to create derivative works outside of Check Point-controlled or
+Check Point-authorized environments without the prior written permission of
+Check Point.
+
+Use only demo/synthetic data. Do not load real customer threat intelligence,
+configurations, or other confidential data into this software except on
+Check Point-controlled infrastructure.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER
+LIABILITY ARISING FROM, OUT OF, OR IN CONNECTION WITH THE SOFTWARE OR THE USE
+OR OTHER DEALINGS IN THE SOFTWARE.
+
+NOTE: This notice is a placeholder asserting Check Point ownership. The
+authoritative license terms should be supplied/confirmed by Check Point Legal
+before external distribution.

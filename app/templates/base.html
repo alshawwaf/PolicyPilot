@@ -1,0 +1,1079 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}PolicyPilot{% endblock %}</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PGRlZnM+PGxpbmVhckdyYWRpZW50IGlkPSJnIiB4MT0iMCIgeTE9IjAiIHgyPSIxIiB5Mj0iMSI+PHN0b3Agb2Zmc2V0PSIwIiBzdG9wLWNvbG9yPSIjZmYzZDlhIi8+PHN0b3Agb2Zmc2V0PSIxIiBzdG9wLWNvbG9yPSIjN2MzYWVkIi8+PC9saW5lYXJHcmFkaWVudD48L2RlZnM+PHJlY3Qgd2lkdGg9IjI0IiBoZWlnaHQ9IjI0IiByeD0iNiIgZmlsbD0idXJsKCNnKSIvPjxnIGZpbGw9Im5vbmUiIHN0cm9rZT0iI2ZmZiIgc3Ryb2tlLXdpZHRoPSIxLjciIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCI+PGxpbmUgeDE9IjQiIHkxPSI5IiB4Mj0iMjAiIHkyPSI5Ii8+PHBhdGggZD0iTTYgMTdWMTIuNWEyLjYgMi42IDAgMCAxIDUuMiAwVjE3Ii8+PHBhdGggZD0iTTEyLjggMTdWMTIuNWEyLjYgMi42IDAgMCAxIDUuMiAwVjE3Ii8+PGxpbmUgeDE9IjYiIHkxPSIxNyIgeDI9IjYiIHkyPSIxOC41Ii8+PGxpbmUgeDE9IjE4IiB5MT0iMTciIHgyPSIxOCIgeTI9IjE4LjUiLz48L2c+PC9zdmc+">
+  <script>
+    /* Set the theme before first paint (no flash). Dark is the default. */
+    (function () {
+      try { document.documentElement.setAttribute('data-theme', localStorage.getItem('dcsim-theme') || 'dark'); }
+      catch (e) { document.documentElement.setAttribute('data-theme', 'dark'); }
+    })();
+  </script>
+  <script src="https://unpkg.com/htmx.org@2.0.3" crossorigin="anonymous"></script>
+  <style>
+    /* ============================ Theme tokens ============================ */
+    :root, html[data-theme="dark"] {
+      --bg:#0a0e17; --bg-glow:radial-gradient(1100px 460px at 78% -160px, rgba(255,61,154,.10), transparent 70%);
+      --surface:#121829; --surface-2:#171f33; --surface-3:#1d263c;
+      --line:#26304a; --line-soft:#1d2538; --line-strong:#3a4666;
+      --text:#e8ecf6; --text-2:#c3ccde; --muted:#8e98b0; --faint:#7d889f;
+      --accent:#ff3d9a; --accent-2:#ff66b2; --accent-dark:#e6007e; --on-accent:#fff;
+      --accent-soft:rgba(255,61,154,.15); --focus-ring:rgba(255,61,154,.32);
+      /* Signature magenta→violet gradient — used for icon chips, primary buttons, active chips. Defined
+         once here (references var(--accent), so it follows the theme); also covers light mode below. */
+      --accent-grad:linear-gradient(135deg, var(--accent) 0%, #7b3ff2 100%);
+      /* Cool secondary gradient — for a SECOND selector on the same view (e.g. PROTOCOL vs FORMAT) so two
+         adjacent pickers don't read as the same control. */
+      --accent-grad-2:linear-gradient(135deg, #06b6d4 0%, #3b82f6 100%);
+      --ok:#34d399; --ok-bg:rgba(52,211,153,.14); --ok-line:rgba(52,211,153,.34);
+      --danger:#fb7185; --danger-bg:rgba(251,113,133,.13); --danger-line:rgba(251,113,133,.34);
+      --warn:#fbbf24; --warn-bg:rgba(251,191,36,.16); --info:#38bdf8; --info-bg:rgba(56,189,248,.16);
+      --header-bg:rgba(11,15,25,.85); --header-fg:#eef1f8; --header-muted:#aab4c8;
+      --header-line:#202842; --header-hover:rgba(255,255,255,.08);
+      --code-bg:#070b14; --code-fg:#d8e3ff;
+      --chip-bg:#1b2336; --chip-fg:#aab4c8; --subtle-bg:#151d2f; --subtle-fg:#aeb7cb;
+      --input-bg:#0d1322; --hover:#1a2236; --overlay:rgba(4,7,13,.66);
+      --shadow-sm:0 1px 2px rgba(0,0,0,.45);
+      --shadow:0 4px 16px rgba(0,0,0,.45);
+      --shadow-lg:0 24px 60px rgba(0,0,0,.6);
+      --r:9px; --r-lg:14px; --r-pill:999px;
+    }
+    html[data-theme="light"] {
+      --bg:#eef1f7; --bg-glow:radial-gradient(1100px 460px at 78% -200px, rgba(230,0,126,.07), transparent 70%);
+      --surface:#fff; --surface-2:#fff; --surface-3:#f7f9fc;
+      --line:#e3e8f1; --line-soft:#eef1f6; --line-strong:#d3d9e4;
+      --text:#16203a; --text-2:#33415c; --muted:#5b6678; --faint:#6b7488;
+      --accent:#e6007e; --accent-2:#ff2e9a; --accent-dark:#c70d72; --on-accent:#fff;
+      --accent-soft:rgba(230,0,126,.10); --focus-ring:rgba(230,0,126,.16);
+      --ok:#15935a; --ok-bg:#e6f5ec; --ok-line:#bfe6cd;
+      --danger:#c0344d; --danger-bg:#fdecef; --danger-line:#f3c6d0;
+      --warn:#b7791f; --warn-bg:rgba(183,121,31,.12); --info:#0284c7; --info-bg:rgba(2,132,199,.10);
+      --header-bg:rgba(255,255,255,.86); --header-fg:#16203a; --header-muted:#5b6678;
+      --header-line:#e3e8f1; --header-hover:#eef1f7;
+      --code-bg:#0f1626; --code-fg:#d8e3ff;
+      --chip-bg:#eef1f6; --chip-fg:#48536a; --subtle-bg:#f1f3f7; --subtle-fg:#42506b;
+      --input-bg:#fff; --hover:#f6f8fc; --overlay:rgba(16,22,38,.42);
+      --shadow-sm:0 1px 2px rgba(16,24,40,.06);
+      --shadow:0 2px 8px rgba(16,24,40,.10);
+      --shadow-lg:0 18px 50px rgba(16,24,40,.20);
+    }
+
+    * { box-sizing:border-box; }
+    html { scroll-behavior:smooth; }
+    /* Keyboard-accessibility: a clear focus ring on every interactive control (mouse clicks stay clean via
+       :focus-visible). Uses the theme's --focus-ring so it reads in both light and dark. */
+    a:focus-visible, button:focus-visible, .btn:focus-visible, .chip:focus-visible, .copybtn:focus-visible,
+    .icon-btn:focus-visible, header nav a:focus-visible, .signout-btn:focus-visible, summary:focus-visible,
+    [tabindex]:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
+      outline:2px solid transparent; outline-offset:2px; box-shadow:0 0 0 3px var(--focus-ring); border-radius:6px;
+    }
+    body {
+      margin:0; min-height:100vh;
+      font-family:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+      background:var(--bg); background-image:var(--bg-glow); background-attachment:fixed;
+      color:var(--text); font-size:14px; line-height:1.55; -webkit-font-smoothing:antialiased;
+      transition:background-color .25s ease, color .25s ease;
+    }
+    ::selection { background:var(--accent-soft); }
+    a { color:var(--accent); }
+
+    /* ============================ Header ============================ */
+    header {
+      position:sticky; top:0; z-index:50; height:60px; padding:0 26px;
+      display:flex; align-items:center; gap:13px;
+      background:var(--header-bg); -webkit-backdrop-filter:blur(12px); backdrop-filter:blur(12px);
+      border-bottom:1px solid var(--header-line); color:var(--header-fg);
+    }
+    header .brand-mark { width:26px; height:26px; border-radius:8px; flex:none;
+      background:var(--accent-grad); box-shadow:0 2px 10px var(--accent-soft);
+      display:inline-flex; align-items:center; justify-content:center; }
+    header .brand-mark svg { width:16px; height:16px; }
+    header .brand { font-weight:750; font-size:15px; letter-spacing:-.1px; color:var(--header-fg); white-space:nowrap; }
+    header .tag { background:var(--accent); color:var(--on-accent); font-size:9.5px; font-weight:800;
+      letter-spacing:.7px; padding:3px 8px; border-radius:var(--r-pill); text-transform:uppercase; }
+    header nav { margin-left:auto; display:flex; align-items:center; gap:2px; }
+    header nav a, header .menu-trigger {
+      color:var(--header-muted); text-decoration:none; font-size:13.5px; font-weight:500;
+      padding:8px 13px; border-radius:8px; line-height:1; white-space:nowrap; transition:color .12s, background .12s; }
+    header nav a:hover, header .menu-trigger:hover { color:var(--header-fg); background:var(--header-hover); }
+    header nav > a, header .menu-trigger { position:relative; }
+    header nav > a.active, header .menu-trigger.active { color:var(--header-fg); background:var(--header-hover); }
+    header nav > a.active::after, header .menu-trigger.active::after { content:""; position:absolute;
+      left:13px; right:13px; bottom:1px; height:2px; border-radius:2px; background:var(--accent); }
+    .menu-items a.active { color:var(--accent) !important; background:var(--hover); }
+    .icon-btn { background:transparent; color:var(--header-muted); border:1px solid transparent; border-radius:8px;
+      width:36px; height:36px; padding:0; display:inline-flex; align-items:center; justify-content:center; cursor:pointer; }
+    .icon-btn:hover { color:var(--header-fg); background:var(--header-hover); }
+    .ic-sun, .ic-moon { display:none; }
+    html[data-theme="light"] .ic-moon { display:inline; }
+    html:not([data-theme="light"]) .ic-sun { display:inline; }
+    .navsep { width:1px; height:22px; background:var(--header-line); margin:0 6px; }
+    header .brand-link { display:flex; align-items:center; gap:10px; text-decoration:none; flex:none; }
+    header .nav-main { margin-left:auto; display:flex; align-items:center; gap:2px; }
+    .nav-side { display:flex; align-items:center; gap:2px; flex:none; }
+    .signout-btn { background:none; border:none; box-shadow:none; color:var(--header-muted); font:inherit;
+      font-size:13.5px; font-weight:500; line-height:1; padding:8px 13px; border-radius:8px; cursor:pointer;
+      display:inline-flex; align-items:center; gap:7px; transition:color .12s, background .12s; }
+    .signout-btn:hover { color:var(--header-fg); background:var(--header-hover); filter:none; transform:none; box-shadow:none; }
+    .signout-btn svg { display:none; }
+    .nav-toggle { display:none; }
+    /* Responsive: collapse the nav into a hamburger panel; keep the icon cluster compact */
+    @media (max-width: 900px) {
+      header { gap:8px; padding:0 16px; }
+      .nav-toggle { display:inline-flex; order:3; }
+      .nav-side { order:2; margin-left:auto; }
+      .navsep { display:none; }
+      header .nav-main { position:absolute; top:60px; left:0; right:0; margin:0; flex-direction:column;
+        align-items:stretch; gap:0; padding:8px; display:none; max-height:calc(100vh - 60px); overflow-y:auto;
+        background:var(--surface-2); border-bottom:1px solid var(--header-line); box-shadow:var(--shadow-lg); }
+      header.nav-open .nav-main { display:flex; animation:pop .14s ease; }
+      .nav-main > a, .nav-main > .menu > .menu-trigger { padding:13px 14px; border-radius:10px; font-size:14px; }
+      .nav-main > a.active::after { display:none; } .nav-main > a.active { background:var(--header-hover); }
+      .nav-main .menu { display:block; }
+      .nav-main .menu > .menu-trigger { pointer-events:none; color:var(--faint); font-size:10.5px; font-weight:700;
+        text-transform:uppercase; letter-spacing:.5px; padding:14px 14px 5px; }
+      .nav-main .menu > .menu-trigger.active::after { display:none; }
+      .nav-main .menu-items { position:static; display:block; min-width:0; padding:0; margin:0 0 4px;
+        background:none; border:none; box-shadow:none; animation:none; }
+      .nav-main .menu-items a { padding:11px 14px 11px 24px; border-radius:10px; font-size:14px; }
+      .signout-btn svg { display:inline; } .so-text { display:none; }
+    }
+    @media (max-width: 470px) { header .brand { display:none; } #notif-panel { min-width:0; width:84vw; } }
+
+    /* ============================ Layout & type ============================ */
+    main { max-width:1060px; margin:36px auto 64px; padding:0 26px; }
+    main.wide { max-width:1340px; }
+    h1 { font-size:25px; font-weight:760; margin:0 0 5px; letter-spacing:-.4px; }
+    h2 { font-size:15px; font-weight:680; margin:24px 0 11px; letter-spacing:-.1px; }
+    h3 { font-size:13px; font-weight:680; margin:16px 0 8px; color:var(--text); }
+    p { margin:8px 0; }
+    .muted { color:var(--muted); font-size:13px; }
+    hr { border:none; border-top:1px solid var(--line); margin:20px 0; }
+
+    /* ============================ Cards ============================ */
+    .card { background:var(--surface); border:1px solid var(--line); border-radius:var(--r-lg);
+      padding:24px; margin:18px 0; box-shadow:var(--shadow-sm); }
+    a.card { display:block; color:inherit; text-decoration:none; transition:border-color .14s, box-shadow .14s, transform .14s; }
+    a.card.choose:hover { border-color:var(--accent); box-shadow:var(--shadow); transform:translateY(-2px); }
+    a.card.lift, .card.lift { transition:transform .14s ease, border-color .14s ease, box-shadow .14s ease; }
+    a.card.lift:hover, .card.lift:hover { border-color:var(--accent); box-shadow:var(--shadow-lg); transform:translateY(-3px); }
+
+    /* ===================== Page header + shared accents (portal-wide) ===================== */
+    .page-head { display:flex; align-items:flex-start; gap:16px; margin:0 0 18px; flex-wrap:wrap; }
+    .page-head .ph-main { flex:1; min-width:240px; }
+    .page-head h1 { display:flex; align-items:center; gap:11px; margin:0; }
+    .page-head .ph-sub { color:var(--muted); font-size:13.5px; margin:7px 0 0; max-width:720px; line-height:1.5; }
+    .page-head .ph-actions { display:flex; gap:9px; align-items:center; flex-wrap:wrap; }
+    .page-head .ph-count { font-size:14px; font-weight:700; color:#fff; background:var(--accent-grad);
+      padding:1px 11px; border-radius:var(--r-pill); vertical-align:middle; position:relative; top:-2px;
+      box-shadow:0 2px 8px rgba(123,63,242,.25); }
+    .icon-chip { display:inline-flex; align-items:center; justify-content:center; width:40px; height:40px;
+      border-radius:12px; flex:none; background:var(--accent-grad); color:#fff;
+      box-shadow:0 3px 12px rgba(123,63,242,.28); }
+    .icon-chip svg { width:21px; height:21px; }
+    .icon-chip.lg { width:48px; height:48px; border-radius:14px; }
+    .icon-chip.lg svg { width:25px; height:25px; }
+    .section-label { font-size:11px; font-weight:800; letter-spacing:.6px; text-transform:uppercase;
+      color:var(--faint); margin:24px 2px 13px; }
+    /* Gradient stat tiles for list/overview headers */
+    .statrow { display:flex; gap:28px; flex-wrap:wrap; }
+    /* Gradient-filled numerals — the signature accent on key metrics. */
+    .gnum, .stat .n { background:var(--accent-grad); -webkit-background-clip:text; background-clip:text;
+      -webkit-text-fill-color:transparent; color:transparent; }
+    .stat .n { font-size:22px; font-weight:800; line-height:1; }
+    .stat .l { display:block; margin-top:5px; font-size:10.5px; font-weight:700; letter-spacing:.4px;
+      text-transform:uppercase; color:var(--faint); }
+
+    /* Empty state — a centred block with a gradient icon chip + a primary CTA (see empty_state macro). */
+    .empty-state { display:flex; flex-direction:column; align-items:center; text-align:center; gap:11px;
+      padding:46px 24px 40px; }
+    .empty-state .empty-ic { width:56px; height:56px; border-radius:16px; }
+    .empty-state .empty-ic svg { width:27px; height:27px; }
+    .empty-state .empty-title { margin:3px 0 0; font-size:17px; font-weight:740; color:var(--text); }
+    .empty-state .empty-hint { margin:0; max-width:440px; color:var(--muted); font-size:13.5px; line-height:1.55; }
+    .empty-state .btn { margin-top:6px; }
+
+    /* ============================ Table ============================ */
+    .tablewrap { overflow-x:auto; }
+    .tablewrap:has(.menu.open), .tablewrap:has(.msel.open) { overflow:visible; }   /* let an open row-action / columns menu escape the scroll clip */
+    table { width:100%; border-collapse:collapse; }
+    thead th { text-align:left; padding:11px 16px; color:var(--faint); font-weight:700; font-size:10.5px;
+      text-transform:uppercase; letter-spacing:.7px; background:var(--surface-3);
+      border-bottom:1px solid var(--line); white-space:nowrap; }
+    tbody td { padding:13px 16px; border-bottom:1px solid var(--line-soft); vertical-align:middle; font-size:13.5px; }
+    tbody tr:last-child td { border-bottom:none; }
+    tbody tr { transition:background .12s; }
+    tbody tr:hover { background:var(--hover); }
+    tbody tr:hover td:first-child { box-shadow:inset 3px 0 0 var(--accent); }   /* accent indicator on row hover */
+    td.nowrap, th.nowrap { white-space:nowrap; }
+    .feedname { color:var(--accent); font-weight:650; text-decoration:none; white-space:nowrap; }
+    .feedname:hover { text-decoration:underline; }
+    .cellclip { display:inline-block; max-width:150px; overflow:hidden; text-overflow:ellipsis;
+      white-space:nowrap; vertical-align:middle; }
+    .subsel { color:var(--faint); font-size:11px; margin-top:4px; }
+    /* Unified table utilities (consistency pass) */
+    th.num, td.num, .num { text-align:right; font-variant-numeric:tabular-nums; }
+    .mono { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; }
+    .ts { white-space:nowrap; border-bottom:1px dotted var(--line-strong); cursor:help; }
+    .menu-items button.menu-danger, .menu-danger { color:var(--danger); }
+    .menu-items button.menu-danger:hover { color:var(--danger); background:var(--danger-bg); }
+
+    /* ============================ Pills ============================ */
+    .pill { display:inline-block; font-size:11px; font-weight:650; padding:3px 10px; border-radius:var(--r-pill);
+      background:var(--chip-bg); color:var(--chip-fg); letter-spacing:.2px; }
+    .pill.ok { background:var(--ok-bg); color:var(--ok); }
+    .pill.faint { background:var(--subtle-bg); color:var(--faint); }
+    .pill.bad { background:var(--danger-bg); color:var(--danger); }
+
+    /* ============================ Buttons ============================ */
+    a.btn, button { font:inherit; font-size:13.5px; font-weight:650; border:none; border-radius:var(--r);
+      padding:10px 17px; cursor:pointer; text-decoration:none; display:inline-flex; align-items:center; gap:6px;
+      line-height:1; background:var(--accent-grad); color:var(--on-accent);
+      box-shadow:0 1px 2px rgba(0,0,0,.18); transition:filter .14s, transform .1s, box-shadow .14s, background .14s, border-color .14s, color .14s; }
+    a.btn:hover, button:hover { filter:brightness(1.08); box-shadow:0 4px 16px var(--accent-soft); transform:translateY(-1px); }
+    a.btn:active, button:active { transform:translateY(0); }
+    a.btn.secondary, button.secondary { background:var(--surface-2); color:var(--text); border:1px solid var(--line); box-shadow:none; }
+    a.btn.secondary:hover, button.secondary:hover { background:var(--hover); border-color:var(--line-strong); filter:none; }
+    a.btn.danger, button.danger { background:var(--danger-bg); color:var(--danger); border:1px solid var(--danger-line); box-shadow:none; }
+    a.btn.danger:hover, button.danger:hover { filter:none; background:var(--danger-bg); border-color:var(--danger); }
+    button:disabled, button:disabled:hover { opacity:.5; cursor:default; transform:none; filter:none; box-shadow:none; }
+
+    /* ============================ Forms ============================ */
+    label { display:block; font-size:13px; font-weight:650; color:var(--text); margin:15px 0 6px; }
+    input, textarea, select { width:100%; padding:10px 12px; border:1px solid var(--line); border-radius:var(--r);
+      font-size:13.5px; font-family:inherit; color:var(--text); background:var(--input-bg);
+      transition:border-color .14s, box-shadow .14s; }
+    input::placeholder, textarea::placeholder { color:var(--faint); }
+    select { appearance:none; background-image:linear-gradient(45deg,transparent 50%,var(--muted) 50%),linear-gradient(135deg,var(--muted) 50%,transparent 50%);
+      background-position:calc(100% - 18px) 52%, calc(100% - 13px) 52%; background-size:5px 5px,5px 5px; background-repeat:no-repeat; padding-right:34px; }
+    input[type="checkbox"], input[type="radio"] { appearance:none; -webkit-appearance:none; width:17px;
+      height:17px; flex:none; margin:0; padding:0; border:1.5px solid var(--line-strong);
+      background:var(--input-bg); cursor:pointer; position:relative; vertical-align:middle;
+      transition:background .12s, border-color .12s, box-shadow .12s; }
+    input[type="checkbox"] { border-radius:5px; } input[type="radio"] { border-radius:50%; }
+    input[type="checkbox"]:hover, input[type="radio"]:hover { border-color:var(--accent); }
+    input[type="checkbox"]:checked { background:var(--accent); border-color:var(--accent); }
+    input[type="checkbox"]:checked::after { content:""; position:absolute; left:5px; top:2px; width:4px;
+      height:8px; border:solid var(--on-accent); border-width:0 2px 2px 0; transform:rotate(45deg); }
+    input[type="radio"]:checked { border-color:var(--accent); }
+    input[type="radio"]:checked::after { content:""; position:absolute; inset:3px; border-radius:50%;
+      background:var(--accent); }
+    input[type="checkbox"]:focus-visible, input[type="radio"]:focus-visible { outline:none;
+      box-shadow:0 0 0 3px var(--focus-ring); }
+    input:focus, textarea:focus, select:focus { outline:none; border-color:var(--accent); box-shadow:0 0 0 3px var(--focus-ring); }
+    textarea { min-height:120px; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:12.5px; line-height:1.6; resize:vertical; }
+    fieldset { border:none; padding:0; margin:0; transition:opacity .15s; }
+    fieldset:disabled { opacity:.5; }
+
+    /* ============================ Code & mono chips ============================ */
+    pre { background:var(--code-bg); color:var(--code-fg); padding:16px; border-radius:var(--r);
+      overflow:auto; font-size:12.5px; line-height:1.65; border:1px solid var(--line-soft); }
+    code { background:var(--subtle-bg); color:var(--subtle-fg); padding:1.5px 6px; border-radius:5px;
+      font-size:12.5px; font-family:ui-monospace,monospace; }
+    /* The Log Exporter command panel follows the theme (no stark black box on the light page) with a
+       cool accent bar marking it as a copy-me command. */
+    #cmd-pre { background:var(--surface-3); color:var(--text); border:1px solid var(--line);
+      border-left:3px solid #3b82f6; }
+    /* The substitution values the pickers rewrite are pilled + colored to match their picker
+       (format = accent/magenta, protocol = blue) and pulse on change so the diff is obvious. */
+    #cmd-pre .tok { display:inline-block; padding:0 6px; border-radius:5px; font-weight:700; line-height:1.55; }
+    #cmd-pre #cmd-fmt { background:var(--accent-soft); color:var(--accent); }
+    #cmd-pre #cmd-proto { background:rgba(59,130,246,.18); color:#3b82f6; }
+    #cmd-pre .cmd-name { display:inline-block; font-weight:700; color:var(--text); }
+    #cmd-pre .flash { animation:cmd-flash .55s ease; }
+    @keyframes cmd-flash {
+      0% { transform:scale(1); filter:brightness(1); }
+      30% { transform:scale(1.16); filter:brightness(1.5); }
+      100% { transform:scale(1); filter:brightness(1); }
+    }
+    .copy { font-family:ui-monospace,monospace; font-size:13px; background:var(--subtle-bg); color:var(--subtle-fg);
+      border:1px solid var(--line); padding:11px 13px; border-radius:var(--r); word-break:break-all; }
+    .fp { font-family:ui-monospace,monospace; font-size:12px; background:var(--subtle-bg); border:1px solid var(--line);
+      padding:8px 10px; border-radius:7px; word-break:break-all; color:var(--subtle-fg); }
+
+    .err { background:var(--danger-bg); color:var(--danger); border:1px solid var(--danger-line);
+      padding:12px 15px; border-radius:var(--r); font-size:13.5px; }
+    .err-inline { color:var(--danger); font-size:12.5px; margin-top:8px; }
+    .row { display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
+    .row.endalign { align-items:flex-end; }
+    .grow { flex:1; }
+    .check { display:flex; align-items:center; gap:7px; }
+    .check label { margin:0; }
+
+    /* ============================ URL cell + copy ============================ */
+    .urlcell { display:flex; align-items:center; gap:8px; max-width:230px; }
+    .urltext { font-family:ui-monospace,monospace; font-size:12px; color:var(--subtle-fg); background:var(--subtle-bg);
+      border:1px solid var(--line); padding:8px 10px; border-radius:7px; overflow:hidden; text-overflow:ellipsis;
+      white-space:nowrap; flex:1; min-width:0; }
+    .copybtn { background:var(--surface-2); color:var(--text); border:1px solid var(--line); border-radius:7px;
+      padding:8px 12px; font-size:12.5px; font-weight:650; line-height:1.15; cursor:pointer; white-space:nowrap;
+      transition:.12s; text-decoration:none; display:inline-flex; align-items:center; justify-content:center;
+      vertical-align:middle; box-sizing:border-box; }
+    .copybtn:hover { border-color:var(--accent); color:var(--accent); }
+    .copybtn.copied { background:var(--ok-bg); color:var(--ok); border-color:var(--ok-line); }
+    .copybtn.cb-danger { color:var(--danger); border-color:var(--danger-line); }
+    .copybtn.cb-danger:hover { color:var(--danger); border-color:var(--danger); background:var(--danger-bg); }
+    .rowacts { display:flex; gap:8px; align-items:center; justify-content:flex-end; }
+    /* Copyable credential rows (detail pages) */
+    .copyfield { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin:9px 0; }
+    .cf-label { font-size:12px; font-weight:650; color:var(--muted); min-width:104px; }
+    .cf-val { flex:1; min-width:180px; }
+    .cf-hint { flex-basis:100%; font-size:12px; margin:-1px 0 0; }
+    /* Sectioned forms */
+    .form-sec { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.6px; color:var(--faint); margin:0 0 6px; }
+    .subpanel { background:var(--surface-3); border:1px solid var(--line); border-radius:11px; padding:15px; }
+
+    /* ============================ Filter chips ============================ */
+    .filterbar { display:flex; gap:8px; margin:18px 0 0; flex-wrap:wrap; }
+    .chip { background:var(--surface); color:var(--muted); border:1px solid var(--line); border-radius:var(--r-pill);
+      padding:7px 15px; font-size:13px; font-weight:600; cursor:pointer; text-decoration:none; display:inline-block; transition:.12s; }
+    .chip:hover { border-color:var(--line-strong); color:var(--text); }
+    .chip.active, .chip.active:hover { background:var(--accent-grad);
+      color:var(--on-accent); border-color:transparent; }
+    /* PROTOCOL picker uses the cool gradient so it reads as a distinct control from the magenta FORMAT
+       picker right next to it. */
+    .cmdpick[data-cmd="cmd-proto"] .chip.active,
+    .cmdpick[data-cmd="cmd-proto"] .chip.active:hover { background:var(--accent-grad-2); }
+    .chipcount { opacity:.7; margin-left:5px; }
+
+    /* ============================ Dropdown menu ============================ */
+    .menu { position:relative; display:inline-block; }
+    .menu-trigger { cursor:pointer; }
+    .menu-items { position:absolute; top:calc(100% + 10px); right:0; background:var(--surface-2); border:1px solid var(--line);
+      border-radius:12px; box-shadow:var(--shadow-lg); min-width:224px; overflow:hidden; z-index:500; display:none; padding:6px; }
+    .menu.open .menu-items { display:block; animation:pop .14s ease; }
+    @keyframes pop { from { opacity:0; transform:translateY(-5px); } to { opacity:1; transform:none; } }
+    .menu-items a { display:block; padding:10px 12px; color:var(--text) !important; text-decoration:none; font-size:13.5px; border-radius:8px; }
+    .menu-items a:hover, .menu-items a:focus { background:var(--accent-soft); color:var(--accent) !important; }
+    /* forms/buttons inside a menu, styled to match the <a> items */
+    .menu-items form { margin:0; }
+    .menu-items button { display:block; width:100%; text-align:left; padding:10px 12px; color:var(--text);
+      background:none; border:0; font:inherit; font-size:13.5px; border-radius:8px; cursor:pointer; }
+    .menu-items button:hover, .menu-items button:focus { background:var(--accent-soft); color:var(--accent); }
+    .menu-items .menu-label { display:block; padding:7px 12px 3px; font-size:10px; font-weight:700;
+      letter-spacing:.5px; color:var(--faint); text-transform:uppercase; }
+    .menu-items .menu-sep { height:1px; background:var(--line); margin:5px 8px; }
+    /* Export dropdown — two-line options with a gradient icon chip (fills on hover). */
+    .export-items { min-width:250px; }
+    .export-opt { display:flex; align-items:center; gap:11px; padding:8px 10px !important; border-radius:9px; }
+    .export-opt:hover, .export-opt:focus { background:var(--accent-soft); }
+    .export-ic { flex:none; width:34px; height:34px; border-radius:9px; display:flex; align-items:center;
+      justify-content:center; background:var(--surface-3); color:var(--accent); transition:background .14s, color .14s; }
+    .export-opt:hover .export-ic, .export-opt:focus .export-ic { background:var(--accent-grad); color:#fff; }
+    .export-txt { display:flex; flex-direction:column; gap:1px; line-height:1.25; }
+    .export-txt b { font-size:13.5px; font-weight:680; color:var(--text); }
+    .export-opt:hover .export-txt b { color:var(--accent); }
+    .export-txt small { font-size:11.5px; color:var(--muted); }
+
+    /* ============================ Notifications bell ============================ */
+    #notif-bell { position:relative; }
+    .notif-badge { position:absolute; top:0; right:0; min-width:16px; height:16px; padding:0 4px;
+      background:var(--danger); color:#fff; border-radius:9px; font-size:10px; font-weight:700;
+      line-height:16px; text-align:center; pointer-events:none; }
+    .notif-head { display:flex; align-items:center; justify-content:space-between; padding:2px 6px 6px; }
+    #notif-clear { width:auto; display:inline-block; background:none; border:0; color:var(--muted);
+      font:inherit; font-size:11px; cursor:pointer; padding:4px 7px; border-radius:6px; text-align:right; }
+    #notif-clear:hover { color:var(--danger); background:var(--danger-bg); }
+    .notif-list-scroll { max-height:380px; overflow-y:auto; }
+    .notif-item { display:flex; gap:9px; align-items:flex-start; padding:8px; border-radius:8px; }
+    .notif-item:hover { background:var(--surface-3); }
+    .notif-dot { width:7px; height:7px; border-radius:50%; margin-top:5px; flex:0 0 auto; background:var(--ok); }
+    .notif-dot.error { background:var(--danger); } .notif-dot.info { background:var(--info); }
+    .notif-body { flex:1; min-width:0; }
+    .notif-text { font-size:12.5px; color:var(--text); word-wrap:break-word; }
+    .notif-time { color:var(--faint); font-size:10.5px; margin-top:2px; }
+    .menu-items button.notif-x { width:auto; display:inline-flex; align-items:center; background:none; border:0;
+      color:var(--faint); cursor:pointer; font-size:15px; line-height:1; padding:2px 5px; border-radius:5px;
+      flex:0 0 auto; text-align:center; }
+    .menu-items button.notif-x:hover { color:var(--danger); background:var(--danger-bg); }
+    .notif-empty { padding:16px 10px; text-align:center; }
+
+    /* ============================ Confirm modal ============================ */
+    .modal-overlay { position:fixed; inset:0; background:var(--overlay); -webkit-backdrop-filter:blur(3px); backdrop-filter:blur(3px);
+      display:flex; align-items:center; justify-content:center; z-index:1000; }
+    .modal-overlay[hidden] { display:none; }
+    /* No flat border — the shadow defines the card and the gradient header keeps crisp edge-to-edge corners;
+       a faint inner ring (only visible on the body edges, hidden under the opaque header) defines the dark edge. */
+    .modal { background:var(--surface); border:none; border-radius:16px; padding:26px; max-width:440px;
+      width:90%; box-shadow:var(--shadow-lg), inset 0 0 0 1px rgba(255,255,255,.06);
+      max-height:88vh; overflow-y:auto; animation:pop .16s ease; }
+    html[data-theme="light"] .modal { box-shadow:var(--shadow-lg); }
+    .modal.wide { max-width:560px; } .modal.xwide { max-width:880px; }
+    .modal h3 { margin:0 0 8px; font-size:18px; font-weight:740; }
+    .modal p { color:var(--muted); font-size:14px; margin:0; }
+    .modal-actions { display:flex; gap:10px; justify-content:flex-end; margin-top:24px; }
+    /* Form-in-modal: the modal IS the card. It's a flex column — the gradient header and the scrolling
+       body are separate rows, so the SCROLLBAR lives only in the body (never crossing the header or the
+       rounded top corners, which is what left a white notch when the whole modal was the scroll area). */
+    #form-modal .modal { max-width:670px; text-align:left; padding:0; overflow:hidden;
+      display:flex; flex-direction:column; }
+    #form-modal .fm-head { flex:none; z-index:3; display:flex; align-items:center; gap:12px;
+      margin:0; padding:8px 14px 8px 22px; color:#fff;
+      background:linear-gradient(100deg, var(--accent) 0%, #c026d3 46%, #7b3ff2 100%);
+      border-radius:16px 16px 0 0; box-shadow:0 1px 0 rgba(0,0,0,.14); }
+    #form-modal .fm-title { font-size:15px; font-weight:740; margin:0; color:#fff; letter-spacing:.2px;
+      text-shadow:0 1px 2px rgba(0,0,0,.22); }
+    #form-modal #fm-close { margin:0; flex:none; width:28px; height:28px; color:#fff; border-color:transparent; }
+    #form-modal #fm-close:hover { color:#fff; background:rgba(255,255,255,.22); }
+    #form-modal .fm-body { flex:1 1 auto; min-height:0; overflow-y:auto; padding:18px 24px 0;
+      scroll-padding-bottom:56px; }
+    #form-modal .fm-body form.card, #form-modal .fm-body form { border:none; box-shadow:none;
+      background:none; padding:0; margin:0; max-width:none; }
+    #form-modal .fm-body hr { border:none; border-top:1px solid var(--line); margin:16px 0; }
+    /* Action bar pinned to the bottom (the form's last .row) — Save/Cancel always reachable, and the
+       content visibly tucking under it signals there's more to scroll. The redundant divider above it
+       (management/gateway forms have an <hr>) is hidden in the modal since the footer has its own border. */
+    #form-modal .fm-body form > hr:last-of-type { display:none; }
+    #form-modal .fm-body form > .row:last-child { position:sticky; bottom:0; z-index:2;
+      margin:16px -24px 0; padding:13px 24px; background:var(--surface);
+      border-top:1px solid var(--line); border-radius:0 0 16px 16px; }
+    /* View modal: the detail page's actions, moved to a matching sticky footer at the bottom. */
+    #form-modal .fm-body .fm-view-foot { position:sticky; bottom:0; z-index:2; display:flex; gap:10px;
+      align-items:center; margin:16px -24px 0; padding:13px 24px; background:var(--surface);
+      border-top:1px solid var(--line); border-radius:0 0 16px 16px; }
+    #form-modal .fm-body .fm-view-foot form { margin:0; }
+    /* Inside the modal, code blocks wrap instead of forcing a left/right scroll (e.g. the feed preview). */
+    #form-modal .fm-body pre { white-space:pre-wrap; overflow-wrap:anywhere; }
+    /* Field help: breathing room from the control above; long (>2 line) help collapses with a More/Less toggle. */
+    form p.muted { margin:8px 0 0; line-height:1.5; }
+    form p.muted.clamped { display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:1;
+      line-clamp:1; overflow:hidden; }
+    button.help-toggle, button.help-toggle:hover { background:none; color:var(--accent); border:none;
+      box-shadow:none; padding:0; margin:5px 0 0; min-height:0; line-height:1.4; font-size:12px;
+      font-weight:650; transform:none; filter:none; }
+    button.help-toggle:hover { text-decoration:underline; }
+
+    /* Settings: a sticky in-page section nav on the left (the page is long). */
+    .settings-layout { display:grid; grid-template-columns:208px minmax(0,1fr); gap:26px; align-items:start; }
+    .settings-nav { position:sticky; top:76px; display:flex; flex-direction:column; gap:1px; }
+    .settings-nav a { padding:7px 12px; border-radius:8px; border-left:2px solid transparent; color:var(--muted);
+      text-decoration:none; font-size:13px; font-weight:600; line-height:1.35; transition:background .12s, color .12s; }
+    .settings-nav a:hover { background:var(--hover); color:var(--text); }
+    .settings-nav a.active { color:var(--accent); background:var(--accent-soft); border-left-color:var(--accent); }
+    /* Table-scoped actions (Export + Columns) grouped in the table header. */
+    .thead-tools { display:inline-flex; gap:7px; align-items:center; justify-content:flex-end; }
+    .settings-main { min-width:0; }
+    .settings-main [id^="grp-"] { scroll-margin-top:74px; }
+    @media (max-width:880px) {
+      .settings-layout { grid-template-columns:1fr; }
+      .settings-nav { position:static; flex-direction:row; flex-wrap:wrap; gap:6px; margin-bottom:8px; }
+      .settings-nav a { border-left:none; border:1px solid var(--line); }
+    }
+
+    /* ============================ Toast ============================ */
+    .toast { position:fixed; bottom:22px; right:22px; background:var(--surface); color:var(--text);
+      border:1px solid var(--line); padding:14px 18px 15px 20px; border-radius:12px; overflow:hidden;
+      box-shadow:var(--shadow-lg); z-index:1100; font-size:14px; max-width:400px; pointer-events:none;
+      transition:opacity .35s, transform .35s; animation:toast-in .32s cubic-bezier(.2,.8,.2,1); }
+    .toast::before { content:""; position:absolute; left:0; top:0; bottom:0; width:4px; background:var(--accent-grad); }
+    .toast::after { content:""; position:absolute; left:0; bottom:0; height:3px; width:100%;
+      background:var(--accent-grad); transform-origin:left; animation:toast-bar 3.5s linear forwards; }
+    .toast.error::before, .toast.error::after { background:var(--danger); }
+    .toast.hide { opacity:0; transform:translateX(24px); }
+    @keyframes toast-in { from { opacity:0; transform:translateX(26px); } to { opacity:1; transform:translateX(0); } }
+    @keyframes toast-bar { from { transform:scaleX(1); } to { transform:scaleX(0); } }
+
+    /* ============================ Builder rows ============================ */
+    .itemrow { display:flex; align-items:center; gap:8px; padding:10px 2px; border-bottom:1px solid var(--line-soft); font-size:13px; flex-wrap:wrap; }
+    .itemrow:last-child { border-bottom:none; }
+    .minibtn { margin-left:auto; background:var(--surface-2); color:var(--danger); border:1px solid var(--danger-line);
+      border-radius:7px; padding:5px 11px; font-size:12px; font-weight:650; cursor:pointer; white-space:nowrap; transition:.12s; }
+    .minibtn:hover { background:var(--danger-bg); }
+    .runbox { border:1px solid var(--line); border-radius:var(--r); padding:14px 16px; background:var(--surface-3); }
+
+    /* ============================ Progress stepper ============================ */
+    .stepper { list-style:none; margin:16px 0 4px; padding:0; }
+    .step { display:flex; align-items:center; gap:11px; padding:8px 0; color:var(--faint); font-size:14px; }
+    .step .dot { width:21px; height:21px; border-radius:50%; border:2px solid var(--line); flex:none;
+      display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:700; }
+    .step.active { color:var(--text); font-weight:600; } .step.active .dot { border-color:var(--accent); }
+    .step.done { color:var(--text); } .step.done .dot { background:var(--ok); border-color:var(--ok); color:#fff; }
+    .step.fail { color:var(--danger); font-weight:600; } .step.fail .dot { background:var(--danger); border-color:var(--danger); color:#fff; }
+    .spin { width:14px; height:14px; border:2px solid var(--line); border-top-color:var(--accent); border-radius:50%;
+      animation:spin .7s linear infinite; display:inline-block; }
+    @keyframes spin { to { transform:rotate(360deg); } }
+
+    /* ============================ Trace viewer ============================ */
+    details > summary { cursor:pointer; font-weight:650; font-size:13px; color:var(--accent); padding:8px 0; list-style:none; }
+    details > summary::-webkit-details-marker { display:none; }
+    details > summary::before { content:"▸ "; }
+    details[open] > summary::before { content:"▾ "; }
+    .trace-step { border-top:1px solid var(--line-soft); padding:11px 0; }
+    .trace-step:first-child { border-top:none; }
+    .trace-head { display:flex; gap:8px; align-items:center; font-size:12.5px; margin-bottom:6px; flex-wrap:wrap; }
+    .trace-lbl { color:var(--faint); font-size:11px; text-transform:uppercase; letter-spacing:.4px; margin:8px 0 3px; }
+    .trace-step pre { margin:0; max-height:230px; font-size:11.5px; }
+
+    /* ============================ Pager / poll / api flow ============================ */
+    .pager { display:flex; align-items:center; gap:14px; padding:2px 0 14px; flex-wrap:wrap; }
+    .pager .muted { font-size:12.5px; }
+    .pollstat { font-size:13px; margin:0 0 12px; color:var(--text); }
+    .apiflow { display:flex; flex-wrap:wrap; align-items:center; gap:8px; }
+    .apicall { background:var(--code-bg); color:var(--code-fg); border:1px solid var(--line-soft); border-radius:8px;
+      padding:7px 11px; font-family:ui-monospace,monospace; font-size:12px; white-space:nowrap; display:inline-flex; align-items:center; }
+    .apicall .pill { background:var(--accent); color:var(--on-accent); margin-right:7px; padding:2px 7px; }
+    .apiarrow { color:var(--faint); font-weight:700; }
+    table.rulebase th, table.rulebase td { padding:9px 12px; font-size:12.5px; vertical-align:top; }
+    table.rulebase tbody td { border-bottom:1px solid var(--line-soft); }
+
+    /* ── Activity log ── */
+    /* Slim one-line summary strip above the table (replaces the old big stat tiles). */
+    .statbar { display:flex; align-items:center; gap:8px 22px; flex-wrap:wrap; margin:0 0 4px;
+      padding:9px 4px 13px; border-bottom:1px solid var(--line); }
+    .stat { display:inline-flex; align-items:baseline; gap:6px; white-space:nowrap; }
+    .stat-n { font-size:15.5px; font-weight:720; letter-spacing:-.3px; color:var(--text); line-height:1; }
+    .stat-n.ok { color:var(--ok); } .stat-n.bad { color:var(--danger); }
+    .stat-u { font-size:11px; font-weight:600; color:var(--muted); margin-left:1px; }
+    .stat-l { font-size:11px; color:var(--faint); text-transform:uppercase; letter-spacing:.5px; }
+    .livewrap { display:inline-flex; align-items:center; gap:7px; font-size:12.5px; color:var(--muted); }
+    .livedot { width:8px; height:8px; border-radius:50%; background:var(--ok); display:inline-block; }
+    .livedot.on { animation:pulse 1.8s infinite; } .livedot.off { background:var(--faint); }
+    @keyframes pulse { 0% { box-shadow:0 0 0 0 rgba(52,211,153,.5); } 70% { box-shadow:0 0 0 7px rgba(52,211,153,0); }
+      100% { box-shadow:0 0 0 0 rgba(52,211,153,0); } }
+    .method { display:inline-block; min-width:50px; text-align:center; font-size:10.5px; font-weight:700;
+      letter-spacing:.4px; padding:3px 7px; border-radius:6px; font-family:ui-monospace,monospace;
+      background:var(--chip-bg); color:var(--chip-fg); }
+    .m-get { background:var(--info-bg); color:var(--info); } .m-post { background:var(--ok-bg); color:var(--ok); }
+    .m-put, .m-patch { background:var(--warn-bg); color:var(--warn); }
+    .m-delete { background:var(--danger-bg); color:var(--danger); }
+    table.acttable td, table.acttable th { padding:8px 10px; }
+    table.acttable tbody tr { cursor:pointer; }
+    table.acttable td.tcell-path { max-width:420px; }
+    .act-pathtext { font-family:ui-monospace,monospace; font-size:12.5px; color:var(--text-2);
+      white-space:nowrap; overflow:hidden; text-overflow:ellipsis; display:block; }
+    .act-time { font-family:ui-monospace,monospace; font-size:12px; color:var(--muted); white-space:nowrap; }
+    .act-num { text-align:right; font-variant-numeric:tabular-nums; color:var(--muted); font-size:12px; white-space:nowrap; }
+    /* Activity command bar (filters) + table controls */
+    .cmdbar { padding:16px 18px; }
+    .cmdrow { display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+    .searchbox { position:relative; display:flex; align-items:center; flex:1; min-width:220px; }
+    .searchbox > svg { position:absolute; left:13px; color:var(--faint); pointer-events:none; }
+    .searchbox input { padding-left:38px; }
+    .msel { position:relative; display:inline-block; }
+    .msel-btn { background:var(--surface-2); color:var(--text); border:1px solid var(--line); border-radius:9px;
+      padding:8px 13px; font-size:12.5px; font-weight:650; box-shadow:none; display:inline-flex; align-items:center; gap:8px; }
+    .msel-btn:hover { background:var(--hover); border-color:var(--line-strong); filter:none; transform:none; box-shadow:none; }
+    .msel.open .msel-btn { border-color:var(--accent); }
+    .msel-badge { background:var(--accent); color:var(--on-accent); border-radius:var(--r-pill); font-size:10px;
+      font-weight:700; padding:1px 6px; min-width:16px; text-align:center; }
+    .msel-caret { color:var(--faint); font-size:9px; }
+    .msel-panel { position:absolute; top:calc(100% + 8px); left:0; min-width:216px; background:var(--surface-2);
+      border:1px solid var(--line); border-radius:12px; box-shadow:var(--shadow-lg); z-index:600; padding:6px; display:none;
+      max-height:340px; overflow-y:auto;
+      text-transform:none; letter-spacing:normal; font-weight:400; font-size:13px; line-height:1.45; color:var(--text); }
+    .msel-panel.right { left:auto; right:0; }
+    .msel.open .msel-panel { display:block; animation:pop .14s ease; }
+    .msel-opt { display:flex; align-items:center; gap:10px; padding:7px 10px; border-radius:8px; cursor:pointer;
+      font-size:13px; color:var(--text-2); }
+    .msel-opt:hover { background:var(--hover); color:var(--text); }
+    .msel-opt:has(input:checked) { color:var(--text); font-weight:600; }
+    .msel-opt .fcount { margin-left:auto; font-size:11px; font-weight:600; color:var(--faint);
+      background:var(--subtle-bg); border:1px solid var(--line); padding:1px 8px; border-radius:var(--r-pill); }
+    .ctl { display:inline-flex; align-items:center; gap:7px; font-size:12px; font-weight:600; color:var(--muted); }
+    .ctl select { width:auto; min-width:84px; padding:7px 30px 7px 11px; font-size:12.5px; }
+    .linkbtn { background:none; border:none; box-shadow:none; color:var(--accent); font-size:12px; font-weight:650;
+      padding:4px 6px; cursor:pointer; }
+    .linkbtn:hover { background:none; filter:none; transform:none; box-shadow:none; text-decoration:underline; }
+  </style>
+</head>
+<body>
+  <header>
+    <a class="brand-link" href="/">
+      <span class="brand-mark"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="9" x2="20" y2="9"/><path d="M6 17V12.5a2.6 2.6 0 0 1 5.2 0V17"/><path d="M12.8 17V12.5a2.6 2.6 0 0 1 5.2 0V17"/><line x1="6" y1="17" x2="6" y2="18.5"/><line x1="18" y1="17" x2="18" y2="18.5"/></svg></span>
+      <span class="brand">PolicyPilot</span>
+    </a>
+    {% block nav %}
+    <nav class="nav-main" id="nav-main">
+      <a href="/">Home</a>
+      <a href="/access-automation">Access automation</a>
+      <div class="menu">
+        <a href="#" class="menu-trigger" data-match="/layers,/gateways,/management,/api-explorer,/mcp-guide">Servers &amp; Agents ▾</a>
+        <div class="menu-items">
+          <a href="/management">Management Servers</a>
+          <a href="/gateways">Gateways</a>
+          <a href="/layers">Dynamic Layers</a>
+          <a href="/mcp-guide">MCP for agents</a>
+          <a href="/api-explorer">API explorer</a>
+        </div>
+      </div>
+      <a href="/settings">Settings</a>
+      <a href="/activity">Activity</a>
+    </nav>
+    <div class="nav-side">
+      <span class="navsep"></span>
+      <div class="menu" id="notif-menu">
+        <button type="button" class="menu-trigger icon-btn" id="notif-bell" title="Notifications" aria-label="Notifications">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+          <span id="notif-badge" class="notif-badge" hidden>0</span>
+        </button>
+        <div class="menu-items" id="notif-panel" style="min-width:330px;">
+          <div class="notif-head"><span class="menu-label" style="padding:0;">Notifications</span><button type="button" id="notif-clear">Clear all</button></div>
+          <div id="notif-list"><div class="notif-empty muted small">No notifications</div></div>
+        </div>
+      </div>
+      <a href="/account" class="icon-btn" title="Account &amp; password" aria-label="Account">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+      </a>
+      <button type="button" id="theme-toggle" class="icon-btn" title="Toggle light / dark" aria-label="Toggle theme">
+        <svg class="ic-sun" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
+        <svg class="ic-moon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      </button>
+      <form method="post" action="/logout" style="display:inline;margin:0;">
+        <button type="submit" class="signout-btn" title="Sign out">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+          <span class="so-text">Sign out</span>
+        </button>
+      </form>
+      <button type="button" class="nav-toggle icon-btn" id="nav-toggle" aria-label="Menu" aria-expanded="false">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      </button>
+    </div>
+    {% endblock %}
+  </header>
+  <main class="{% block main_class %}{% endblock %}">{% block content %}{% endblock %}</main>
+
+  <footer style="max-width:1180px; margin:40px auto 24px; padding:14px 20px 0; border-top:1px solid var(--line);
+                 color:var(--faint); font-size:12px; text-align:center;">
+    <strong style="color:var(--muted);">PolicyPilot</strong> v{{ app_version }}
+  </footer>
+
+  {% if flash %}
+  <div id="toast" class="toast {{ flash.type }}">{{ flash.text }}</div>
+  {% endif %}
+
+  <div id="modal-overlay" class="modal-overlay" hidden>
+    <div class="modal" role="dialog" aria-modal="true">
+      <h3 id="modal-title">Please confirm</h3>
+      <p id="modal-msg"></p>
+      <div class="modal-actions">
+        <button type="button" class="secondary" id="modal-cancel">Cancel</button>
+        <button type="button" class="danger" id="modal-ok">Confirm</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="form-modal" class="modal-overlay" hidden>
+    <div class="modal" role="dialog" aria-modal="true">
+      <div class="fm-head">
+        <h3 class="fm-title grow"></h3>
+        <button type="button" class="icon-btn" id="fm-close" aria-label="Close">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <div class="fm-body"></div>
+    </div>
+  </div>
+
+  <script>
+    // Reusable form-in-modal (progressive enhancement). A link/button with data-modal-form="<url>"
+    // opens a modal, loads that page's FORM FRAGMENT (X-Fragment header), submits via fetch, and reloads
+    // the list on success. The target URL stays a normal page, so no-JS / open-in-new-tab still works.
+    (function () {
+      var fm = document.getElementById('form-modal');
+      if (!fm) return;
+      var titleEl = fm.querySelector('.fm-title'), bodyEl = fm.querySelector('.fm-body');
+      var fmIsView = false;     // true while a read VIEW is open (its action links navigate, not "cancel")
+      function close() { fm.hidden = true; bodyEl.innerHTML = ''; }
+      function runScripts(root) {            // innerHTML doesn't execute <script>; re-create them so it does
+        root.querySelectorAll('script').forEach(function (old) {
+          var s = document.createElement('script');
+          if (old.src) s.src = old.src; else s.textContent = old.textContent;
+          old.replaceWith(s);
+        });
+      }
+      var fhSeq = 0;
+      function initFieldHelp(root) {            // long help paragraphs (>2 lines) collapse with a More/Less toggle
+        (root || document).querySelectorAll('form p.muted').forEach(function (p) {
+          if (p.dataset.fhInit) return;
+          if (!p.offsetParent) return;          // hidden right now (e.g. a collapsed branch) → leave it for a later pass
+          p.dataset.fhInit = '1';
+          var lh = parseFloat(getComputedStyle(p).lineHeight) || 19;
+          if (p.scrollHeight <= lh * 2 + 4) return;   // 2 lines or fewer: leave it expanded
+          if (!p.id) p.id = 'fh-' + (++fhSeq);
+          p.classList.add('clamped');
+          var btn = document.createElement('button');
+          btn.type = 'button'; btn.className = 'help-toggle'; btn.textContent = 'More';
+          btn.setAttribute('aria-expanded', 'false');
+          btn.setAttribute('aria-controls', p.id);
+          btn.addEventListener('click', function () {
+            var clamped = p.classList.toggle('clamped');
+            btn.textContent = clamped ? 'More' : 'Less';
+            btn.setAttribute('aria-expanded', clamped ? 'false' : 'true');
+          });
+          p.insertAdjacentElement('afterend', btn);
+        });
+      }
+      function wire() {
+        var form = bodyEl.querySelector('form'); if (!form) return;
+        initFieldHelp(bodyEl);
+        form.addEventListener('submit', function (e) {
+          e.preventDefault();
+          var btn = form.querySelector('[type=submit]'); if (btn) { btn.disabled = true; btn.dataset.t = btn.textContent; btn.textContent = 'Saving…'; }
+          fetch(form.getAttribute('action') || location.pathname,
+                { method: 'POST', body: new FormData(form), headers: { 'X-Fragment': '1' }, redirect: 'follow' })
+            .then(function (r) {
+              // Success uses the POST→redirect→GET pattern (303 to the list); a re-rendered form (200,
+              // no redirect) means a validation error → show it in the modal.
+              if (r.redirected) { location.reload(); return null; }
+              return r.text();
+            })
+            .then(function (html) {
+              if (html === null) return;
+              bodyEl.innerHTML = fragmentOf(html); runScripts(bodyEl); wire();
+            })
+            .catch(function () { if (btn) { btn.disabled = false; btn.textContent = btn.dataset.t || 'Save'; } });
+        });
+      }
+      function fragmentOf(html, keepActions) {
+        // A route may return just the form (X-Fragment) OR a full page. For a full page, extract the
+        // main content. FORM mode drops the whole page-head (the modal has its own title bar). VIEW mode
+        // moves the page-head's ACTION buttons (Edit / Delete) into a sticky footer at the BOTTOM (a
+        // proper modal: title bar → content → action bar), dropping the title + icon (the modal titles it).
+        if (!/<!doctype|<html|<header/i.test(html)) return html;
+        var doc = new DOMParser().parseFromString(html, 'text/html');
+        var main = doc.querySelector('main') || doc.body;
+        var ph = main.querySelector('.page-head');
+        if (ph) {
+          var actions = keepActions ? ph.querySelector('.ph-actions') : null;
+          ph.remove();
+          if (actions) { actions.classList.add('fm-view-foot'); main.appendChild(actions); }
+        }
+        return main.innerHTML;
+      }
+      function open(url, title, view) {
+        titleEl.textContent = title || '';
+        fmIsView = !!view;     // view and form share one width — opening Edit from a view never resizes
+        bodyEl.innerHTML = '<p class="muted">Loading…</p>';
+        fm.hidden = false;
+        fetch(url, { headers: { 'X-Fragment': '1' } })
+          .then(function (r) { return r.text(); })
+          .then(function (html) {
+            bodyEl.innerHTML = fragmentOf(html, view); runScripts(bodyEl);
+            // FORM mode wires the submit hijack + focuses the first field. A VIEW (e.g. a datacenter
+            // detail) keeps its OWN scripts (inline edit, copy, delete) and must not be hijacked.
+            if (view) { initFieldHelp(bodyEl); }
+            else { wire(); var f = bodyEl.querySelector('input:not([type=hidden]),select,textarea'); if (f) f.focus(); }
+          })
+          .catch(function () { bodyEl.innerHTML = '<p class="err">Could not load it. <a href="' + url + '">Open the page instead.</a></p>'; });
+      }
+      document.addEventListener('click', function (e) {
+        // Cancel closes the modal (a [data-fm-cancel] link, or any secondary button-link in the body —
+        // e.g. a create page's "Cancel"). On the full page these just navigate, as a fallback.
+        // In a VIEW modal the body's secondary links are real actions (e.g. "Gaia config →") that must
+        // navigate, so the blanket secondary-as-cancel heuristic applies to FORM modals only.
+        var cancel = e.target.closest('[data-fm-cancel]')
+          || (fmIsView ? null : e.target.closest('#form-modal .fm-body a.btn.secondary, #form-modal .fm-body a.secondary'));
+        // …but a secondary-styled link that is itself a modal trigger (e.g. a detail view's "Edit" button)
+        // must OPEN, not be mistaken for Cancel.
+        if (cancel && !cancel.hasAttribute('data-modal-form') && !cancel.hasAttribute('data-modal-view') && !fm.hidden) {
+          e.preventDefault(); close(); return;
+        }
+        var v = e.target.closest('[data-modal-view]');
+        if (v && !e.target.closest('#form-modal')) {    // open a read view (not a trigger already in the modal)
+          e.preventDefault(); open(v.getAttribute('data-modal-view'), v.getAttribute('data-modal-title'), true); return;
+        }
+        var t = e.target.closest('[data-modal-form]'); if (!t) return;
+        e.preventDefault();
+        open(t.getAttribute('data-modal-form'), t.getAttribute('data-modal-title'));
+      });
+      document.getElementById('fm-close').addEventListener('click', close);
+      fm.addEventListener('click', function (e) { if (e.target === fm) close(); });
+      document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !fm.hidden) close(); });
+      initFieldHelp(document);                 // standalone form pages (the modal paths call it after injection)
+    })();
+  </script>
+
+  <script>
+    // Theme toggle (persists; default dark).
+    (function () {
+      var btn = document.getElementById('theme-toggle');
+      if (!btn) return;
+      btn.addEventListener('click', function () {
+        var next = document.documentElement.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
+        document.documentElement.setAttribute('data-theme', next);
+        try { localStorage.setItem('dcsim-theme', next); } catch (e) {}
+      });
+    })();
+    // Mark the active nav link for the current page.
+    (function () {
+      var path = location.pathname;
+      document.querySelectorAll('header nav a[href]').forEach(function (a) {
+        var href = a.getAttribute('href');
+        if (!href || href === '#' || href === '/logout') return;
+        if (href === '/' ? path === '/' : path.indexOf(href) === 0) a.classList.add('active');
+      });
+      document.querySelectorAll('header .menu-trigger[data-match]').forEach(function (t) {
+        if (t.getAttribute('data-match').split(',').some(function (p) { return path.indexOf(p) === 0; }))
+          t.classList.add('active');
+      });
+    })();
+    // Auto-dismiss the toast.
+    (function () {
+      var t = document.getElementById('toast');
+      if (!t) return;
+      setTimeout(function () { t.classList.add('hide'); }, 3500);
+      setTimeout(function () { t.remove(); }, 4000);
+    })();
+    // In-app confirm modal (replaces native confirm()).
+    (function () {
+      var overlay = document.getElementById('modal-overlay');
+      var msg = document.getElementById('modal-msg');
+      var okBtn = document.getElementById('modal-ok');
+      var cancelBtn = document.getElementById('modal-cancel');
+      var pendingForm = null;
+      var pendingSubmitter = null;
+      function open(message, form, submitter) { msg.textContent = message; pendingForm = form; pendingSubmitter = submitter || null; overlay.hidden = false; }
+      function close() { overlay.hidden = true; pendingForm = null; pendingSubmitter = null; }
+      document.addEventListener('click', function (e) {
+        var el = e.target.closest('[data-confirm]');
+        if (!el) return;
+        e.preventDefault();
+        var sub = (el.tagName === 'BUTTON' || el.type === 'submit') ? el : null;
+        open(el.getAttribute('data-confirm'), el.closest('form'), sub);
+      });
+      okBtn.addEventListener('click', function () {
+        if (!pendingForm) return;
+        // requestSubmit(submitter) preserves the clicked button's formaction (e.g. Activity "Clear all");
+        // .submit() drops it. Fall back to .submit() only where requestSubmit is unavailable.
+        if (pendingForm.requestSubmit) {
+          pendingForm.requestSubmit(pendingSubmitter && pendingSubmitter.form === pendingForm ? pendingSubmitter : undefined);
+        } else {
+          pendingForm.submit();
+        }
+        close();
+      });
+      cancelBtn.addEventListener('click', close);
+      overlay.addEventListener('click', function (e) { if (e.target === overlay) close(); });
+      document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !overlay.hidden) close(); });
+    })();
+    // Dropdown menus.
+    (function () {
+      document.addEventListener('click', function (e) {
+        var trigger = e.target.closest('.menu-trigger');
+        if (trigger) {
+          e.preventDefault();
+          var menu = trigger.closest('.menu');
+          var wasOpen = menu.classList.contains('open');
+          document.querySelectorAll('.menu.open').forEach(function (m) { m.classList.remove('open'); });
+          if (!wasOpen) menu.classList.add('open');
+          return;
+        }
+        document.querySelectorAll('.menu.open').forEach(function (m) { m.classList.remove('open'); });
+      });
+    })();
+    // Multi-select / column-chooser popovers (.msel): toggle on the button, stay open while ticking
+    // options, close on outside click. Global so any page (filters, the Columns chooser) gets it.
+    (function () {
+      document.addEventListener('click', function (e) {
+        var btn = e.target.closest('.msel-btn');
+        if (btn) {
+          e.preventDefault();
+          var msel = btn.closest('.msel'), wasOpen = msel.classList.contains('open');
+          document.querySelectorAll('.msel.open').forEach(function (m) { m.classList.remove('open'); });
+          if (!wasOpen) msel.classList.add('open');
+          return;
+        }
+        if (e.target.closest('.msel-panel')) return;
+        document.querySelectorAll('.msel.open').forEach(function (m) { m.classList.remove('open'); });
+      });
+      document.addEventListener('DOMContentLoaded', function () {   // initial badge = count of checked opts
+        document.querySelectorAll('.msel').forEach(function (m) {
+          var b = m.querySelector('.msel-badge'); if (!b) return;
+          var n = m.querySelectorAll('input:checked:not([disabled])').length;
+          b.textContent = n; b.hidden = !n;
+        });
+      });
+    })();
+    // Relative timestamps: render any element with class "ts" + data-ts="ISO" as "5m ago"
+    // (absolute local time on hover). One renderer for every table; survives row swaps via window.paintTimestamps.
+    (function () {
+      function rel(iso) {
+        var s = (Date.now() - new Date(iso).getTime()) / 1000;
+        if (s < 0) s = 0;
+        if (s < 60) return Math.floor(s) + 's ago';
+        if (s < 3600) return Math.floor(s / 60) + 'm ago';
+        if (s < 86400) return Math.floor(s / 3600) + 'h ago';
+        return Math.floor(s / 86400) + 'd ago';
+      }
+      function paint() {
+        document.querySelectorAll('.ts[data-ts]').forEach(function (el) {
+          var iso = el.getAttribute('data-ts'); if (!iso) return;
+          if (!el.getAttribute('title')) { try { el.title = new Date(iso).toLocaleString() + ' (local)'; } catch (e) {} }
+          el.textContent = rel(iso);
+        });
+      }
+      window.paintTimestamps = paint;
+      document.addEventListener('DOMContentLoaded', paint);
+      document.body.addEventListener('htmx:afterSwap', paint);  // repaint .ts cells in htmx-swapped fragments (e.g. live polls)
+      setInterval(paint, 60000);
+    })();
+    // Responsive nav: hamburger toggles the mobile menu panel.
+    (function () {
+      var t = document.getElementById('nav-toggle');
+      var hdr = document.querySelector('header');
+      if (!t || !hdr) return;
+      t.addEventListener('click', function (e) {
+        e.stopPropagation();
+        var open = hdr.classList.toggle('nav-open');
+        t.setAttribute('aria-expanded', open ? 'true' : 'false');
+      });
+      document.addEventListener('click', function (e) {
+        if (!hdr.classList.contains('nav-open')) return;
+        if (e.target.closest('#nav-toggle')) return;
+        var link = e.target.closest('.nav-main a[href]');
+        if (link && link.getAttribute('href') !== '#') { hdr.classList.remove('nav-open'); return; }
+        if (!e.target.closest('.nav-main')) hdr.classList.remove('nav-open');
+      });
+    })();
+    // Notifications bell: lazy-load list, badge unread count, delete one / clear all.
+    (function () {
+      var bell = document.getElementById('notif-bell');
+      if (!bell) return;
+      var badge = document.getElementById('notif-badge');
+      var list = document.getElementById('notif-list');
+      var panel = document.getElementById('notif-panel');
+      var menu = document.getElementById('notif-menu');
+      function setBadge(n) {
+        if (n > 0) { badge.textContent = n > 99 ? '99+' : n; badge.hidden = false; }
+        else { badge.hidden = true; }
+      }
+      function esc(s) { var d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+      function render(items) {
+        if (!items || !items.length) {
+          list.innerHTML = '<div class="notif-empty muted small">No notifications</div>'; return;
+        }
+        list.innerHTML = '<div class="notif-list-scroll">' + items.map(function (n) {
+          var k = n.kind === 'error' ? 'error' : (n.kind === 'info' ? 'info' : '');
+          return '<div class="notif-item" data-id="' + n.id + '"><span class="notif-dot ' + k + '"></span>'
+            + '<div class="notif-body"><div class="notif-text">' + esc(n.text) + '</div>'
+            + '<div class="notif-time">' + esc(n.ago) + '</div></div>'
+            + '<button class="notif-x" data-del="' + n.id + '" title="Delete" aria-label="Delete">&times;</button></div>';
+        }).join('') + '</div>';
+      }
+      function load(cb) {
+        fetch('/notifications', { headers: { 'Accept': 'application/json' } })
+          .then(function (r) { return r.ok ? r.json() : { items: [], unread: 0 }; })
+          .then(function (d) { setBadge(d.unread || 0); render(d.items); if (cb) cb(d); })
+          .catch(function () {});
+      }
+      document.addEventListener('DOMContentLoaded', function () { load(); });
+      bell.addEventListener('click', function () {
+        setTimeout(function () {                 // after the menu toggle ran: if now open, refresh + mark read
+          if (menu.classList.contains('open')) {
+            load(function () { fetch('/notifications/read', { method: 'POST' }).then(function () { setBadge(0); }); });
+          }
+        }, 0);
+      });
+      panel.addEventListener('click', function (e) {
+        e.stopPropagation();                     // interacting inside the panel must not close it
+        var del = e.target.closest('[data-del]');
+        if (del) {
+          var id = del.getAttribute('data-del');
+          fetch('/notifications/' + id + '/delete', { method: 'POST' }).then(function () {
+            var it = list.querySelector('[data-id="' + id + '"]'); if (it) it.remove();
+            if (!list.querySelector('.notif-item')) render([]);
+          });
+          return;
+        }
+        if (e.target.closest('#notif-clear')) {
+          fetch('/notifications/clear', { method: 'POST' }).then(function () { render([]); setBadge(0); });
+        }
+      });
+    })();
+    // Copy-to-clipboard buttons (data-copy="text").
+    (function () {
+      document.addEventListener('click', function (e) {
+        var btn = e.target.closest('[data-copy], [data-copy-from]');
+        if (!btn) return;
+        e.preventDefault();
+        var src = btn.getAttribute('data-copy-from');   // copy a live element's text (e.g. a built-up command)
+        var text = src ? ((document.querySelector(src) || {}).innerText || '').trim() : btn.getAttribute('data-copy');
+        function done() {
+          var label = btn.getAttribute('data-label') || btn.textContent;
+          btn.setAttribute('data-label', label);
+          btn.textContent = 'Copied!';
+          btn.classList.add('copied');
+          setTimeout(function () { btn.textContent = label; btn.classList.remove('copied'); }, 1500);
+        }
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(done, done);
+        } else {
+          var ta = document.createElement('textarea');
+          ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+          document.body.appendChild(ta); ta.select();
+          try { document.execCommand('copy'); } catch (err) {}
+          document.body.removeChild(ta); done();
+        }
+      });
+    })();
+    // Client-side pagination for static list tables: <table data-paginate="N"> keeps long lists from
+    // ever scrolling off the page. Filter-aware — a page's own filter tags rows with class "row-hidden"
+    // (excluded from paging) and calls table.repaginate() after toggling them.
+    (function () {
+      function makePager(table) {
+        var size = parseInt(table.getAttribute('data-paginate'), 10) || 10;
+        var tbody = table.tBodies && table.tBodies[0];
+        if (!tbody) return;
+        var page = 1;
+        var pager = document.createElement('div');
+        pager.className = 'pager';
+        (table.closest('.tablewrap') || table).insertAdjacentElement('afterend', pager);
+        function eligible() {
+          return Array.prototype.slice.call(tbody.rows).filter(function (r) { return !r.classList.contains('row-hidden'); });
+        }
+        function mk(label, p, cur, dis) {
+          var b = document.createElement('button');
+          b.type = 'button'; b.textContent = label; b.className = cur ? '' : 'secondary';
+          if (dis) b.disabled = true;
+          else b.addEventListener('click', function () { page = p; render(); window.scrollTo({ top: 0, behavior: 'smooth' }); });
+          return b;
+        }
+        function dots() { var s = document.createElement('span'); s.className = 'muted'; s.textContent = '…'; return s; }
+        function render() {
+          var rows = eligible();
+          var pages = Math.max(1, Math.ceil(rows.length / size));
+          if (page > pages) page = pages;
+          if (page < 1) page = 1;
+          Array.prototype.slice.call(tbody.rows).forEach(function (r) { if (r.classList.contains('row-hidden')) r.style.display = 'none'; });
+          rows.forEach(function (r, i) { r.style.display = (i >= (page - 1) * size && i < page * size) ? '' : 'none'; });
+          pager.replaceChildren();
+          if (pages <= 1) return;
+          var lo = Math.max(1, page - 2), hi = Math.min(pages, page + 2), p;
+          pager.appendChild(mk('« First', 1, false, page <= 1));
+          pager.appendChild(mk('‹ Prev', page - 1, false, page <= 1));
+          if (lo > 1) { pager.appendChild(mk('1', 1, false, false)); if (lo > 2) pager.appendChild(dots()); }
+          for (p = lo; p <= hi; p++) pager.appendChild(mk(String(p), p, p === page, false));
+          if (hi < pages) { if (hi < pages - 1) pager.appendChild(dots()); pager.appendChild(mk(String(pages), pages, false, false)); }
+          pager.appendChild(mk('Next ›', page + 1, false, page >= pages));
+          pager.appendChild(mk('Last »', pages, false, page >= pages));
+          var info = document.createElement('span'); info.className = 'muted';
+          info.textContent = 'Page ' + page + ' of ' + pages + ' · ' + rows.length + ' total';
+          pager.appendChild(info);
+        }
+        table.repaginate = function () { page = 1; render(); };
+        render();
+      }
+      function init() { document.querySelectorAll('table[data-paginate]').forEach(makePager); }
+      if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
+    })();
+    // Reveal / hide a masked secret (button.cf-reveal toggles the .cf-secret in its .copyfield).
+    (function () {
+      document.addEventListener('click', function (e) {
+        var b = e.target.closest('.cf-reveal');
+        if (!b) return;
+        e.preventDefault();
+        var field = b.closest('.copyfield');
+        var el = field && field.querySelector('.cf-secret');
+        if (!el) return;
+        var shown = el.getAttribute('data-shown') === '1';
+        el.textContent = shown ? '••••••••' : (el.getAttribute('data-secret') || '');
+        el.setAttribute('data-shown', shown ? '0' : '1');
+        b.textContent = shown ? 'Show' : 'Hide';
+      });
+    })();
+  </script>
+</body>
+</html>

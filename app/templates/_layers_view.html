@@ -1,0 +1,78 @@
+{# Shared server-rendered views for dynamic-layer rulebases + objects (gateway "layers" page). #}
+{% macro _cell(v) %}{% if v is string %}{{ v }}{% elif v %}{{ v | join(', ') }}{% else %}Any{% endif %}{% endmacro %}
+
+{% macro render_rulebase(rulebase) %}
+{% set actcls = {'accept': 'ok', 'drop': 'bad', 'reject': 'bad', 'drop with block message': 'bad'} %}
+<div class="tablewrap">
+  <table class="rulebase">
+    <thead><tr><th>#</th><th>Name</th><th>Source</th><th>Destination</th><th>Service</th><th>Action</th><th>Track</th></tr></thead>
+    <tbody>
+    {% for r in rulebase %}
+      <tr>
+        <td class="muted">{{ loop.index }}</td>
+        <td><b>{{ r.name or 'rule-' ~ loop.index }}</b></td>
+        <td>{{ _cell(r.source) }}</td>
+        <td>{{ _cell(r.destination) }}</td>
+        <td>{{ _cell(r.service) }}</td>
+        <td><span class="pill {{ actcls.get((r.action or '')|lower, '') }}">{{ r.action or '—' }}</span></td>
+        <td class="muted">{% if r.track is mapping %}{{ r.track.type or 'None' }}{% else %}{{ r.track or 'None' }}{% endif %}</td>
+      </tr>
+    {% else %}
+      <tr><td class="muted" colspan="7">No rules.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endmacro %}
+
+{%- macro _objdetail(o) -%}
+{%- if o['ip-address'] %}{{ o['ip-address'] }}{% elif o.subnet4 %}{{ o.subnet4 }}{% if o['mask-length4'] is not none %}/{{ o['mask-length4'] }}{% endif %}{% elif o.members %}{{ o.members | join(', ') }}{% elif o['ipv4-address-first'] %}{{ o['ipv4-address-first'] }} – {{ o['ipv4-address-last'] or '' }}{% endif -%}
+{%- endmacro -%}
+
+{% macro render_objects(objects) %}
+{% set types = (objects or {}).keys() | list %}
+{% if types %}
+<div class="trace-lbl" style="margin-top:10px;">Objects</div>
+{% for t in types %}{% if objects[t] %}
+<div style="margin:3px 0;"><span class="muted" style="font-size:11px; text-transform:uppercase; letter-spacing:.4px;">{{ t }}</span>
+{% for o in objects[t] %}<span class="pill" style="margin:2px;">{{ o.name or '?' }}{% set d = _objdetail(o) %}{% if d %} · {{ d }}{% endif %}</span>{% endfor %}
+</div>{% endif %}{% endfor %}
+{% endif %}
+{% endmacro %}
+
+{% macro render_referenced(names) %}
+{% if names %}
+<div class="trace-lbl" style="margin-top:10px;">Referenced objects <span class="muted" style="font-weight:400; text-transform:none; letter-spacing:0;">— used by rules, resolved on the gateway</span></div>
+<div style="margin:3px 0;">{% for n in names %}<span class="pill faint" style="margin:2px;">{{ n }}</span>{% endfor %}</div>
+{% endif %}
+{% endmacro %}
+
+{% macro render_layers(layers) %}
+{% for l in layers %}
+<div class="card" style="margin:10px 0; box-shadow:none;">
+  <b>{{ l.name or '(unnamed)' }}</b>{% if l.display_name %} <span class="muted">— {{ l.display_name }}</span>{% endif %}
+  <div class="muted" style="margin:6px 0;">{{ (l.rulebase or [])|length }} rule(s) · {{ (l.objects or {}).values() | map('length') | sum }} object(s){% if l.referenced %} · {{ l.referenced|length }} referenced{% endif %}</div>
+  {{ render_rulebase(l.rulebase or []) }}
+  {{ render_objects(l.objects or {}) }}
+  {{ render_referenced(l.referenced or []) }}
+  {% if l.last_change and l.last_change.administrator %}<div class="muted" style="font-size:11px; margin-top:6px;">last change by {{ l.last_change.administrator }}{% if l.last_change.time and l.last_change.time['iso-8601'] %} · {{ l.last_change.time['iso-8601'] }}{% endif %}</div>{% endif %}
+</div>
+{% else %}
+<p class="muted">No dynamic layers found on the gateway.</p>
+{% endfor %}
+{% endmacro %}
+
+{% macro render_trace(trace) %}
+  {% for s in trace %}
+  <div class="trace-step">
+    <div class="trace-head">
+      <span class="pill">{{ s.step }}</span>
+      <code>{{ s.method }} {{ s.url }}</code>
+      {% if s.status %}<span class="pill {{ 'ok' if s.status == 200 else 'bad' }}">{{ s.status }}</span>{% endif %}
+      {% if s.ms is not none %}<span class="muted">{{ s.ms }} ms</span>{% endif %}
+    </div>
+    <div class="trace-lbl">Request</div><pre>{{ s.request | tojson(indent=2) }}</pre>
+    <div class="trace-lbl">Response</div><pre>{{ s.response | tojson(indent=2) }}</pre>
+  </div>
+  {% endfor %}
+{% endmacro %}

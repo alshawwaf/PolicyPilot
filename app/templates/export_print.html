@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ et.title }} — PolicyPilot export</title>
+<style>
+  :root { --ink:#161b22; --muted:#5b6573; --line:#e6e9ef; --line2:#d7dce4;
+    --accent:#c4145f; --head:#f4f6fa; --zebra:#fafbfd; }
+  * { box-sizing:border-box; }
+  html, body { background:#fff; }
+  body { margin:0; color:var(--ink); font:13px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",
+    Roboto,Helvetica,Arial,sans-serif; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  .wrap { max-width:1180px; margin:0 auto; padding:22px 30px 70px; }
+  .toolbar { display:flex; align-items:center; gap:10px; padding:10px 0 16px; margin-bottom:18px;
+    border-bottom:1px solid var(--line); }
+  .toolbar .grow { flex:1; }
+  .btn { font:600 13px/1 inherit; padding:10px 17px; border-radius:9px; border:1px solid var(--line2);
+    background:#fff; color:var(--ink); cursor:pointer; text-decoration:none; display:inline-flex;
+    align-items:center; gap:7px; }
+  .btn:hover { background:#f6f7f9; }
+  .btn.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
+  .btn.primary:hover { filter:brightness(1.05); }
+  .brand { display:flex; align-items:center; gap:10px; font-weight:800; font-size:15px; letter-spacing:-.2px; }
+  .brand .logo { width:30px; height:30px; border-radius:8px; flex:none; color:#fff; font-weight:800;
+    display:flex; align-items:center; justify-content:center; font-size:15px;
+    background:linear-gradient(135deg,#ff3d9a,#7c3aed); }
+  h1 { font-size:21px; margin:2px 0 3px; letter-spacing:-.4px; }
+  .sub { color:var(--muted); font-size:13px; max-width:760px; }
+  .meta { display:flex; flex-wrap:wrap; gap:5px 24px; margin:13px 0 18px; font-size:12px; color:var(--muted); }
+  .meta b { color:var(--ink); font-weight:600; }
+  table { width:100%; border-collapse:collapse; }
+  thead { display:table-header-group; }                 /* repeat the header on every printed page */
+  tfoot { display:table-footer-group; }
+  tr { break-inside:avoid; page-break-inside:avoid; }    /* never split a row across a page break */
+  th, td { text-align:left; padding:7px 11px; border-bottom:1px solid var(--line); font-size:12px;
+    vertical-align:top; }
+  td { word-break:break-word; }
+  th { background:var(--head); font-size:10.5px; text-transform:uppercase; letter-spacing:.04em;
+    color:var(--muted); border-bottom:1.5px solid var(--line2); white-space:nowrap; }
+  tbody tr:nth-child(even) td { background:var(--zebra); }
+  td.num, th.num { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
+  .empty { color:var(--muted); padding:34px 0; text-align:center; font-size:14px; }
+  .foot { margin-top:24px; padding-top:12px; border-top:1px solid var(--line); font-size:11px; color:var(--muted); }
+  @media print {
+    .toolbar { display:none; }
+    .wrap { max-width:none; padding:0; }
+    body { font-size:11px; }
+    @page { size: A4 landscape; margin: 12mm 10mm 14mm; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="toolbar">
+    <span class="brand"><span class="logo">D</span>PolicyPilot</span>
+    <span class="grow"></span>
+    <button class="btn primary" type="button" onclick="window.print()">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+      Save as PDF / Print
+    </button>
+    <a class="btn" href="{{ back }}">← Back</a>
+  </div>
+
+  <h1>{{ et.title }}</h1>
+  {% if et.subtitle %}<div class="sub">{{ et.subtitle }}</div>{% endif %}
+  <div class="meta">
+    <span>Generated <b>{{ generated.strftime('%Y-%m-%d %H:%M UTC') }}</b></span>
+    <span><b>{{ et.rows | length }}</b> row{{ '' if et.rows | length == 1 else 's' }}</span>
+    {% for label, val in et.meta %}<span>{{ label }}: <b>{{ val }}</b></span>{% endfor %}
+  </div>
+
+  {% if et.rows %}
+  <table>
+    <thead><tr>
+      {% for c in et.columns %}<th class="{{ 'num' if loop.index0 in et.numeric_cols else '' }}">{{ c }}</th>{% endfor %}
+    </tr></thead>
+    <tbody>
+    {% for row in et.rows %}
+      <tr>{% for cell in row %}<td class="{{ 'num' if loop.index0 in et.numeric_cols else '' }}">{{ cell if cell is not none else '' }}</td>{% endfor %}</tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="empty">No rows to export for this view.</p>
+  {% endif %}
+
+  <div class="foot">PolicyPilot · Check Point PoV portal · {{ et.title }}</div>
+</div>
+<script>
+  // The "Save as PDF" menu links here with ?auto=1 → open the print dialog automatically.
+  if (new URLSearchParams(location.search).get('auto') === '1') setTimeout(function () { window.print(); }, 300);
+</script>
+</body>
+</html>

@@ -1,0 +1,223 @@
+{% extends "base.html" %}
+{% block title %}{{ ms.name }} — policy{% endblock %}
+{% block main_class %}wide{% endblock %}
+{% block content %}
+<div class="page-head">
+  <span class="icon-chip lg"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 5v14c0 1.66-4 3-9 3s-9-1.34-9-3V5"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/></svg></span>
+  <div class="ph-main">
+    <h1>{{ ms.name }} <span class="pill">Management</span></h1>
+    <p class="ph-sub"><code>{{ ms.host }}:{{ ms.port }}</code>{% if ms.domain %} · domain <b>{{ ms.domain }}</b>{% endif %} · pulled live over the <code>web_api</code>.</p>
+  </div>
+  <div class="ph-actions">
+    <a class="btn secondary" href="/management/{{ ms.id }}/gaia-export">Gaia config →</a>
+    <a class="btn secondary" href="/management/{{ ms.id }}/edit" data-modal-form="/management/{{ ms.id }}/edit" data-modal-title="Edit management server">Edit connection</a>
+  </div>
+</div>
+
+{% if not has_secret %}
+<div class="card"><p class="muted">No saved credential on this server, so policy can't be pulled. <a href="/management/{{ ms.id }}/edit">Add a password on Edit</a> (stored encrypted), then return here.</p></div>
+{% else %}
+<div class="card" id="mgmt-viewer" data-id="{{ ms.id }}" style="padding:14px 18px;">
+  <div class="row" style="align-items:center; gap:10px; flex-wrap:wrap;">
+    <span class="muted" style="font-size:11px; font-weight:700; letter-spacing:.5px;">ACCESS LAYER</span>
+    <span id="layer-picker" class="filterbar" style="margin:0;"><span class="muted">Loading layers…</span></span>
+    <a id="export-link" class="btn secondary" href="/management/{{ ms.id }}/export" style="margin-left:auto;">Export to IaC →</a>
+  </div>
+  <div id="rulebase" style="margin-top:14px;"><p class="muted">Pick a layer to pull its rulebase.</p></div>
+</div>
+
+<div class="modal-overlay" id="edit-modal" hidden>
+  <div class="modal wide">
+    <div class="row" style="align-items:center;"><h3 class="grow" style="margin:0;" id="edit-title">Edit rule</h3>
+      <button type="button" class="copybtn" id="edit-close">Close</button></div>
+    <div style="margin-top:14px; display:grid; gap:12px;">
+      <label class="row" style="gap:8px; align-items:center; margin:0;"><input type="checkbox" id="ed-enabled"> <span>Rule enabled</span></label>
+      <label>Action
+        <select id="ed-action" style="width:100%; margin-top:4px;">
+          <option>Accept</option><option>Drop</option><option>Reject</option><option>Ask</option><option>Inform</option>
+        </select></label>
+      <label>Track
+        <select id="ed-track" style="width:100%; margin-top:4px;">
+          <option>None</option><option>Log</option><option>Detailed Log</option><option>Extended Log</option><option>Alert</option>
+        </select></label>
+      <label>Name<input id="ed-name" style="width:100%; margin-top:4px;"></label>
+      <label>Comments<input id="ed-comments" style="width:100%; margin-top:4px;"></label>
+    </div>
+    <div id="ed-changes" class="muted" style="margin-top:12px; font-size:13px;">No changes yet.</div>
+    <div id="ed-result" style="margin-top:8px;"></div>
+    <div class="row" style="margin-top:14px; gap:8px;">
+      <button type="button" class="btn secondary" id="ed-dryrun">Dry-run (no commit)</button>
+      <button type="button" class="btn" id="ed-publish">Publish to SMS</button>
+    </div>
+    <div id="ed-confirm" hidden class="err" style="margin-top:12px; padding:10px 12px;">
+      This writes to <b>live policy</b> on <code>{{ ms.host }}</code> and publishes — it can't be undone here.
+      <div style="margin-top:8px;"><button type="button" class="btn" id="ed-confirm-yes">Confirm publish</button>
+        <button type="button" class="copybtn" id="ed-confirm-no" style="margin-left:6px;">Cancel</button></div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<script>
+  (function () {
+    var root = document.getElementById('mgmt-viewer');
+    if (!root) return;
+    var id = root.getAttribute('data-id');
+    var picker = document.getElementById('layer-picker');
+    var view = document.getElementById('rulebase');
+    var currentRows = [], currentLayer = '';
+    function esc(s) { var d = document.createElement('div'); d.textContent = (s == null ? '' : s); return d.innerHTML; }
+    function cell(names, negate) {
+      var v = (names && names.length) ? names.join(', ') : 'Any';
+      return (negate ? '<span class="pill bad" style="margin-right:4px;">!</span>' : '') + esc(v);
+    }
+    function actionCls(a) {
+      a = (a || '').toLowerCase();
+      if (a.indexOf('accept') > -1) return 'ok';
+      if (a.indexOf('drop') > -1 || a.indexOf('reject') > -1) return 'bad';
+      return 'faint';
+    }
+    function renderRulebase(data) {
+      if (data.error) { view.innerHTML = '<div class="err">' + esc(data.error) + '</div>'; return; }
+      currentRows = data.rows || []; currentLayer = data.layer || '';
+      if (!currentRows.length) { view.innerHTML = '<p class="muted">This layer has no rules.</p>'; return; }
+      var h = '<p class="muted" style="margin:0 0 8px;">Layer <b>' + esc(data.layer) + '</b> · ' +
+              esc(data.shown) + ' rule(s)' + (data.total > data.shown ? ' (of ' + esc(data.total) + ')' : '') +
+              ' · <span class="faint">click ✎ to edit a rule</span></p>' +
+              '<div class="tablewrap"><table class="acttable"><thead><tr>' +
+              '<th>No.</th><th>Name</th><th>Source</th><th>Destination</th><th>VPN</th><th>Service</th>' +
+              '<th>Action</th><th>Track</th><th>Comments</th><th></th></tr></thead><tbody>';
+      currentRows.forEach(function (r, i) {
+        if (r.kind === 'section') {
+          h += '<tr><td colspan="10" style="background:var(--header-hover); font-weight:700;">▸ ' + esc(r.name || 'Section') + '</td></tr>';
+        } else if (r.kind === 'rule') {
+          var dim = r.enabled ? '' : ' style="opacity:.5;"';
+          h += '<tr' + dim + '><td class="nowrap">' + esc(r.number) + (r.enabled ? '' : ' ⃠') + '</td>' +
+               '<td>' + esc(r.name) + '</td>' +
+               '<td>' + cell(r.source, r.source_negate) + '</td>' +
+               '<td>' + cell(r.destination, r.destination_negate) + '</td>' +
+               '<td>' + esc((r.vpn && r.vpn.length) ? r.vpn.join(', ') : 'Any') + '</td>' +
+               '<td>' + cell(r.service, r.service_negate) + '</td>' +
+               '<td><span class="pill ' + actionCls(r.action) + '">' + esc(r.action || '—') + '</span></td>' +
+               '<td>' + esc(r.track || '—') + '</td>' +
+               '<td class="muted" style="font-size:12px;">' + esc(r.comments || '') + '</td>' +
+               '<td class="nowrap"><button class="copybtn cb-edit" type="button" data-idx="' + i + '" title="Edit rule">✎</button></td></tr>';
+        } else {
+          h += '<tr><td colspan="10" class="muted">' + esc(r.type) + ' — ' + esc(r.name) + ' (not rendered)</td></tr>';
+        }
+      });
+      view.innerHTML = h + '</tbody></table></div>';
+      view.querySelectorAll('.cb-edit').forEach(function (b) {
+        b.addEventListener('click', function () { openEdit(currentRows[+b.getAttribute('data-idx')]); });
+      });
+    }
+    function loadRulebase(name) {
+      var link = document.getElementById('export-link');
+      if (link) link.href = '/management/' + id + '/export?layer=' + encodeURIComponent(name);
+      view.innerHTML = '<p class="muted">Pulling “' + esc(name) + '” over web_api…</p>';
+      fetch('/management/' + id + '/rulebase?name=' + encodeURIComponent(name))
+        .then(function (r) { return r.json(); }).then(renderRulebase)
+        .catch(function () { view.innerHTML = '<div class="err">Failed to pull the rulebase.</div>'; });
+    }
+    fetch('/management/' + id + '/layers').then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (data.error) { picker.innerHTML = '<span class="err">' + esc(data.error) + '</span>'; return; }
+        var layers = data.layers || [];
+        if (!layers.length) { picker.innerHTML = '<span class="muted">No access layers found.</span>'; return; }
+        picker.innerHTML = '';
+        layers.forEach(function (l, i) {
+          var b = document.createElement('button');
+          b.type = 'button'; b.className = 'chip' + (i === 0 ? ' active' : ''); b.textContent = l.name;
+          b.addEventListener('click', function () {
+            picker.querySelectorAll('.chip').forEach(function (c) { c.classList.remove('active'); });
+            b.classList.add('active'); loadRulebase(l.name);
+          });
+          picker.appendChild(b);
+        });
+        loadRulebase(layers[0].name);   // auto-load the first layer
+      })
+      .catch(function () { picker.innerHTML = '<span class="err">Failed to load layers.</span>'; });
+
+    // --- rule editor (Phase 4: edit → preview → dry-run / publish) ---------------------------
+    var editing = null;
+    var em = document.getElementById('edit-modal');
+    var elEnabled = document.getElementById('ed-enabled');
+    var elAction = document.getElementById('ed-action');
+    var elTrack = document.getElementById('ed-track');
+    var elName = document.getElementById('ed-name');
+    var elComments = document.getElementById('ed-comments');
+    var elChanges = document.getElementById('ed-changes');
+    var elResult = document.getElementById('ed-result');
+    var elConfirm = document.getElementById('ed-confirm');
+
+    function ensureOption(sel, val) {            // keep the rule's current value selectable even if exotic
+      if (!val) return;
+      var has = [].some.call(sel.options, function (o) { return o.value === val; });
+      if (!has) { var o = document.createElement('option'); o.value = o.textContent = val; sel.appendChild(o); }
+      sel.value = val;
+    }
+    function closeEdit() { em.hidden = true; editing = null; }
+    function openEdit(rule) {
+      if (!rule || !rule.uid) return;
+      editing = rule;
+      document.getElementById('edit-title').textContent = 'Edit rule — ' + (rule.name || ('#' + rule.number));
+      elEnabled.checked = rule.enabled !== false;
+      ensureOption(elAction, rule.action || 'Accept');
+      ensureOption(elTrack, rule.track || 'None');
+      elName.value = rule.name || '';
+      elComments.value = rule.comments || '';
+      elResult.innerHTML = ''; elConfirm.hidden = true;
+      renderChanges();
+      em.hidden = false;
+    }
+    function computeChanges() {
+      var r = editing || {}, c = {};
+      if (elEnabled.checked !== (r.enabled !== false)) c.enabled = elEnabled.checked;
+      if (elAction.value !== (r.action || '')) c.action = elAction.value;
+      if (elTrack.value !== (r.track || '')) c.track = elTrack.value;
+      if (elName.value !== (r.name || '')) c.name = elName.value;
+      if (elComments.value !== (r.comments || '')) c.comments = elComments.value;
+      return c;
+    }
+    function renderChanges() {
+      var c = computeChanges(), keys = Object.keys(c);
+      if (!keys.length) { elChanges.innerHTML = 'No changes yet.'; return; }
+      var bits = keys.map(function (k) {
+        return k === 'enabled' ? (c.enabled ? 'enable' : 'disable') : esc(k) + ' → ' + esc(String(c[k]));
+      });
+      elChanges.innerHTML = '<b>Pending:</b> ' + bits.join(', ') +
+        ' <span class="faint">· set-access-rule on “' + esc(currentLayer) + '”</span>';
+    }
+    [elEnabled, elAction, elTrack, elName, elComments].forEach(function (el) {
+      el.addEventListener('input', renderChanges); el.addEventListener('change', renderChanges);
+    });
+    document.getElementById('edit-close').addEventListener('click', closeEdit);
+    em.addEventListener('click', function (e) { if (e.target === em) closeEdit(); });
+
+    function apply(publish) {
+      var changes = computeChanges();
+      if (!Object.keys(changes).length) { elResult.innerHTML = '<span class="muted">Nothing changed.</span>'; return; }
+      elResult.innerHTML = '<span class="muted">' + (publish ? 'Publishing…' : 'Dry-run…') + '</span>';
+      fetch('/management/' + id + '/apply', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ layer: currentLayer, uid: editing.uid, changes: changes, publish: publish })
+      }).then(function (r) { return r.json(); }).then(function (j) {
+        if (!j.ok) { elResult.innerHTML = '<div class="err">' + esc(j.error || 'Failed.') + '</div>'; return; }
+        if (j.published) {
+          elResult.innerHTML = '<div class="ok">✓ Published to the SMS.</div>';
+          setTimeout(function () { closeEdit(); loadRulebase(currentLayer); }, 900);
+        } else {
+          elResult.innerHTML = '<div class="ok">✓ Dry-run OK — the SMS accepted the change, then discarded it (nothing committed). Use Publish to commit.</div>';
+        }
+      }).catch(function () { elResult.innerHTML = '<div class="err">Request failed.</div>'; });
+    }
+    document.getElementById('ed-dryrun').addEventListener('click', function () { elConfirm.hidden = true; apply(false); });
+    document.getElementById('ed-publish').addEventListener('click', function () {
+      if (!Object.keys(computeChanges()).length) { elResult.innerHTML = '<span class="muted">Nothing changed.</span>'; return; }
+      elConfirm.hidden = false;
+    });
+    document.getElementById('ed-confirm-no').addEventListener('click', function () { elConfirm.hidden = true; });
+    document.getElementById('ed-confirm-yes').addEventListener('click', function () { elConfirm.hidden = true; apply(true); });
+  })();
+</script>
+{% endblock %}

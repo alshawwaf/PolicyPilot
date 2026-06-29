@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% block title %}Account{% endblock %}
+{% block content %}
+<style>
+  .acct-id { display:flex; align-items:center; gap:18px; flex-wrap:wrap; }
+  .avatar { width:66px; height:66px; border-radius:19px; flex:none; display:flex; align-items:center;
+    justify-content:center; font-size:25px; font-weight:800; letter-spacing:.5px; color:#fff;
+    background:linear-gradient(135deg, var(--accent), #7c3aed); box-shadow:0 7px 22px var(--accent-soft); }
+  .acct-name { font-size:20px; font-weight:760; letter-spacing:-.3px; }
+  .acct-sub { color:var(--muted); font-size:13px; margin-top:4px; display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+  .acct-sub .dot { color:var(--line-strong); }
+  .acct-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(330px, 1fr)); gap:16px; margin-top:16px; align-items:start; }
+  .acct-card h2 { margin:0; font-size:15px; display:flex; align-items:center; gap:9px; }
+  .acct-card .csub { color:var(--muted); font-size:12.5px; margin:4px 0 16px; }
+  .acct-ic { display:inline-flex; align-items:center; justify-content:center; width:30px; height:30px;
+    border-radius:9px; background:var(--accent-soft); color:var(--accent); flex:none; }
+  .acct-ic svg { width:17px; height:17px; }
+  .pw-hint { font-size:12px; color:var(--muted); margin:9px 0 0; display:flex; gap:7px; align-items:flex-start; }
+  .pw-hint svg { width:14px; height:14px; flex:none; margin-top:1px; color:var(--faint); }
+  .secnote { margin-top:16px; padding-top:14px; border-top:1px solid var(--line-soft); font-size:12.5px; color:var(--muted);
+    display:flex; gap:8px; align-items:center; }
+  .secnote svg { width:15px; height:15px; color:var(--ok); flex:none; }
+</style>
+
+{% set fn = user.first_name or '' %}{% set ln = user.last_name or '' %}
+{% set initials = ((fn[:1] ~ ln[:1]) if (fn or ln) else user.username[:2]) | upper %}
+
+<div class="card" style="margin-bottom:4px;">
+  <div class="acct-id">
+    <span class="avatar">{{ initials }}</span>
+    <div class="grow" style="min-width:200px;">
+      <div class="acct-name">{{ user.display_name }}</div>
+      <div class="acct-sub">
+        <span><code>{{ user.username }}</code></span>
+        {% if user.title %}<span class="dot">·</span><span>{{ user.title }}</span>{% endif %}
+        {% if user.email %}<span class="dot">·</span><span>{{ user.email }}</span>{% endif %}
+      </div>
+      <div class="muted small" style="margin-top:7px;">Member since {{ user.created_at.strftime('%B %-d, %Y') }}</div>
+    </div>
+    <a class="btn secondary" href="/">← Back to portal</a>
+  </div>
+</div>
+
+<div class="acct-grid">
+  <div class="card acct-card">
+    <h2><span class="acct-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span> Profile</h2>
+    <p class="csub">How you appear across the portal.</p>
+    <form method="post" action="/account/profile">
+      <div class="row" style="gap:12px;">
+        <div class="grow"><label>First name</label>
+          <input name="first_name" value="{{ user.first_name }}" maxlength="80" autocomplete="given-name"></div>
+        <div class="grow"><label>Last name</label>
+          <input name="last_name" value="{{ user.last_name }}" maxlength="80" autocomplete="family-name"></div>
+      </div>
+      <label>Email</label>
+      <input name="email" type="email" value="{{ user.email }}" maxlength="200" autocomplete="email" placeholder="you@example.com">
+      <label>Title / role</label>
+      <input name="title" value="{{ user.title }}" maxlength="120" placeholder="e.g. Security Engineer">
+      <div style="margin-top:16px;"><button type="submit">Save profile</button></div>
+    </form>
+  </div>
+
+  <div class="card acct-card">
+    <h2><span class="acct-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span> Password</h2>
+    <p class="csub">Change your sign-in password.</p>
+    <form method="post" action="/account/password">
+      <label>Current password</label>
+      <input type="password" name="current" autocomplete="current-password" required>
+      <label>New password</label>
+      <input type="password" name="new" autocomplete="new-password" required>
+      <label>Confirm new password</label>
+      <input type="password" name="confirm" autocomplete="new-password" required>
+      <p class="pw-hint">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+        At least 10 characters, with a mix of letters and numbers (symbols help too).
+      </p>
+      <div style="margin-top:16px;"><button type="submit">Change password</button></div>
+    </form>
+    <div class="secnote">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg>
+      Sign-in is brute-force throttled and your session expires when idle.
+    </div>
+  </div>
+</div>
+{% endblock %}

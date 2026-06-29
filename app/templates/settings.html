@@ -5,7 +5,8 @@
 {% block content %}
 <style>
   #settings-app { --ss-card:var(--surface); --ss-ctrl:var(--surface-2); }
-  #settings-app .ss-wrap { display:grid; grid-template-columns:230px 1fr; gap:26px; align-items:start; }
+  #settings-app .ss-wrap { display:grid; grid-template-columns:248px minmax(0,1fr); gap:30px; align-items:start; }
+  #settings-app .ss-main { min-width:0; }
   @media (max-width:760px) { #settings-app .ss-wrap { grid-template-columns:1fr; } }
   #settings-app .ss-side { position:sticky; top:14px; background:var(--ss-card); border:1px solid var(--line);
     border-radius:14px; padding:11px 9px; }
@@ -48,8 +49,12 @@
   #settings-app .tin.mono { font-family:ui-monospace,monospace; }
   #settings-app .tin.num { width:96px; }
   #settings-app .tin.ta { width:100%; box-sizing:border-box; resize:vertical; }
-  #settings-app select.tin, #settings-app .gc select { background:var(--ss-ctrl); border:1px solid var(--line);
-    color:var(--text); border-radius:8px; padding:7px 10px; font-size:13px; font-family:inherit; }
+  #settings-app select.tin, #settings-app .gc select { background-color:var(--ss-ctrl); border:1px solid var(--line);
+    color:var(--text); border-radius:8px; padding:7px 34px 7px 11px; font-size:13px; font-family:inherit; cursor:pointer;
+    appearance:none; -webkit-appearance:none;
+    background-image:linear-gradient(45deg,transparent 50%,var(--muted) 50%),linear-gradient(135deg,var(--muted) 50%,transparent 50%);
+    background-position:calc(100% - 17px) center, calc(100% - 12px) center; background-size:5px 5px,5px 5px; background-repeat:no-repeat; }
+  #settings-app select.tin:hover, #settings-app .gc select:hover { border-color:var(--line-strong); }
   #settings-app .ms-sw { display:inline-block; cursor:pointer; flex:none; }
   #settings-app .ms-sw input { position:absolute; opacity:0; width:0; height:0; }
   #settings-app .ms-sw span { display:block; width:40px; height:24px; border-radius:20px;
@@ -88,16 +93,22 @@
   #settings-app .matrix th { font-size:10.5px; text-transform:uppercase; letter-spacing:.4px; color:var(--faint); }
   #settings-app .matrix tr:last-child td { border-bottom:0; }
   #settings-app .matrix td:first-child { font-weight:600; white-space:nowrap; }
-  #settings-app .keylist { display:flex; flex-direction:column; gap:11px; }
-  #settings-app .keycard { background:var(--ss-card); border:1px solid var(--line); border-radius:13px; padding:15px 17px;
-    display:grid; grid-template-columns:1fr auto; gap:10px 18px; align-items:center; }
+  #settings-app .keylist { display:flex; flex-direction:column; gap:12px; }
+  #settings-app .keycard { background:var(--ss-card); border:1px solid var(--line); border-radius:14px; padding:16px 18px;
+    display:grid; grid-template-columns:minmax(0,1fr) auto; gap:6px 18px; align-items:start; }
   #settings-app .keycard.expired { opacity:.6; }
   #settings-app .keycard .kname { font-size:15px; font-weight:650; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
-  #settings-app .keycard .kmeta { display:flex; gap:16px; flex-wrap:wrap; margin-top:7px; font-size:12px; color:var(--muted); }
-  #settings-app .keycard .kmeta b { color:var(--text); font-weight:600; }
-  #settings-app .keycard .kmeta .mono { font-family:ui-monospace,monospace; }
-  #settings-app .keycard .kact { display:flex; flex-direction:column; gap:7px; align-items:flex-end; }
-  #settings-app .kexp { display:flex; gap:5px; align-items:center; flex-wrap:wrap; }
+  #settings-app .keycard .kmeta { display:flex; gap:7px 18px; flex-wrap:wrap; margin-top:9px; font-size:12px; color:var(--faint); }
+  #settings-app .keycard .kmeta b { color:var(--muted); font-weight:600; }
+  #settings-app .keycard .kmeta .exp b { color:var(--text); }
+  #settings-app .keycard .kmeta .mono { font-family:ui-monospace,monospace; color:var(--muted); }
+  #settings-app .keycard .kact { display:flex; gap:8px; align-items:center; }
+  #settings-app .kedit { display:none; grid-column:1 / -1; margin-top:13px; padding-top:13px; border-top:1px solid var(--line);
+    align-items:center; gap:9px; flex-wrap:wrap; }
+  #settings-app .kedit.open { display:flex; }
+  #settings-app .kedit .kedit-l { font-size:12px; color:var(--muted); }
+  #settings-app .kdanger { color:var(--danger,#ef6b6b); border-color:rgba(239,107,107,.35); }
+  #settings-app .kdanger:hover { background:rgba(239,107,107,.10); }
   #settings-app .kpill-rw { background:var(--accent-soft); color:var(--accent); }
   #settings-app .kpill-ro { background:rgba(125,135,148,.18); }
   #settings-app .keynew { background:var(--ss-card); border:1px solid var(--line); border-radius:14px; padding:17px 19px; margin-top:16px; }
@@ -174,30 +185,33 @@
           <div class="keylist">
             {% for k in api_keys %}
             <div class="keycard {{ 'expired' if k.status == 'expired' }}">
-              <div>
-                <div class="kname">{{ k.name }}
-                  <span class="pill">{{ k.scope }}</span>
-                  {% if k.can_write %}<span class="pill kpill-rw">read-write</span>{% else %}<span class="pill kpill-ro" title="Preview/read tools only">read-only</span>{% endif %}
-                  {% if k.status == 'expired' %}<span class="pill" style="color:var(--danger,#ef6b6b)">expired</span>
-                  {% elif k.status == 'soon' %}<span class="pill" style="color:var(--warn,#e0b252)">expires soon</span>
-                  {% elif k.status == 'unused' %}<span class="pill">unused 30d+</span>{% endif %}
-                </div>
-                <div class="kmeta">
-                  <span>key <b class="mono">…{{ k.hint }}</b></span>
-                  <span>last used <b>{{ k.last_used.strftime('%Y-%m-%d %H:%M') if k.last_used else 'never' }}</b></span>
-                  <span>expires <b>{{ k.expires.strftime('%Y-%m-%d') if k.expires else 'never' }}</b></span>
-                </div>
+              <div class="kname">{{ k.name }}
+                <span class="pill">{{ k.scope }}</span>
+                {% if k.can_write %}<span class="pill kpill-rw">read-write</span>{% else %}<span class="pill kpill-ro" title="Preview/read tools only">read-only</span>{% endif %}
+                {% if k.status == 'expired' %}<span class="pill" style="color:var(--danger,#ef6b6b)">expired</span>
+                {% elif k.status == 'soon' %}<span class="pill" style="color:var(--warn,#e0b252)">expires soon</span>
+                {% elif k.status == 'unused' %}<span class="pill">unused 30d+</span>{% endif %}
               </div>
               <div class="kact">
-                <form method="post" action="/settings/api-keys/{{ k.id }}/expiry" class="kexp">
-                  <input type="date" name="expires_date" class="tin" style="padding:5px 7px;font-size:11.5px;">
-                  <select name="expires" class="tin" style="padding:5px 7px;font-size:11.5px;"><option value="">change expiry…</option><option value="30">30 days</option><option value="90">90 days</option><option value="365">1 year</option><option value="never">never</option></select>
-                  <button class="ms-mini" type="submit" style="padding:5px 11px;">Set</button>
-                </form>
+                <button type="button" class="ms-mini kedit-toggle">Change expiry</button>
                 <form method="post" action="/settings/api-keys/{{ k.id }}/revoke" style="margin:0;">
-                  <button class="ms-mini" type="submit" style="color:var(--danger,#ef6b6b);border-color:var(--danger-line,#5a2a35);" data-confirm="Revoke “{{ k.name }}”? Clients using it will get 401 immediately." data-confirm-title="Revoke API key" data-confirm-ok="Revoke">Revoke key</button>
+                  <button class="ms-mini kdanger" type="submit" data-confirm="Revoke “{{ k.name }}”? Clients using it will get 401 immediately." data-confirm-title="Revoke API key" data-confirm-ok="Revoke">Revoke</button>
                 </form>
               </div>
+              <div class="kmeta">
+                <span>key <b class="mono">…{{ k.hint }}</b></span>
+                <span>created <b>{{ k.created.strftime('%Y-%m-%d') if k.created else '—' }}</b></span>
+                <span>last used <b>{{ k.last_used.strftime('%Y-%m-%d %H:%M') if k.last_used else 'never' }}</b></span>
+                <span class="exp">expires <b>{{ k.expires.strftime('%Y-%m-%d') if k.expires else 'never' }}</b></span>
+              </div>
+              <form method="post" action="/settings/api-keys/{{ k.id }}/expiry" class="kedit">
+                <span class="kedit-l">Set expiry to</span>
+                <select name="expires" class="tin"><option value="">choose…</option><option value="30">30 days from now</option><option value="90">90 days from now</option><option value="365">1 year from now</option><option value="never">never</option></select>
+                <span class="kedit-l">or a date</span>
+                <input type="date" name="expires_date" class="tin">
+                <button class="ms-mini" type="submit">Apply</button>
+                <button type="button" class="ms-mini kedit-cancel">Cancel</button>
+              </form>
             </div>
             {% endfor %}
           </div>
@@ -246,6 +260,21 @@
     el.addEventListener('click', function (e) { e.preventDefault(); show(el.dataset.t); });
   });
   show((location.hash || '').replace('#', '') || 'overview');
+
+  app.querySelectorAll('.kedit-toggle').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var ed = btn.closest('.keycard').querySelector('.kedit');
+      var open = ed.classList.toggle('open');
+      btn.textContent = open ? 'Close' : 'Change expiry';
+    });
+  });
+  app.querySelectorAll('.kedit-cancel').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var card = b.closest('.keycard');
+      card.querySelector('.kedit').classList.remove('open');
+      var t = card.querySelector('.kedit-toggle'); if (t) t.textContent = 'Change expiry';
+    });
+  });
 
   var filter = document.getElementById('ss-filter');
   if (filter) filter.addEventListener('input', function () {

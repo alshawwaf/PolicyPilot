@@ -24,10 +24,20 @@
       radial-gradient(1100px 460px at 78% -8%, rgba(123,63,242,.18), transparent 60%),
       radial-gradient(900px 420px at 8% 112%, rgba(255,61,154,.14), transparent 55%),
       linear-gradient(160deg,#eef1f8,#e7ebf4); }
-  .os-hello { position:absolute; top:40px; left:0; right:0; text-align:center; pointer-events:none; }
+  .os-hello { position:absolute; top:42px; left:0; right:0; text-align:center; pointer-events:none; }
   .os-hello h2 { font-size:30px; font-weight:700; margin:0; letter-spacing:-.4px;
     background:var(--accent-grad); -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; }
   .os-hello p { font-size:13.5px; color:var(--muted); margin:8px 0 0; }
+
+  /* ---- Desktop icons ---- */
+  .os-deskicon { position:absolute; width:88px; display:flex; flex-direction:column; align-items:center; gap:7px;
+    padding:8px 4px; border-radius:12px; cursor:pointer; user-select:none; text-align:center; }
+  .os-deskicon:hover, .os-deskicon.sel { background:rgba(255,255,255,.10); }
+  .os-deskicon .os-tile { width:54px; height:54px; border-radius:15px; display:flex; align-items:center; justify-content:center;
+    color:#fff; box-shadow:0 8px 20px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.25); }
+  .os-deskicon .os-tile svg { width:28px; height:28px; }
+  .os-deskicon .os-lbl { font-size:11.5px; color:#fff; text-shadow:0 1px 3px rgba(0,0,0,.6); line-height:1.2; }
+  html[data-theme="light"] .os-deskicon .os-lbl { color:#1a2236; text-shadow:none; }
 
   /* ---- Dock ---- */
   .os-dock { position:absolute; left:50%; transform:translateX(-50%); bottom:18px; display:flex; gap:13px;
@@ -35,6 +45,7 @@
     -webkit-backdrop-filter:blur(18px); border:1px solid rgba(255,255,255,.12);
     box-shadow:0 16px 50px rgba(0,0,0,.45); z-index:50; }
   html[data-theme="light"] .os-dock { background:rgba(255,255,255,.62); border-color:rgba(0,0,0,.06); box-shadow:0 16px 40px rgba(16,24,40,.18); }
+  .os-dock .os-sep { width:1px; align-self:stretch; margin:4px 1px; background:rgba(255,255,255,.16); }
   .os-dik { position:relative; width:50px; height:50px; border-radius:14px; display:flex; align-items:center;
     justify-content:center; color:#fff; cursor:pointer; transition:transform .15s ease; border:0; padding:0;
     box-shadow:0 6px 16px rgba(0,0,0,.30), inset 0 1px 0 rgba(255,255,255,.25); }
@@ -50,6 +61,25 @@
   .os-dik .os-badge { position:absolute; top:-4px; right:-4px; min-width:17px; height:17px; padding:0 4px; border-radius:9px;
     background:#0b0f1a; color:#fff; font-size:10px; font-weight:700; display:flex; align-items:center; justify-content:center;
     border:1.5px solid rgba(255,255,255,.5); }
+
+  /* ---- Launchpad ---- */
+  .os-launch { position:absolute; inset:0; z-index:60; display:none; align-items:flex-start; justify-content:center;
+    background:rgba(8,11,20,.6); backdrop-filter:blur(22px); -webkit-backdrop-filter:blur(22px); padding:54px 24px; }
+  .os-launch.open { display:flex; }
+  .os-launch-grid { display:grid; grid-template-columns:repeat(auto-fill,150px); gap:18px; align-content:start;
+    width:100%; max-width:840px; }
+  .os-ltile { display:flex; flex-direction:column; align-items:center; gap:9px; padding:14px 8px; border-radius:16px;
+    cursor:pointer; position:relative; }
+  .os-ltile:hover { background:rgba(255,255,255,.08); }
+  .os-ltile .os-tile { width:62px; height:62px; border-radius:17px; display:flex; align-items:center; justify-content:center;
+    color:#fff; box-shadow:0 10px 24px rgba(0,0,0,.4), inset 0 1px 0 rgba(255,255,255,.25); }
+  .os-ltile .os-tile svg { width:31px; height:31px; }
+  .os-ltile .os-lbl { font-size:12.5px; color:#fff; }
+  .os-ltile .os-toggles { display:flex; gap:6px; margin-top:2px; }
+  .os-ltile .os-tg { font-size:10.5px; padding:2px 9px; border-radius:20px; border:1px solid rgba(255,255,255,.22);
+    color:rgba(255,255,255,.75); background:transparent; cursor:pointer; }
+  .os-ltile .os-tg.on { background:var(--accent-grad); border-color:transparent; color:#fff; }
+  .os-launch-x { position:absolute; top:16px; right:20px; }
 
   /* ---- Windows ---- */
   .os-win { position:absolute; display:flex; flex-direction:column; background:var(--surface); border:1px solid var(--line-strong);
@@ -71,22 +101,40 @@
   .os-title .os-ic svg { width:15px; height:15px; }
   .os-body { flex:1; position:relative; background:var(--surface); }
   .os-body iframe { width:100%; height:100%; border:0; display:block; }
-  .os-rsz { position:absolute; right:0; bottom:0; width:18px; height:18px; cursor:nwse-resize; z-index:3; }
-  .os-rsz::after { content:""; position:absolute; right:3px; bottom:3px; width:8px; height:8px;
+  .os-rz { position:absolute; z-index:5; }
+  .os-rz.n { top:-3px; left:10px; right:10px; height:7px; cursor:ns-resize; }
+  .os-rz.s { bottom:-3px; left:10px; right:10px; height:7px; cursor:ns-resize; }
+  .os-rz.e { right:-3px; top:10px; bottom:10px; width:7px; cursor:ew-resize; }
+  .os-rz.w { left:-3px; top:10px; bottom:10px; width:7px; cursor:ew-resize; }
+  .os-rz.ne { top:-4px; right:-4px; width:16px; height:16px; cursor:nesw-resize; }
+  .os-rz.nw { top:-4px; left:-4px; width:16px; height:16px; cursor:nwse-resize; }
+  .os-rz.sw { bottom:-4px; left:-4px; width:16px; height:16px; cursor:nesw-resize; }
+  .os-rz.se { bottom:-4px; right:-4px; width:16px; height:16px; cursor:nwse-resize; }
+  .os-rz.se::after { content:""; position:absolute; right:4px; bottom:4px; width:8px; height:8px;
     border-right:2px solid var(--faint); border-bottom:2px solid var(--faint); border-radius:0 0 3px 0; }
 </style>
 
 <div class="os-desktop" id="os-desktop">
-  <div class="os-hello">
+  <div class="os-hello" id="os-hello">
     <h2>Welcome back{% if user %}, {{ user.username }}{% endif %}</h2>
-    <p>Click an app in the dock to open it as a window — drag, resize, stack as many as you like.</p>
+    <p>Open apps from the dock — drag, resize from any edge, stack as many as you like. The launchpad (▦) lets you add icons to the dock or desktop.</p>
   </div>
+  <div class="os-launch" id="os-launch"><div class="os-launch-grid" id="os-launch-grid"></div>
+    <button type="button" class="btn secondary os-launch-x" id="os-launch-x">Done</button></div>
   <div class="os-dock" id="os-dock"></div>
 </div>
 
+<script>window.PP_LAYOUT = {{ layout | tojson }};</script>
 <script>
 (function () {
-  var desktop = document.getElementById('os-desktop'), dock = document.getElementById('os-dock');
+  var desktop = document.getElementById('os-desktop'), dock = document.getElementById('os-dock'),
+      hello = document.getElementById('os-hello'), launch = document.getElementById('os-launch'),
+      lgrid = document.getElementById('os-launch-grid');
+  var LAYOUT = window.PP_LAYOUT && typeof window.PP_LAYOUT === 'object'
+    ? window.PP_LAYOUT : { dock: ['access', 'layers', 'management', 'gateways', 'agents', 'settings', 'activity'], desktop: [] };
+  if (!Array.isArray(LAYOUT.dock)) LAYOUT.dock = [];
+  if (!Array.isArray(LAYOUT.desktop)) LAYOUT.desktop = [];
+
   var I = {
     access: '<path d="M16 3h5v5"/><path d="M21 3l-7 7"/><path d="M8 3H3v5"/><path d="M3 3l7 7"/><path d="M3 16v5h5"/><path d="M3 21l7-7"/><path d="M16 21h5v-5"/><path d="M21 21l-7-7"/>',
     layers: '<polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/>',
@@ -94,33 +142,49 @@
     gateway: '<rect x="2" y="13" width="20" height="8" rx="2"/><path d="M6 17h.01M10 17h8"/><path d="M12 13V7a4 4 0 0 1 4-4"/>',
     robot: '<rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="12" cy="5" r="2"/><path d="M12 7v4M8 16h.01M16 16h.01"/>',
     sliders: '<path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/>',
-    clock: '<circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/>'
+    clock: '<circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/>',
+    code: '<polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>',
+    user: '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
+    grid: '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>'
   };
   function svg(p) { return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">' + p + '</svg>'; }
   var COUNTS = { layers: {{ counts.layers|default(0) }}, management: {{ counts.management|default(0) }}, gateways: {{ counts.gateways|default(0) }} };
-  var APPS = [
-    { key: 'access', label: 'Access automation', href: '/access-automation', ic: I.access, grad: 'linear-gradient(135deg,#3b82f6,#22d3ee)' },
-    { key: 'layers', label: 'Dynamic Layers', href: '/layers', ic: I.layers, grad: 'linear-gradient(135deg,#1d9e75,#34d399)', badge: COUNTS.layers },
-    { key: 'management', label: 'Connections', href: '/management', ic: I.server, grad: 'linear-gradient(135deg,#5566dd,#7b3ff2)', badge: COUNTS.management },
-    { key: 'gateways', label: 'Gateways', href: '/gateways', ic: I.gateway, grad: 'linear-gradient(135deg,#06b6d4,#3b82f6)', badge: COUNTS.gateways },
-    { key: 'agents', label: 'Agents & API', href: '/mcp-guide', ic: I.robot, grad: 'linear-gradient(135deg,#f59e0b,#f43f5e)' },
-    { key: 'settings', label: 'Settings', href: '/settings', ic: I.sliders, grad: 'linear-gradient(135deg,#a855f7,#7b3ff2)' },
-    { key: 'activity', label: 'Activity', href: '/activity', ic: I.clock, grad: 'linear-gradient(135deg,#ec4899,#f43f5e)' }
-  ];
+  var CATALOG = {
+    access:      { label: 'Access automation', href: '/access-automation', ic: I.access,  grad: 'linear-gradient(135deg,#3b82f6,#22d3ee)' },
+    layers:      { label: 'Dynamic Layers',     href: '/layers',            ic: I.layers,  grad: 'linear-gradient(135deg,#1d9e75,#34d399)', badge: COUNTS.layers },
+    management:  { label: 'Connections',        href: '/management',        ic: I.server,  grad: 'linear-gradient(135deg,#5566dd,#7b3ff2)', badge: COUNTS.management },
+    gateways:    { label: 'Gateways',           href: '/gateways',          ic: I.gateway, grad: 'linear-gradient(135deg,#06b6d4,#3b82f6)', badge: COUNTS.gateways },
+    agents:      { label: 'Agents & API',       href: '/mcp-guide',         ic: I.robot,   grad: 'linear-gradient(135deg,#f59e0b,#f43f5e)' },
+    apiexplorer: { label: 'API explorer',       href: '/api-explorer',      ic: I.code,    grad: 'linear-gradient(135deg,#22d3ee,#3b82f6)' },
+    settings:    { label: 'Settings',           href: '/settings',          ic: I.sliders, grad: 'linear-gradient(135deg,#a855f7,#7b3ff2)' },
+    activity:    { label: 'Activity',           href: '/activity',          ic: I.clock,   grad: 'linear-gradient(135deg,#ec4899,#f43f5e)' },
+    account:     { label: 'Account',            href: '/account',           ic: I.user,    grad: 'linear-gradient(135deg,#94a3b8,#64748b)' }
+  };
+  var ORDER = ['access', 'layers', 'management', 'gateways', 'agents', 'apiexplorer', 'settings', 'activity', 'account'];
   var wins = {}, z = 100, openCount = 0;
 
-  function appByKey(k) { for (var i = 0; i < APPS.length; i++) if (APPS[i].key === k) return APPS[i]; }
   function clamp(v, lo, hi) { return Math.max(lo, Math.min(v, hi)); }
+  function appByHref(path) { for (var i = 0; i < ORDER.length; i++) { var a = CATALOG[ORDER[i]]; if (a.href === path || path.indexOf(a.href + '/') === 0) return ORDER[i]; } return null; }
+
+  var saveT = null;
+  function saveLayout() {
+    clearTimeout(saveT);
+    saveT = setTimeout(function () {
+      try { fetch('/desktop/layout', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(LAYOUT) }); } catch (e) {}
+    }, 450);
+  }
+
+  /* ---- window manager ---- */
   function focusWin(w) { w.style.zIndex = (++z); Object.keys(wins).forEach(function (k) { wins[k].classList.remove('active'); }); w.classList.add('active'); }
   function setRunning(key, on) { var d = dock.querySelector('.os-dik[data-key="' + key + '"]'); if (d) d.classList.toggle('running', on); }
+  function showDesktop() { Object.keys(wins).forEach(function (k) { wins[k].style.display = 'none'; }); }
 
   function makeDraggable(w, handle) {
     handle.addEventListener('mousedown', function (e) {
       if (e.target.closest('.os-lt')) return;
       focusWin(w);
-      var dr = desktop.getBoundingClientRect(), r = w.getBoundingClientRect();
-      var ox = e.clientX - r.left, oy = e.clientY - r.top;
-      var ov = w.querySelector('.os-body'); if (ov) ov.style.pointerEvents = 'none';   // don't lose drag over the iframe
+      var dr = desktop.getBoundingClientRect(), r = w.getBoundingClientRect(), ox = e.clientX - r.left, oy = e.clientY - r.top;
+      var ov = w.querySelector('.os-body'); if (ov) ov.style.pointerEvents = 'none';
       function mv(ev) {
         w.style.left = clamp(ev.clientX - dr.left - ox, 0, desktop.clientWidth - w.offsetWidth) + 'px';
         w.style.top = clamp(ev.clientY - dr.top - oy, 0, desktop.clientHeight - 40) + 'px';
@@ -129,46 +193,48 @@
       document.addEventListener('mousemove', mv); document.addEventListener('mouseup', up); e.preventDefault();
     });
   }
-  function makeResizable(w, handle) {
-    handle.addEventListener('mousedown', function (e) {
-      focusWin(w);
-      var r = w.getBoundingClientRect(), sx = e.clientX, sy = e.clientY, sw = r.width, sh = r.height;
-      var ov = w.querySelector('.os-body'); if (ov) ov.style.pointerEvents = 'none';
-      function mv(ev) {
-        w.style.width = clamp(sw + (ev.clientX - sx), 360, desktop.clientWidth - w.offsetLeft) + 'px';
-        w.style.height = clamp(sh + (ev.clientY - sy), 240, desktop.clientHeight - w.offsetTop) + 'px';
-      }
-      function up() { document.removeEventListener('mousemove', mv); document.removeEventListener('mouseup', up); if (ov) ov.style.pointerEvents = ''; }
-      document.addEventListener('mousemove', mv); document.addEventListener('mouseup', up); e.preventDefault();
+  function attachResize(w) {
+    w.querySelectorAll('.os-rz').forEach(function (h) {
+      h.addEventListener('mousedown', function (e) {
+        e.stopPropagation(); focusWin(w);
+        var dir = h.dataset.rz, dr = desktop.getBoundingClientRect(), r = w.getBoundingClientRect();
+        var sx = e.clientX, sy = e.clientY, x0 = r.left - dr.left, y0 = r.top - dr.top, w0 = r.width, h0 = r.height;
+        var ov = w.querySelector('.os-body'); if (ov) ov.style.pointerEvents = 'none';
+        function mv(ev) {
+          var dx = ev.clientX - sx, dy = ev.clientY - sy, nx = x0, ny = y0, nw = w0, nh = h0;
+          if (dir.indexOf('e') >= 0) nw = Math.max(360, w0 + dx);
+          if (dir.indexOf('s') >= 0) nh = Math.max(240, h0 + dy);
+          if (dir.indexOf('w') >= 0) { nw = clamp(w0 - dx, 360, x0 + w0); nx = x0 + w0 - nw; }
+          if (dir.indexOf('n') >= 0) { nh = clamp(h0 - dy, 240, y0 + h0); ny = y0 + h0 - nh; }
+          nw = Math.min(nw, desktop.clientWidth - nx); nh = Math.min(nh, desktop.clientHeight - ny);
+          w.style.left = nx + 'px'; w.style.top = ny + 'px'; w.style.width = nw + 'px'; w.style.height = nh + 'px';
+        }
+        function up() { document.removeEventListener('mousemove', mv); document.removeEventListener('mouseup', up); if (ov) ov.style.pointerEvents = ''; }
+        document.addEventListener('mousemove', mv); document.addEventListener('mouseup', up); e.preventDefault();
+      });
     });
   }
-
   function openApp(key) {
-    var app = appByKey(key); if (!app) return;
-    if (wins[key]) { var ex = wins[key]; ex.style.display = 'flex'; focusWin(ex); return; }
-    var hello = desktop.querySelector('.os-hello'); if (hello) hello.style.display = 'none';
+    var app = CATALOG[key]; if (!app) return;
+    if (wins[key]) { wins[key].style.display = 'flex'; focusWin(wins[key]); return; }
+    if (hello) hello.style.display = 'none';
     var w = document.createElement('div'); w.className = 'os-win'; w.dataset.key = key;
-    var ww = Math.min(960, Math.round(desktop.clientWidth * 0.74));
-    var wh = Math.min(640, Math.round(desktop.clientHeight * 0.82));
-    var off = (openCount % 6) * 30;
+    var ww = Math.min(960, Math.round(desktop.clientWidth * 0.74)), wh = Math.min(640, Math.round(desktop.clientHeight * 0.82));
+    var off = (openCount % 6) * 30; openCount++;
     w.style.width = ww + 'px'; w.style.height = wh + 'px';
     w.style.left = clamp(Math.round((desktop.clientWidth - ww) / 2) - 90 + off, 8, desktop.clientWidth - ww - 8) + 'px';
     w.style.top = clamp(34 + off, 8, desktop.clientHeight - 80) + 'px';
-    openCount++;
     w.innerHTML =
-      '<div class="os-tbar">' +
-        '<span class="os-lights">' +
-          '<button class="os-lt r" title="Close" data-act="close"><span>✕</span></button>' +
-          '<button class="os-lt y" title="Minimize" data-act="min"><span>−</span></button>' +
-          '<button class="os-lt g" title="Zoom" data-act="zoom"><span>↗</span></button>' +
-        '</span>' +
-        '<span class="os-title"><span class="os-ic" style="color:#fff;background:' + app.grad + ';border-radius:5px;padding:2px;">' + svg(app.ic) + '</span>' + app.label + '</span>' +
-      '</div>' +
+      '<div class="os-tbar"><span class="os-lights">' +
+        '<button class="os-lt r" title="Close" data-act="close"><span>✕</span></button>' +
+        '<button class="os-lt y" title="Minimize" data-act="min"><span>−</span></button>' +
+        '<button class="os-lt g" title="Zoom" data-act="zoom"><span>↗</span></button>' +
+      '</span><span class="os-title"><span class="os-ic" style="color:#fff;background:' + app.grad + ';border-radius:5px;padding:2px;">' + svg(app.ic) + '</span>' + app.label + '</span></div>' +
       '<div class="os-body"><iframe src="' + app.href + '" title="' + app.label + '" loading="lazy"></iframe></div>' +
-      '<div class="os-rsz"></div>';
+      '<div class="os-rz n" data-rz="n"></div><div class="os-rz s" data-rz="s"></div><div class="os-rz e" data-rz="e"></div><div class="os-rz w" data-rz="w"></div>' +
+      '<div class="os-rz ne" data-rz="ne"></div><div class="os-rz nw" data-rz="nw"></div><div class="os-rz sw" data-rz="sw"></div><div class="os-rz se" data-rz="se"></div>';
     desktop.appendChild(w); wins[key] = w; setRunning(key, true); focusWin(w);
-    makeDraggable(w, w.querySelector('.os-tbar'));
-    makeResizable(w, w.querySelector('.os-rsz'));
+    makeDraggable(w, w.querySelector('.os-tbar')); attachResize(w);
     w.addEventListener('mousedown', function () { focusWin(w); });
     w.querySelector('[data-act="close"]').addEventListener('click', function (e) { e.stopPropagation(); w.remove(); delete wins[key]; setRunning(key, false); });
     w.querySelector('[data-act="min"]').addEventListener('click', function (e) { e.stopPropagation(); w.style.display = 'none'; });
@@ -180,16 +246,103 @@
     });
   }
 
-  APPS.forEach(function (app) {
-    var d = document.createElement('button'); d.type = 'button'; d.className = 'os-dik'; d.dataset.key = app.key;
-    d.style.background = app.grad;
-    d.innerHTML = svg(app.ic) + '<span class="os-tip">' + app.label + '</span><span class="os-run"></span>' +
-      (app.badge ? '<span class="os-badge">' + app.badge + '</span>' : '');
-    d.addEventListener('click', function () { openApp(app.key); });
-    dock.appendChild(d);
+  /* ---- dock ---- */
+  function renderDock() {
+    dock.innerHTML = '';
+    var lp = document.createElement('button'); lp.type = 'button'; lp.className = 'os-dik'; lp.dataset.lp = '1';
+    lp.style.background = 'linear-gradient(135deg,#475569,#1f2937)';
+    lp.innerHTML = svg(I.grid) + '<span class="os-tip">Launchpad</span>';
+    lp.addEventListener('click', openLaunchpad); dock.appendChild(lp);
+    if (LAYOUT.dock.length) { var sep = document.createElement('div'); sep.className = 'os-sep'; dock.appendChild(sep); }
+    LAYOUT.dock.forEach(function (key) {
+      var app = CATALOG[key]; if (!app) return;
+      var d = document.createElement('button'); d.type = 'button'; d.className = 'os-dik'; d.dataset.key = key;
+      d.style.background = app.grad;
+      d.innerHTML = svg(app.ic) + '<span class="os-tip">' + app.label + '</span><span class="os-run"></span>' +
+        (app.badge ? '<span class="os-badge">' + app.badge + '</span>' : '');
+      if (wins[key] && wins[key].style.display !== 'none') d.classList.add('running');
+      d.addEventListener('click', function () { openApp(key); });
+      dock.appendChild(d);
+    });
+  }
+
+  /* ---- desktop icons ---- */
+  function nextSlot(n) { var col = Math.floor(n / 6), row = n % 6; return { x: 24 + col * 104, y: 18 + row * 92 }; }
+  function renderDesktopIcons() {
+    desktop.querySelectorAll('.os-deskicon').forEach(function (n) { n.remove(); });
+    LAYOUT.desktop.forEach(function (it) {
+      var app = CATALOG[it.key]; if (!app) return;
+      var el = document.createElement('div'); el.className = 'os-deskicon'; el.dataset.key = it.key;
+      el.style.left = (it.x || 0) + 'px'; el.style.top = (it.y || 0) + 'px';
+      el.innerHTML = '<span class="os-tile" style="background:' + app.grad + '">' + svg(app.ic) + '</span><span class="os-lbl">' + app.label + '</span>';
+      var moved = false, sx, sy;
+      el.addEventListener('mousedown', function (e) {
+        moved = false; sx = e.clientX; sy = e.clientY;
+        var dr = desktop.getBoundingClientRect(), r = el.getBoundingClientRect(), ox = e.clientX - r.left, oy = e.clientY - r.top;
+        function mv(ev) {
+          if (Math.abs(ev.clientX - sx) + Math.abs(ev.clientY - sy) > 4) moved = true;
+          el.style.left = clamp(ev.clientX - dr.left - ox, 0, desktop.clientWidth - el.offsetWidth) + 'px';
+          el.style.top = clamp(ev.clientY - dr.top - oy, 0, desktop.clientHeight - el.offsetHeight) + 'px';
+        }
+        function up() {
+          document.removeEventListener('mousemove', mv); document.removeEventListener('mouseup', up);
+          if (moved) { it.x = parseInt(el.style.left, 10); it.y = parseInt(el.style.top, 10); saveLayout(); }
+          else openApp(it.key);
+        }
+        document.addEventListener('mousemove', mv); document.addEventListener('mouseup', up); e.preventDefault();
+      });
+      desktop.appendChild(el);
+    });
+  }
+
+  /* ---- layout mutators ---- */
+  function inDock(k) { return LAYOUT.dock.indexOf(k) >= 0; }
+  function onDesktop(k) { return LAYOUT.desktop.some(function (i) { return i.key === k; }); }
+  function toggleDock(k) { var i = LAYOUT.dock.indexOf(k); if (i >= 0) LAYOUT.dock.splice(i, 1); else LAYOUT.dock.push(k); renderDock(); saveLayout(); }
+  function toggleDesktop(k) {
+    var i = -1; LAYOUT.desktop.forEach(function (it, n) { if (it.key === k) i = n; });
+    if (i >= 0) LAYOUT.desktop.splice(i, 1);
+    else { var s = nextSlot(LAYOUT.desktop.length); LAYOUT.desktop.push({ key: k, x: s.x, y: s.y }); }
+    renderDesktopIcons(); saveLayout();
+  }
+
+  /* ---- launchpad ---- */
+  function renderLaunch() {
+    lgrid.innerHTML = '';
+    ORDER.forEach(function (key) {
+      var app = CATALOG[key];
+      var t = document.createElement('div'); t.className = 'os-ltile';
+      t.innerHTML = '<span class="os-tile" style="background:' + app.grad + '">' + svg(app.ic) + '</span><span class="os-lbl">' + app.label + '</span>' +
+        '<span class="os-toggles"><button type="button" class="os-tg ' + (inDock(key) ? 'on' : '') + '" data-tg="dock">Dock</button>' +
+        '<button type="button" class="os-tg ' + (onDesktop(key) ? 'on' : '') + '" data-tg="desktop">Desktop</button></span>';
+      t.addEventListener('click', function (e) {
+        var tg = e.target.closest('.os-tg');
+        if (tg) { e.stopPropagation(); if (tg.dataset.tg === 'dock') toggleDock(key); else toggleDesktop(key); tg.classList.toggle('on'); return; }
+        closeLaunchpad(); openApp(key);
+      });
+      lgrid.appendChild(t);
+    });
+  }
+  function openLaunchpad() { renderLaunch(); launch.classList.add('open'); }
+  function closeLaunchpad() { launch.classList.remove('open'); }
+  document.getElementById('os-launch-x').addEventListener('click', closeLaunchpad);
+  launch.addEventListener('click', function (e) { if (e.target === launch) closeLaunchpad(); });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeLaunchpad(); });
+
+  /* ---- never leave the OS: contain top-level internal links into windows ---- */
+  document.addEventListener('click', function (e) {
+    var a = e.target.closest && e.target.closest('a[href]'); if (!a) return;
+    if (a.target === '_blank' || a.hasAttribute('download') || a.getAttribute('href').indexOf('#') === 0) return;
+    var url; try { url = new URL(a.href, window.location.origin); } catch (x) { return; }
+    if (url.origin !== window.location.origin) return;       // external link — leave it
+    var path = url.pathname;
+    if (path === '/' || path === '') { e.preventDefault(); showDesktop(); return; }
+    if (path === '/logout' || path === '/login') return;      // auth flow legitimately leaves the OS
+    var key = appByHref(path);
+    if (key) { e.preventDefault(); openApp(key); }            // a known tool → open it as a window
   });
 
-  openApp('access');   // open the core tool on load so the desktop feels alive
+  renderDock(); renderDesktopIcons();
 })();
 </script>
 {% endblock %}

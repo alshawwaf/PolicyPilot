@@ -19,6 +19,15 @@ Post-1.0.0 hardening of the agent surface, ahead of broader live validation.
 - Security: framing is now **same-origin** (`X-Frame-Options: SAMEORIGIN`, CSP `frame-ancestors 'self'`)
   so the portal can frame its own pages, while no foreign origin can frame it — the clickjacking
   protection is preserved (`'self'`, not `DENY`).
+- **Windows resize from any edge or corner** (8 handles), not just the bottom-right; plus drag, minimize,
+  zoom (maximize), and close.
+- **You never leave the OS.** Top-level internal links are contained — the menubar Account icon (and any
+  in-app link to a known tool) now opens as a *window* instead of navigating away to a bare page; the
+  brand mark "shows desktop". Only sign-out/login legitimately leave.
+- **Customizable, persisted layout** (per user): a **Launchpad** (▦ in the dock) lists every app with
+  *Dock* / *Desktop* toggles; desktop icons are **draggable** and remember their position. Saved to a new
+  `UserDesktopPref` (JSON, validated against an app-key allowlist) via `POST /desktop/layout` and restored
+  server-side on next load — so each user arranges their own dock + desktop, macOS-style.
 
 ### Application typo tolerance + Autonomous auto-correct
 - The application resolver now does a **typo-tolerant prefix fallback**: the SMS `filter` is substring-based,

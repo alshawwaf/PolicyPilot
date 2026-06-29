@@ -283,6 +283,17 @@ class UserTablePref(Base):
     prefs: Mapped[dict] = mapped_column(JSON, default=dict)
 
 
+class UserDesktopPref(Base):
+    """Per-user desktop layout for the OS-style Home: which apps sit on the dock and which icons sit on
+    the desktop (with x/y), so a user's arrangement sticks across sessions/devices. One row per user."""
+
+    __tablename__ = "user_desktop_prefs"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    owner_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True, unique=True)
+    layout: Mapped[dict] = mapped_column(JSON, default=dict)
+
+
 class ManagementServer(Base):
     """A saved Check Point Management Server (or MDS domain/CMA) connection the portal drives over the
     `web_api`: pull layers/objects, view/edit them, export to IaC. Login password / API key is stored

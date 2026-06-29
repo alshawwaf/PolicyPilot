@@ -9,7 +9,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from ..db import get_db
-from ..models import DynamicLayer, Gateway, ManagementServer, User
+from ..models import DynamicLayer, Gateway, ManagementServer, User, UserDesktopPref
 from ..security import get_user_or_none, hash_password, password_strength_error, verify_password
 from ..services import coverage, login_guard
 
@@ -298,6 +298,44 @@ def update_profile(
 
 
 # --- Home ------------------------------------------------------------------------------
+# --- Desktop layout (OS-style Home): which apps are on the dock + which icons sit on the desktop ------
+# Server-side allowlist of app keys (anything else in a saved layout is dropped — no junk/injection).
+DESKTOP_APP_KEYS = {"access", "layers", "management", "gateways", "agents", "apiexplorer",
+                    "settings", "activity", "account"}
+DEFAULT_DESKTOP_LAYOUT = {"dock": ["access", "layers", "management", "gateways", "agents", "settings", "activity"],
+                          "desktop": []}
+
+
+def _sanitize_layout(raw) -> dict:
+    """Validate a layout dict against the app-key allowlist; clamp counts + icon positions. Falls back to
+    the default dock when empty so a user is never stranded with no apps."""
+    if not isinstance(raw, dict):
+        return {k: list(v) for k, v in DEFAULT_DESKTOP_LAYOUT.items()}
+    seen = set()
+    dock = []
+    for k in (raw.get("dock") or [])[:24]:
+        if k in DESKTOP_APP_KEYS and k not in seen:
+            seen.add(k); dock.append(k)
+    desk = []
+    for it in (raw.get("desktop") or [])[:48]:
+        if not isinstance(it, dict):
+            continue
+        k = it.get("key")
+        if k in DESKTOP_APP_KEYS:
+            try:
+                x = max(0, min(int(it.get("x", 0)), 6000)); y = max(0, min(int(it.get("y", 0)), 6000))
+            except (TypeError, ValueError):
+                x, y = 0, 0
+            desk.append({"key": k, "x": x, "y": y})
+    return {"dock": dock or list(DEFAULT_DESKTOP_LAYOUT["dock"]), "desktop": desk}
+
+
+def _load_desktop_layout(db: Session, user: User) -> dict:
+    row = db.scalar(select(UserDesktopPref).where(UserDesktopPref.owner_id == user.id))
+    return _sanitize_layout(row.layout) if (row and isinstance(row.layout, dict) and row.layout) else \
+        {k: list(v) for k, v in DEFAULT_DESKTOP_LAYOUT.items()}
+
+
 @router.get("/", response_class=HTMLResponse)
 def home(request: Request, db: Session = Depends(get_db)):
     user = get_user_or_none(request, db)
@@ -311,4 +349,26 @@ def home(request: Request, db: Session = Depends(get_db)):
     counts = {"gateways": _count(Gateway), "management": _count(ManagementServer),
               "layers": _count(DynamicLayer)}
     return templates.TemplateResponse(request, "home.html",
-                                      {"user": user, "counts": counts, "flash": _pop_flash(request)})
+                                      {"user": user, "counts": counts, "layout": _load_desktop_layout(db, user),
+                                       "flash": _pop_flash(request)})
+
+
+@router.post("/desktop/layout")
+async def save_desktop_layout(request: Request, db: Session = Depends(get_db)):
+    """Persist the user's desktop arrangement (dock apps + desktop icon positions). Same-origin JSON from
+    the desktop shell; validated against the app-key allowlist before storing."""
+    user = get_user_or_none(request, db)
+    if user is None:
+        return Response(status_code=401)
+    try:
+        body = await request.json()
+    except Exception:  # noqa: BLE001 — malformed body
+        return Response(status_code=400)
+    layout = _sanitize_layout(body)
+    row = db.scalar(select(UserDesktopPref).where(UserDesktopPref.owner_id == user.id))
+    if row:
+        row.layout = layout
+    else:
+        db.add(UserDesktopPref(owner_id=user.id, layout=layout))
+    db.commit()
+    return Response(status_code=204)

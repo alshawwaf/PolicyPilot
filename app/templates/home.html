@@ -1,229 +1,195 @@
 {% extends "base.html" %}
-{% block title %}Home{% endblock %}
+{% block title %}PolicyPilot{% endblock %}
+{% block body_class %}desktop-mode{% endblock %}
+{% block main_class %}desktop{% endblock %}
 {% block content %}
 <style>
-  /* ---- Hero ---- */
-  .hero { position:relative; overflow:hidden; border:1px solid var(--line); border-radius:18px;
-    padding:30px 32px; margin-bottom:26px; box-shadow:var(--shadow-sm);
-    background:radial-gradient(120% 140% at 0% 0%, var(--accent-soft) 0%, transparent 55%), var(--surface); }
-  .hero-blob { position:absolute; right:-50px; top:-60px; width:230px; height:230px; border-radius:48px;
-    background:linear-gradient(135deg, var(--accent), #7c3aed); opacity:.15; transform:rotate(18deg);
-    filter:blur(2px); pointer-events:none; }
-  .hero-grid { position:relative; display:grid; grid-template-columns:1.12fr .88fr; gap:32px; align-items:center; }
-  @media (max-width:860px) { .hero-grid { grid-template-columns:1fr; gap:24px; } }
-  .hero-badge { display:inline-flex; align-items:center; gap:7px; font-size:10.5px; font-weight:800;
-    letter-spacing:.5px; text-transform:uppercase; color:var(--accent); background:var(--accent-soft);
-    border:1px solid var(--line); padding:5px 11px; border-radius:var(--r-pill); margin-bottom:14px; }
-  .hero-badge::before { content:""; width:7px; height:7px; border-radius:50%; background:var(--accent);
-    box-shadow:0 0 0 4px var(--accent-soft); }
-  .kicker { font-size:13px; color:var(--faint); font-weight:600; margin-bottom:4px; }
-  .hero h1 { margin:0 0 10px; font-size:32px; line-height:1.12; letter-spacing:-.6px; }
-  .hero h1 .grad { background:var(--accent-grad); -webkit-background-clip:text; background-clip:text;
-    -webkit-text-fill-color:transparent; color:transparent; }
-  .hero .sub { color:var(--muted); font-size:14px; line-height:1.6; max-width:540px; }
-  .hero-actions { margin-top:20px; display:flex; gap:10px; flex-wrap:wrap; }
-  .hero-stats { display:flex; gap:28px; margin-top:24px; flex-wrap:wrap; }
-  .hstat .n { font-size:25px; font-weight:800; line-height:1;
-    background:var(--accent-grad); -webkit-background-clip:text; background-clip:text;
-    -webkit-text-fill-color:transparent; color:transparent; }
-  .hstat .l { display:block; margin-top:5px; font-size:11px; font-weight:700; letter-spacing:.4px;
-    text-transform:uppercase; color:var(--faint); }
+  /* ---- PolicyPilot desktop: the top header becomes a slim macOS menubar (its JS hooks are preserved;
+         only the page-nav links are hidden — the dock is the navigation). ---- */
+  body.desktop-mode { overflow:hidden; }
+  body.desktop-mode header { height:48px; min-height:48px; padding:0 16px; background:rgba(12,17,32,.62);
+    backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px); border-bottom:1px solid rgba(255,255,255,.07); }
+  html[data-theme="light"] body.desktop-mode header { background:rgba(255,255,255,.7); border-bottom:1px solid var(--line); }
+  body.desktop-mode .nav-main, body.desktop-mode .nav-toggle, body.desktop-mode .navsep { display:none !important; }
+  body.desktop-mode .nav-side { margin-left:auto; }
 
-  /* ---- Hero demo card (the one-sentence → rule story) ---- */
-  .demo { background:var(--surface); border:1px solid var(--line); border-radius:var(--r-lg);
-    box-shadow:var(--shadow-lg); overflow:hidden; }
-  .demo-bar { display:flex; align-items:center; gap:6px; padding:9px 13px; background:var(--surface-2);
-    border-bottom:1px solid var(--line-soft); }
-  .demo-bar .dot { width:9px; height:9px; border-radius:50%; background:var(--line-strong); opacity:.7; }
-  .demo-bar .demo-title { margin-left:9px; font-size:10.5px; font-weight:800; letter-spacing:.5px;
-    text-transform:uppercase; color:var(--faint); }
-  .demo-body { padding:15px; display:flex; flex-direction:column; gap:11px; }
-  .msg { display:flex; }
-  .msg.you { justify-content:flex-end; }
-  .msg .bubble { max-width:90%; font-size:13px; line-height:1.55; padding:10px 13px; border-radius:14px; }
-  .msg.you .bubble { background:var(--chip-bg); color:var(--chip-fg); border-bottom-right-radius:5px; }
-  .msg.bot .bubble { background:var(--accent-soft); color:var(--text); border:1px solid var(--line);
-    border-bottom-left-radius:5px; }
-  .ok-tick { color:var(--ok); font-weight:800; }
-  .msg.bot .meta { margin-top:8px; font-size:11px; color:var(--faint); }
+  main.desktop { max-width:none; margin:0; padding:0; height:calc(100vh - 48px); }
+  .os-desktop { position:relative; width:100%; height:100%; overflow:hidden;
+    background:
+      radial-gradient(1100px 460px at 78% -8%, rgba(123,63,242,.34), transparent 60%),
+      radial-gradient(900px 420px at 8% 112%, rgba(255,61,154,.26), transparent 55%),
+      radial-gradient(700px 500px at 100% 100%, rgba(34,211,238,.10), transparent 60%),
+      linear-gradient(160deg,#0c1120,#0a0e18); }
+  html[data-theme="light"] .os-desktop { background:
+      radial-gradient(1100px 460px at 78% -8%, rgba(123,63,242,.18), transparent 60%),
+      radial-gradient(900px 420px at 8% 112%, rgba(255,61,154,.14), transparent 55%),
+      linear-gradient(160deg,#eef1f8,#e7ebf4); }
+  .os-hello { position:absolute; top:40px; left:0; right:0; text-align:center; pointer-events:none; }
+  .os-hello h2 { font-size:30px; font-weight:700; margin:0; letter-spacing:-.4px;
+    background:var(--accent-grad); -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; }
+  .os-hello p { font-size:13.5px; color:var(--muted); margin:8px 0 0; }
 
-  /* ---- Section heading ---- */
-  .home-section { font-size:11px; font-weight:800; letter-spacing:.6px; text-transform:uppercase;
-    color:var(--faint); margin:30px 2px 13px; }
-  .home-section:first-of-type { margin-top:4px; }
+  /* ---- Dock ---- */
+  .os-dock { position:absolute; left:50%; transform:translateX(-50%); bottom:18px; display:flex; gap:13px;
+    padding:11px 15px; border-radius:20px; background:rgba(22,28,48,.5); backdrop-filter:blur(18px);
+    -webkit-backdrop-filter:blur(18px); border:1px solid rgba(255,255,255,.12);
+    box-shadow:0 16px 50px rgba(0,0,0,.45); z-index:50; }
+  html[data-theme="light"] .os-dock { background:rgba(255,255,255,.62); border-color:rgba(0,0,0,.06); box-shadow:0 16px 40px rgba(16,24,40,.18); }
+  .os-dik { position:relative; width:50px; height:50px; border-radius:14px; display:flex; align-items:center;
+    justify-content:center; color:#fff; cursor:pointer; transition:transform .15s ease; border:0; padding:0;
+    box-shadow:0 6px 16px rgba(0,0,0,.30), inset 0 1px 0 rgba(255,255,255,.25); }
+  .os-dik:hover { transform:translateY(-10px) scale(1.07); }
+  .os-dik svg { width:25px; height:25px; }
+  .os-dik .os-tip { position:absolute; top:-30px; left:50%; transform:translateX(-50%); background:#0b0f1a; color:#fff;
+    font-size:11px; padding:4px 9px; border-radius:7px; white-space:nowrap; opacity:0; transition:opacity .12s;
+    pointer-events:none; border:1px solid #2a3550; }
+  .os-dik:hover .os-tip { opacity:1; }
+  .os-dik .os-run { position:absolute; bottom:-7px; left:50%; transform:translateX(-50%); width:5px; height:5px;
+    border-radius:50%; background:#fff; opacity:0; transition:opacity .12s; }
+  .os-dik.running .os-run { opacity:.9; }
+  .os-dik .os-badge { position:absolute; top:-4px; right:-4px; min-width:17px; height:17px; padding:0 4px; border-radius:9px;
+    background:#0b0f1a; color:#fff; font-size:10px; font-weight:700; display:flex; align-items:center; justify-content:center;
+    border:1.5px solid rgba(255,255,255,.5); }
 
-  /* ---- Two rails ---- */
-  .rails { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
-  @media (max-width:680px) { .rails { grid-template-columns:1fr; } }
-  .rail { position:relative; background:var(--surface); border:1px solid var(--line); border-radius:var(--r-lg);
-    padding:18px 18px 18px 22px; overflow:hidden; box-shadow:var(--shadow-sm); }
-  .rail::before { content:""; position:absolute; left:0; top:0; bottom:0; width:4px; background:var(--accent-grad); }
-  .rail.b::before { background:var(--accent-grad-2); }
-  .rail h3 { margin:0; font-size:15.5px; }
-  .rail .tag { display:block; font-size:10px; font-weight:800; letter-spacing:.5px; text-transform:uppercase;
-    color:var(--faint); margin-bottom:5px; }
-  .rail p { margin:9px 0 0; font-size:12.5px; color:var(--muted); line-height:1.55; }
-  .rail code { background:var(--code-bg); color:var(--code-fg); padding:1px 5px; border-radius:5px; font-size:11.5px; }
-  .rail h3 .pill.soon { font-size:10px; font-weight:800; letter-spacing:.4px; text-transform:uppercase;
-    color:var(--accent); background:var(--accent-soft); vertical-align:middle; }
-
-  /* ---- How it works ---- */
-  .steps { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; }
-  @media (max-width:680px) { .steps { grid-template-columns:1fr; } }
-  .step { background:var(--surface); border:1px solid var(--line); border-radius:var(--r-lg); padding:16px;
-    box-shadow:var(--shadow-sm); }
-  .step .num { display:inline-flex; align-items:center; justify-content:center; width:30px; height:30px;
-    border-radius:10px; background:var(--accent-grad); color:var(--on-accent); font-weight:800; font-size:14px;
-    box-shadow:0 3px 10px rgba(123,63,242,.22); }
-  .step h4 { margin:11px 0 4px; font-size:14px; }
-  .step p { margin:0; font-size:12.5px; color:var(--muted); line-height:1.5; }
-
-  /* ---- Drive it 4 ways ---- */
-  .ways { display:flex; flex-wrap:wrap; gap:10px; }
-  a.way { display:inline-flex; align-items:center; gap:8px; text-decoration:none; font-size:13px;
-    font-weight:600; color:var(--text); background:var(--surface); border:1px solid var(--line);
-    border-radius:var(--r-pill); padding:8px 14px; box-shadow:var(--shadow-sm);
-    transition:border-color .14s, transform .14s, color .14s, box-shadow .14s; }
-  a.way:hover { border-color:var(--accent); color:var(--accent); transform:translateY(-2px); }
-  a.way .wic { color:var(--accent); display:inline-flex; }
-
-  /* ---- Section cards ---- */
-  .home-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(290px, 1fr)); gap:16px; }
-  a.hcard { display:block; text-decoration:none; color:inherit; background:var(--surface);
-    border:1px solid var(--line); border-radius:var(--r-lg); padding:18px 18px 17px; box-shadow:var(--shadow-sm);
-    transition:transform .14s ease, border-color .14s ease, box-shadow .14s ease; animation:hc-in .34s ease both; }
-  a.hcard:hover { transform:translateY(-3px); border-color:var(--accent); box-shadow:var(--shadow-lg); }
-  .hcard-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:13px; }
-  .hcard-ic { display:inline-flex; align-items:center; justify-content:center; width:44px; height:44px;
-    border-radius:14px; background:var(--accent-grad); color:var(--on-accent);
-    box-shadow:0 3px 12px rgba(123,63,242,.22); transition:transform .14s ease, box-shadow .14s ease; }
-  a.hcard:hover .hcard-ic { transform:scale(1.06); box-shadow:0 6px 18px rgba(123,63,242,.36); }
-  .hcard-count { font-size:22px; font-weight:800; line-height:1;
-    background:var(--accent-grad); -webkit-background-clip:text; background-clip:text;
-    -webkit-text-fill-color:transparent; color:transparent; }
-  .hcard-go { color:var(--faint); font-size:17px; transition:transform .14s ease, color .14s ease; }
-  a.hcard:hover .hcard-go { color:var(--accent); transform:translateX(3px); }
-  .hcard-title { font-size:15.5px; font-weight:700; color:var(--text); }
-  a.hcard:hover .hcard-title { color:var(--accent); }
-  .hcard-desc { margin-top:5px; font-size:12.5px; color:var(--muted); line-height:1.5; }
-  @keyframes hc-in { from { opacity:0; transform:translateY(7px); } to { opacity:1; transform:none; } }
-  .home-grid a.hcard:nth-child(2) { animation-delay:.03s; } .home-grid a.hcard:nth-child(3) { animation-delay:.06s; }
-  .home-grid a.hcard:nth-child(4) { animation-delay:.09s; } .home-grid a.hcard:nth-child(5) { animation-delay:.12s; }
-  .home-grid a.hcard:nth-child(6) { animation-delay:.15s; } .home-grid a.hcard:nth-child(n+7) { animation-delay:.18s; }
+  /* ---- Windows ---- */
+  .os-win { position:absolute; display:flex; flex-direction:column; background:var(--surface); border:1px solid var(--line-strong);
+    border-radius:13px; overflow:hidden; box-shadow:0 28px 70px rgba(0,0,0,.55), 0 0 0 1px rgba(255,255,255,.04) inset;
+    min-width:360px; min-height:240px; }
+  html[data-theme="light"] .os-win { box-shadow:0 24px 60px rgba(16,24,40,.22); }
+  .os-win.active { box-shadow:0 30px 80px rgba(0,0,0,.62), 0 0 0 1px var(--accent-soft) inset; }
+  .os-tbar { height:40px; flex:none; display:flex; align-items:center; gap:9px; padding:0 13px; cursor:grab;
+    background:linear-gradient(180deg, var(--surface-3), var(--surface-2)); border-bottom:1px solid var(--line); user-select:none; }
+  .os-tbar:active { cursor:grabbing; }
+  .os-lights { display:flex; gap:8px; }
+  .os-lt { width:12px; height:12px; border-radius:50%; border:0; padding:0; cursor:pointer; position:relative; }
+  .os-lt.r { background:#ff5f57; } .os-lt.y { background:#febc2e; } .os-lt.g { background:#28c840; }
+  .os-lt span { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:9px;
+    color:rgba(0,0,0,.55); opacity:0; }
+  .os-tbar:hover .os-lt span { opacity:1; }
+  .os-title { font-size:13px; font-weight:650; color:var(--text); margin-left:5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .os-title .os-ic { display:inline-flex; vertical-align:-3px; margin-right:7px; }
+  .os-title .os-ic svg { width:15px; height:15px; }
+  .os-body { flex:1; position:relative; background:var(--surface); }
+  .os-body iframe { width:100%; height:100%; border:0; display:block; }
+  .os-rsz { position:absolute; right:0; bottom:0; width:18px; height:18px; cursor:nwse-resize; z-index:3; }
+  .os-rsz::after { content:""; position:absolute; right:3px; bottom:3px; width:8px; height:8px;
+    border-right:2px solid var(--faint); border-bottom:2px solid var(--faint); border-radius:0 0 3px 0; }
 </style>
 
-{% set ICONS = {
-  "mgmt": '<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 5v14c0 1.66-4 3-9 3s-9-1.34-9-3V5"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/>',
-  "access": '<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>',
-  "gw": '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>',
-  "layers": '<polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/>',
-  "api": '<polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>',
-  "bot": '<rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="12" cy="5" r="2"/><path d="M12 7v4"/><line x1="8" y1="16" x2="8" y2="16"/><line x1="16" y1="16" x2="16" y2="16"/>',
-  "hook": '<path d="M18 6a3 3 0 0 0-3 3v6a3 3 0 0 1-6 0V8"/><circle cx="9" cy="6" r="2"/>',
-  "activity": '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
-  "settings": '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>'
-} %}
-
-{% macro tic(key) %}<svg class="wic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">{{ ICONS[key]|safe }}</svg>{% endmacro %}
-
-{% macro card(href, key, title, desc, count=none) %}
-  <a class="hcard" href="{{ href }}">
-    <div class="hcard-head">
-      <span class="hcard-ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">{{ ICONS[key]|safe }}</svg></span>
-      {% if count is not none %}<span class="hcard-count">{{ count }}</span>{% else %}<span class="hcard-go">&rarr;</span>{% endif %}
-    </div>
-    <div class="hcard-title">{{ title }}</div>
-    <div class="hcard-desc">{{ desc }}</div>
-  </a>
-{% endmacro %}
-
-<section class="hero">
-  <span class="hero-blob"></span>
-  <div class="hero-grid">
-    <div>
-      <span class="hero-badge">Agentic Check Point access automation</span>
-      <div class="kicker"><span id="greet">Welcome back,</span> {{ user.first_name or user.username }}</div>
-      <h1>Turn a sentence into the <span class="grad">right firewall rule</span>.</h1>
-      <p class="sub">PolicyPilot computes the minimal, first-match-safe change to your Check Point management
-        policy and applies it on a real R82.10 server — reuse, widen, or create — drivable by an agent, a
-        ticket, an API call, or right here.</p>
-      <div class="hero-actions">
-        <a class="btn" href="/access-automation">Open access automation</a>
-        <a class="btn secondary" href="/mcp-guide">Connect an agent (MCP)</a>
-      </div>
-      <div class="hero-stats">
-        <div class="hstat"><span class="n">{{ counts.management }}</span><span class="l">Mgmt Servers</span></div>
-        <div class="hstat"><span class="n">{{ counts.gateways }}</span><span class="l">Gateways</span></div>
-        <div class="hstat"><span class="n">{{ counts.layers }}</span><span class="l">Dynamic Layers</span></div>
-      </div>
-    </div>
-    <div class="demo" aria-hidden="true">
-      <div class="demo-bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span>
-        <span class="demo-title">access request</span></div>
-      <div class="demo-body">
-        <div class="msg you"><div class="bubble">Allow <b>10.1.1.50</b> to the DNS servers <b>and publish</b></div></div>
-        <div class="msg bot"><div class="bubble"><span class="ok-tick">✓</span> Created
-          <b>“web_client → DNS”</b>, placed above <b>Silent&nbsp;Drop</b> for first-match safety, and
-          <b>published</b> to SMS.
-          <div class="meta">objects reused · least-privilege · one-click rollback</div></div></div>
-      </div>
-    </div>
+<div class="os-desktop" id="os-desktop">
+  <div class="os-hello">
+    <h2>Welcome back{% if user %}, {{ user.username }}{% endif %}</h2>
+    <p>Click an app in the dock to open it as a window — drag, resize, stack as many as you like.</p>
   </div>
-</section>
-
-<div class="home-section">More in PolicyPilot</div>
-<div class="rails">
-  <div class="rail a">
-    <span class="tag">Available now</span>
-    <h3>Dynamic Layers</h3>
-    <p>Author an access rulebase and push it straight to a gateway via the Gaia API
-      (<code>set-dynamic-content</code>) — out-of-band, no SmartConsole publish. Drive it from the UI or an
-      agent over MCP (behind its own admin gate, separate from SMS publishing).</p>
-  </div>
-  <div class="rail b">
-    <span class="tag">On the roadmap</span>
-    <h3>Policy Manager <span class="pill soon">soon</span></h3>
-    <p>A full visual policy manager — browse, edit and organize the whole rulebase — built on the same safe
-      engine that powers access automation.</p>
-  </div>
-</div>
-
-<div class="home-section">How it works</div>
-<div class="steps">
-  <div class="step"><span class="num">1</span><h4>Describe</h4>
-    <p>State the access in plain language — source, destination, service/app — from an agent, ticket, API, or the UI.</p></div>
-  <div class="step"><span class="num">2</span><h4>Decide</h4>
-    <p>The engine pulls the live rulebase and computes the minimal change: no-op, widen, or create — with safe placement.</p></div>
-  <div class="step"><span class="num">3</span><h4>Apply &amp; publish</h4>
-    <p>Preview it, apply on approval (or one-turn autopilot), publish — and revert any change with one click.</p></div>
-</div>
-
-<div class="home-section">Drive it four ways</div>
-<div class="ways">
-  <a class="way" href="/mcp-guide">{{ tic("bot") }} Agent over MCP</a>
-  <a class="way" href="/api-explorer">{{ tic("api") }} REST API</a>
-  <a class="way" href="/settings">{{ tic("hook") }} Ticket webhook</a>
-  <a class="way" href="/access-automation">{{ tic("access") }} Portal UI</a>
-</div>
-
-<div class="home-section">Jump into a section</div>
-<div class="home-grid">
-  {{ card("/access-automation", "access", "Access automation", "Turn a plain-language request into the minimal correct rule change — no-op / widen / create, first-match-safe.") }}
-  {{ card("/mcp-guide", "bot", "MCP for agents", "Connect n8n / an LLM agent over /mcp — one sentence becomes the right policy change.") }}
-  {{ card("/management", "mgmt", "Management Servers", "Pull, view, edit, and export real SMS policy over the web_api.", counts.management) }}
-  {{ card("/gateways", "gw", "Gateways", "Saved Gaia gateways + OS config export (interfaces, routes, DNS…).", counts.gateways) }}
-  {{ card("/layers", "layers", "Dynamic Layers", "Author an access rulebase and push it straight to the gateway via the Gaia API.", counts.layers) }}
-  {{ card("/api-explorer", "api", "API explorer", "Browse the live Management / Gaia API in an embedded Swagger UI.") }}
-  {{ card("/activity", "activity", "Activity", "Every API call the portal served — methods, status, timing.") }}
-  {{ card("/settings", "settings", "Settings", "Session reuse & policy cache, ticket write-back, API keys, base URL.") }}
+  <div class="os-dock" id="os-dock"></div>
 </div>
 
 <script>
-  (function () {
-    var h = new Date().getHours();
-    var g = h < 12 ? 'Good morning,' : (h < 18 ? 'Good afternoon,' : 'Good evening,');
-    var el = document.getElementById('greet');
-    if (el) el.textContent = g;
-  })();
+(function () {
+  var desktop = document.getElementById('os-desktop'), dock = document.getElementById('os-dock');
+  var I = {
+    access: '<path d="M16 3h5v5"/><path d="M21 3l-7 7"/><path d="M8 3H3v5"/><path d="M3 3l7 7"/><path d="M3 16v5h5"/><path d="M3 21l7-7"/><path d="M16 21h5v-5"/><path d="M21 21l-7-7"/>',
+    layers: '<polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/>',
+    server: '<rect x="2" y="3" width="20" height="7" rx="2"/><rect x="2" y="14" width="20" height="7" rx="2"/><path d="M6 6.5h.01M6 17.5h.01"/>',
+    gateway: '<rect x="2" y="13" width="20" height="8" rx="2"/><path d="M6 17h.01M10 17h8"/><path d="M12 13V7a4 4 0 0 1 4-4"/>',
+    robot: '<rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="12" cy="5" r="2"/><path d="M12 7v4M8 16h.01M16 16h.01"/>',
+    sliders: '<path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/>',
+    clock: '<circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/>'
+  };
+  function svg(p) { return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">' + p + '</svg>'; }
+  var COUNTS = { layers: {{ counts.layers|default(0) }}, management: {{ counts.management|default(0) }}, gateways: {{ counts.gateways|default(0) }} };
+  var APPS = [
+    { key: 'access', label: 'Access automation', href: '/access-automation', ic: I.access, grad: 'linear-gradient(135deg,#3b82f6,#22d3ee)' },
+    { key: 'layers', label: 'Dynamic Layers', href: '/layers', ic: I.layers, grad: 'linear-gradient(135deg,#1d9e75,#34d399)', badge: COUNTS.layers },
+    { key: 'management', label: 'Connections', href: '/management', ic: I.server, grad: 'linear-gradient(135deg,#5566dd,#7b3ff2)', badge: COUNTS.management },
+    { key: 'gateways', label: 'Gateways', href: '/gateways', ic: I.gateway, grad: 'linear-gradient(135deg,#06b6d4,#3b82f6)', badge: COUNTS.gateways },
+    { key: 'agents', label: 'Agents & API', href: '/mcp-guide', ic: I.robot, grad: 'linear-gradient(135deg,#f59e0b,#f43f5e)' },
+    { key: 'settings', label: 'Settings', href: '/settings', ic: I.sliders, grad: 'linear-gradient(135deg,#a855f7,#7b3ff2)' },
+    { key: 'activity', label: 'Activity', href: '/activity', ic: I.clock, grad: 'linear-gradient(135deg,#ec4899,#f43f5e)' }
+  ];
+  var wins = {}, z = 100, openCount = 0;
+
+  function appByKey(k) { for (var i = 0; i < APPS.length; i++) if (APPS[i].key === k) return APPS[i]; }
+  function clamp(v, lo, hi) { return Math.max(lo, Math.min(v, hi)); }
+  function focusWin(w) { w.style.zIndex = (++z); Object.keys(wins).forEach(function (k) { wins[k].classList.remove('active'); }); w.classList.add('active'); }
+  function setRunning(key, on) { var d = dock.querySelector('.os-dik[data-key="' + key + '"]'); if (d) d.classList.toggle('running', on); }
+
+  function makeDraggable(w, handle) {
+    handle.addEventListener('mousedown', function (e) {
+      if (e.target.closest('.os-lt')) return;
+      focusWin(w);
+      var dr = desktop.getBoundingClientRect(), r = w.getBoundingClientRect();
+      var ox = e.clientX - r.left, oy = e.clientY - r.top;
+      var ov = w.querySelector('.os-body'); if (ov) ov.style.pointerEvents = 'none';   // don't lose drag over the iframe
+      function mv(ev) {
+        w.style.left = clamp(ev.clientX - dr.left - ox, 0, desktop.clientWidth - w.offsetWidth) + 'px';
+        w.style.top = clamp(ev.clientY - dr.top - oy, 0, desktop.clientHeight - 40) + 'px';
+      }
+      function up() { document.removeEventListener('mousemove', mv); document.removeEventListener('mouseup', up); if (ov) ov.style.pointerEvents = ''; }
+      document.addEventListener('mousemove', mv); document.addEventListener('mouseup', up); e.preventDefault();
+    });
+  }
+  function makeResizable(w, handle) {
+    handle.addEventListener('mousedown', function (e) {
+      focusWin(w);
+      var r = w.getBoundingClientRect(), sx = e.clientX, sy = e.clientY, sw = r.width, sh = r.height;
+      var ov = w.querySelector('.os-body'); if (ov) ov.style.pointerEvents = 'none';
+      function mv(ev) {
+        w.style.width = clamp(sw + (ev.clientX - sx), 360, desktop.clientWidth - w.offsetLeft) + 'px';
+        w.style.height = clamp(sh + (ev.clientY - sy), 240, desktop.clientHeight - w.offsetTop) + 'px';
+      }
+      function up() { document.removeEventListener('mousemove', mv); document.removeEventListener('mouseup', up); if (ov) ov.style.pointerEvents = ''; }
+      document.addEventListener('mousemove', mv); document.addEventListener('mouseup', up); e.preventDefault();
+    });
+  }
+
+  function openApp(key) {
+    var app = appByKey(key); if (!app) return;
+    if (wins[key]) { var ex = wins[key]; ex.style.display = 'flex'; focusWin(ex); return; }
+    var hello = desktop.querySelector('.os-hello'); if (hello) hello.style.display = 'none';
+    var w = document.createElement('div'); w.className = 'os-win'; w.dataset.key = key;
+    var ww = Math.min(960, Math.round(desktop.clientWidth * 0.74));
+    var wh = Math.min(640, Math.round(desktop.clientHeight * 0.82));
+    var off = (openCount % 6) * 30;
+    w.style.width = ww + 'px'; w.style.height = wh + 'px';
+    w.style.left = clamp(Math.round((desktop.clientWidth - ww) / 2) - 90 + off, 8, desktop.clientWidth - ww - 8) + 'px';
+    w.style.top = clamp(34 + off, 8, desktop.clientHeight - 80) + 'px';
+    openCount++;
+    w.innerHTML =
+      '<div class="os-tbar">' +
+        '<span class="os-lights">' +
+          '<button class="os-lt r" title="Close" data-act="close"><span>✕</span></button>' +
+          '<button class="os-lt y" title="Minimize" data-act="min"><span>−</span></button>' +
+          '<button class="os-lt g" title="Zoom" data-act="zoom"><span>↗</span></button>' +
+        '</span>' +
+        '<span class="os-title"><span class="os-ic" style="color:#fff;background:' + app.grad + ';border-radius:5px;padding:2px;">' + svg(app.ic) + '</span>' + app.label + '</span>' +
+      '</div>' +
+      '<div class="os-body"><iframe src="' + app.href + '" title="' + app.label + '" loading="lazy"></iframe></div>' +
+      '<div class="os-rsz"></div>';
+    desktop.appendChild(w); wins[key] = w; setRunning(key, true); focusWin(w);
+    makeDraggable(w, w.querySelector('.os-tbar'));
+    makeResizable(w, w.querySelector('.os-rsz'));
+    w.addEventListener('mousedown', function () { focusWin(w); });
+    w.querySelector('[data-act="close"]').addEventListener('click', function (e) { e.stopPropagation(); w.remove(); delete wins[key]; setRunning(key, false); });
+    w.querySelector('[data-act="min"]').addEventListener('click', function (e) { e.stopPropagation(); w.style.display = 'none'; });
+    w.querySelector('[data-act="zoom"]').addEventListener('click', function (e) {
+      e.stopPropagation();
+      if (w.dataset.max) { w.style.left = w.dataset.pl; w.style.top = w.dataset.pt; w.style.width = w.dataset.pw; w.style.height = w.dataset.ph; delete w.dataset.max; }
+      else { w.dataset.pl = w.style.left; w.dataset.pt = w.style.top; w.dataset.pw = w.style.width; w.dataset.ph = w.style.height;
+        w.style.left = '8px'; w.style.top = '8px'; w.style.width = (desktop.clientWidth - 16) + 'px'; w.style.height = (desktop.clientHeight - 16) + 'px'; w.dataset.max = '1'; }
+    });
+  }
+
+  APPS.forEach(function (app) {
+    var d = document.createElement('button'); d.type = 'button'; d.className = 'os-dik'; d.dataset.key = app.key;
+    d.style.background = app.grad;
+    d.innerHTML = svg(app.ic) + '<span class="os-tip">' + app.label + '</span><span class="os-run"></span>' +
+      (app.badge ? '<span class="os-badge">' + app.badge + '</span>' : '');
+    d.addEventListener('click', function () { openApp(app.key); });
+    dock.appendChild(d);
+  });
+
+  openApp('access');   // open the core tool on load so the desktop feels alive
+})();
 </script>
 {% endblock %}

@@ -77,14 +77,16 @@ def _parse_response(raw: bytes, content_type: str):
 
 
 class SecurityHeadersMiddleware:
-    """Adds defensive HTTP response headers to every reply: anti-clickjacking (the admin portal is never
-    meant to be framed), MIME-sniff protection, a tight referrer policy, and HSTS when served over HTTPS.
-    Deliberately minimal — no restrictive ``default-src`` CSP — so the embedded Swagger UI and the inline
-    ``<script type="application/json">`` blobs keep working; only ``frame-ancestors`` is locked down."""
+    """Adds defensive HTTP response headers to every reply: anti-clickjacking, MIME-sniff protection, a
+    tight referrer policy, and HSTS when served over HTTPS. Deliberately minimal — no restrictive
+    ``default-src`` CSP — so the embedded Swagger UI and the inline ``<script type="application/json">``
+    blobs keep working; only ``frame-ancestors`` is constrained. Framing is SAME-ORIGIN: the portal frames
+    its OWN pages (the desktop shell opens each tool in a window via a same-origin iframe), but no foreign
+    site can frame it — so the clickjacking protection is preserved (``'self'`` / SAMEORIGIN, not DENY)."""
 
     _BASE = [
-        (b"x-frame-options", b"DENY"),
-        (b"content-security-policy", b"frame-ancestors 'none'"),
+        (b"x-frame-options", b"SAMEORIGIN"),
+        (b"content-security-policy", b"frame-ancestors 'self'"),
         (b"x-content-type-options", b"nosniff"),
         (b"referrer-policy", b"same-origin"),
     ]

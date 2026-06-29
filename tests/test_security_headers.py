@@ -19,8 +19,10 @@ def _app(https: bool) -> TestClient:
 def test_security_headers_present_and_hsts_on_https():
     r = _app(https=True).get("/x")
     assert r.status_code == 200
-    assert r.headers["x-frame-options"] == "DENY"
-    assert "frame-ancestors 'none'" in r.headers["content-security-policy"]
+    # SAME-ORIGIN framing: the desktop shell frames its OWN pages (each tool opens in a window iframe),
+    # but no foreign origin may frame the portal — clickjacking protection is preserved.
+    assert r.headers["x-frame-options"] == "SAMEORIGIN"
+    assert "frame-ancestors 'self'" in r.headers["content-security-policy"]
     assert r.headers["x-content-type-options"] == "nosniff"
     assert r.headers["referrer-policy"] == "same-origin"
     assert "max-age=31536000" in r.headers["strict-transport-security"]
@@ -29,4 +31,4 @@ def test_security_headers_present_and_hsts_on_https():
 def test_no_hsts_when_not_https():
     r = _app(https=False).get("/x")
     assert "strict-transport-security" not in r.headers       # HSTS only when served over TLS
-    assert r.headers["x-frame-options"] == "DENY"             # the rest still apply
+    assert r.headers["x-frame-options"] == "SAMEORIGIN"       # the rest still apply

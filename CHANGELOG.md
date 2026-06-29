@@ -7,6 +7,19 @@ All notable changes to **PolicyPilot** are documented here. This project follows
 
 Post-1.0.0 hardening of the agent surface, ahead of broader live validation.
 
+### Desktop UI — the portal as a macOS-style desktop
+- The Home page is now a **desktop**: a colourful **dock** of app icons, where each tool opens as a
+  **draggable / resizable / minimisable / zoomable window** with macOS traffic-light controls. Multiple
+  tools can be open at once and stacked. The top header becomes a slim translucent **menubar** (its
+  notification / account / theme / sign-out controls are preserved; only the page-nav links are hidden —
+  the dock is the navigation).
+- Windows reuse the EXISTING pages unchanged via a same-origin `<iframe>`; a page auto-hides its own
+  top-nav when it detects it is inside a window (so the window shows just the tool, not a nested navbar).
+  No tool was rewritten — the windowing is a pure shell layer.
+- Security: framing is now **same-origin** (`X-Frame-Options: SAMEORIGIN`, CSP `frame-ancestors 'self'`)
+  so the portal can frame its own pages, while no foreign origin can frame it — the clickjacking
+  protection is preserved (`'self'`, not `DENY`).
+
 ### Application typo tolerance + Autonomous auto-correct
 - The application resolver now does a **typo-tolerant prefix fallback**: the SMS `filter` is substring-based,
   so a misspelling that isn't a substring of any app name (e.g. `faccebook`) previously returned an empty

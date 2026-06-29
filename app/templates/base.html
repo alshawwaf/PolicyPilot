@@ -12,6 +12,11 @@
       catch (e) { document.documentElement.setAttribute('data-theme', 'dark'); }
     })();
   </script>
+  <script>
+    /* When this page is loaded inside a desktop window (an iframe on the desktop shell), drop its own
+       top-nav chrome so the window shows just the tool, not a nested navbar. Runs before first paint. */
+    (function () { try { if (window.self !== window.top) document.documentElement.classList.add('embedded'); } catch (e) { document.documentElement.classList.add('embedded'); } })();
+  </script>
   <script src="https://unpkg.com/htmx.org@2.0.3" crossorigin="anonymous"></script>
   <style>
     /* ============================ Theme tokens ============================ */
@@ -666,9 +671,15 @@
     select { background-color:var(--surface-3); border-color:var(--line-strong);
       background-image:linear-gradient(45deg,transparent 50%,var(--accent) 50%),linear-gradient(135deg,var(--accent) 50%,transparent 50%); }
     select:hover { border-color:var(--accent); }
+
+    /* — Embedded mode: this page is the content of a desktop window (iframe). Drop the top-nav and let
+         the tool fill the window; its own modals (position:fixed) then scope to the window. — */
+    html.embedded header { display:none !important; }
+    html.embedded main { max-width:none; margin:16px auto 30px; }
+    html.embedded .page-head { margin-top:2px; }
   </style>
 </head>
-<body>
+<body class="{% block body_class %}{% endblock %}">
   <header>
     <a class="brand-link" href="/">
       <span class="brand-mark"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><polygon points="15 9 13.4 13.4 9 15 10.6 10.6 15 9"/></svg></span>

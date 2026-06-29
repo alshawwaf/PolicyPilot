@@ -8,7 +8,7 @@
   <span class="icon-chip lg"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg></span>
   <div class="ph-main">
     <h1><span class="dc-name">{{ layer.name }}</span> <span class="pill">dynamic layer</span> <button type="button" class="copybtn cf-edit-name" title="Rename this layer" style="vertical-align:middle; font-size:12px;">Rename</button></h1>
-    <p class="ph-sub">Gateway layer <code>{{ layer.layer_name }}</code>{% if layer.description %} · {{ layer.description }}{% endif %}</p>
+    <p class="ph-sub">Gateway layer <code>{{ layer.layer_name }}</code>{% if layer.description %} · {{ layer.description }}{% endif %} · pushed to the gateway via the Gaia API, out-of-band of SmartConsole.</p>
   </div>
   <div class="ph-actions">
     <a class="btn secondary" href="/layers/{{ layer.id }}/edit">Edit</a>
@@ -19,10 +19,11 @@
 </div>
 
 <div class="card">
-  <h2 style="margin-top:0;">Apply</h2>
+  <h2 style="margin-top:0;">Push to gateway</h2>
+  <p class="muted" style="margin:-2px 0 12px;">Push this rulebase to the selected gateway with <code>set-dynamic-content</code>. This is a manual action you drive from here — the change lands on the gateway out-of-band, with no SmartConsole publish.</p>
   <form id="apply-form">
     <div class="row">
-      <div class="check"><input type="checkbox" id="use-mock" name="use_mock" value="1"><label for="use-mock">Use built-in mock gateway</label></div>
+      <div class="check"><input type="checkbox" id="use-mock" name="use_mock" value="1"><label for="use-mock">Use the built-in target (no real gateway)</label></div>
       <div class="check"><input type="checkbox" id="dry_run" name="dry_run" value="1"><label for="dry_run">Dry-run (validate only)</label></div>
     </div>
     <fieldset id="gw-fields">
@@ -37,7 +38,7 @@
       <p class="muted">No saved gateways yet. <a href="/gateways/new">Add a gateway</a> first (address, port, username, certificate), then select it here.</p>
       {% endif %}
     </fieldset>
-    <div style="margin-top:14px;"><button type="button" id="apply-btn">Apply</button>
+    <div style="margin-top:14px;"><button type="button" id="apply-btn">Push to gateway</button>
       <button type="button" class="secondary" id="fetch-btn" title="Read the dynamic layers and content this gateway currently has">⤓ Fetch from gateway</button>
       <span class="err-inline" id="apply-err" style="display:none;"></span></div>
   </form>
@@ -62,7 +63,7 @@
     {% if latest.trace %}<details style="margin-top:8px;"><summary>HTTP request / response trace ({{ latest.trace|length }} calls)</summary>{{ lv.render_trace(latest.trace) }}</details>{% endif %}
   </div>
   {% else %}
-  <p class="muted" style="margin-top:14px;">Not applied yet — click <b>Apply</b> above to push this layer to the gateway.</p>
+  <p class="muted" style="margin-top:14px;">Not pushed yet — click <b>Push to gateway</b> above to send this layer via the Gaia API.</p>
   {% endif %}
 </div>
 {% endif %}
@@ -87,7 +88,7 @@
     <p class="muted" style="font-size:12px; margin-top:14px;">Base <code>https://&lt;gateway&gt;:{{ '{}'.format(gateways[0].port) if gateways else '443' }}/gaia_api/v1.9/</code> · session header <code>X-chkp-sid</code> · a returned <code>task-id</code> means accepted, <code>show-task</code> confirms the outcome · TLS verified (pinned cert for self-signed).</p>
     <h3 style="margin-top:20px;">set-dynamic-content payload</h3>
     <div class="row" style="gap:8px; align-items:center; flex-wrap:nowrap; margin-bottom:10px;">
-      <span class="muted grow">POST to the mock at <code>{{ mock_url }}/set-dynamic-content</code> — or your gateway's Gaia API.</span>
+      <span class="muted grow">POST to the built-in target at <code>{{ mock_url }}/set-dynamic-content</code> — or your gateway's Gaia API.</span>
       <button class="copybtn" type="button" data-copy="{{ payload_json }}">Copy JSON</button>
     </div>
     <pre style="max-height:360px;">{{ payload_json }}</pre>
@@ -96,7 +97,7 @@
 
 <div class="modal-overlay" id="progress-modal" hidden>
   <div class="modal wide">
-    <h3 id="progress-title">Applying…</h3>
+    <h3 id="progress-title">Pushing…</h3>
     <p class="muted" id="progress-sub">Running the Gaia API session.</p>
     <ul class="stepper" id="stepper"></ul>
     <div id="progress-result" style="display:none;"></div>
@@ -173,7 +174,7 @@
         renderStepper(p.stages || [], p.done_stages || [], p.stage, p.status, p.failed_stage);
         if (p.status === 'running') { setTimeout(function () { poll(pid); }, 500); return; }
         var ok = p.status === 'succeeded';
-        $('progress-title').textContent = ok ? 'Applied' : 'Apply failed';
+        $('progress-title').textContent = ok ? 'Pushed' : 'Push failed';
         $('progress-sub').style.display = 'none';
         var box = $('progress-result'); box.style.display = ''; var html = '';
         if (p.error) { html += '<div class="err" style="margin-top:10px;">' + esc(p.error) + '</div>'; }
@@ -193,7 +194,7 @@
         .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
         .then(function (res) {
           if (!res.ok) { var e = $('apply-err'); e.style.display = ''; e.textContent = res.j.error || 'Failed to start'; return; }
-          $('progress-title').textContent = $('use-mock').checked ? 'Applying to mock gateway…' : 'Applying to gateway…';
+          $('progress-title').textContent = $('use-mock').checked ? 'Pushing to the built-in target…' : 'Pushing to gateway…';
           $('progress-sub').style.display = ''; $('progress-result').style.display = 'none'; $('progress-result').innerHTML = '';
           $('progress-close').style.display = 'none'; $('progress-modal').hidden = false;
           poll(res.j.progress_id);
@@ -271,7 +272,7 @@
       }).join('');
     }
     $('fetch-btn').addEventListener('click', function () {
-      $('fetch-title').textContent = $('use-mock').checked ? 'Dynamic layers on the mock gateway' : 'Dynamic layers on the gateway';
+      $('fetch-title').textContent = $('use-mock').checked ? 'Dynamic layers on the built-in target' : 'Dynamic layers on the gateway';
       $('fetch-sub').style.display = ''; $('fetch-sub').textContent = 'Reading current content…';
       $('fetch-result').innerHTML = ''; $('fetch-close').style.display = 'none'; $('fetch-modal').hidden = false;
       fetch('/layers/' + LAYER_ID + '/fetch-content', { method: 'POST', body: formData() })

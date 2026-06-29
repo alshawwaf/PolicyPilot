@@ -13,27 +13,8 @@ from .ui import _flash, _pop_flash, templates
 
 router = APIRouter(include_in_schema=False)
 
-KIND_LABELS = {"feed_poll": "Feed poll", "gaia_mock": "Mock Gaia API", "layer_apply": "Layer apply",
-               "gateway_read": "Gateway read", "datacenter": "Data Center", "api": "API", "ui": "Page view"}
-
-# Data Center sub-filter: which path fragments identify each provider's traffic, so the user can
-# narrow the "Data Center" kind to one provider when troubleshooting (vCenter vs NSX-T vs Proxmox…).
-# (The shared NSX-T-family /api/session + /api/v1 calls aren't provider-specific, so they only show
-# under the unfiltered Data Center view.)
-PROVIDER_PATHS = {
-    "vcenter": ["/sdk", "/rest/", "/vcenter/"],
-    "nsxt": ["/policy/", "/nsxt/"],
-    "globalnsxt": ["/global-manager/"],
-    "openstack": ["/openstack/"],
-    "proxmox": ["/api2/json", "/proxmox/"],
-    "aci": ["/aci/", "/api/aaaLogin", "/api/aaaRefresh", "/api/aaaLogout",
-            "/api/node/", "/api/class/", "/api/mo/"],
-    "kubernetes": ["/k8s/", "/api/v1/nodes", "/api/v1/pods", "/api/v1/services", "/api/v1/endpoints"],
-    "nutanix": ["/nutanix/", "/api/nutanix/", "/api/vmm/", "/api/prism/"],
-}
-PROVIDER_LABELS = {"vcenter": "vCenter", "nsxt": "NSX-T", "globalnsxt": "Global NSX-T",
-                   "openstack": "OpenStack", "proxmox": "Proxmox", "aci": "Cisco ACI",
-                   "kubernetes": "Kubernetes", "nutanix": "Nutanix"}
+KIND_LABELS = {"layer_apply": "Layer apply", "gateway_read": "Gateway read",
+               "api": "API", "ui": "Page view"}
 
 PAGE_SIZES = [10, 25, 50, 100]
 DEFAULT_PAGE_SIZE = 10
@@ -42,24 +23,17 @@ DEFAULT_PAGE_SIZE = 10
 STATUS_RANGES = {"2xx": (200, 300), "3xx": (300, 400), "4xx": (400, 500), "5xx": (500, 600)}
 
 
-def _clean_dc(dc: list[str]) -> list[str]:
-    return [d for d in (dc or []) if d in PROVIDER_PATHS]
-
-
 def _clean_status(status: list[str]) -> list[str]:
     return [s for s in (status or []) if s in STATUS_RANGES]
 
 
-def _filter_conds(sel_kinds: list[str], dc: list[str], q: str, status: list[str]) -> list:
+def _filter_conds(sel_kinds: list[str], q: str, status: list[str]) -> list:
     """SQL conditions for the row/count queries — independent AND filters. ``sel_kinds`` (kind IN),
-    ``dc`` providers (path matches ANY selected provider), ``status`` classes (status in ANY selected
-    range), and ``q`` (free-text match across path/summary/source IP). Each group is OR within itself."""
+    ``status`` classes (status in ANY selected range), and ``q`` (free-text match across
+    path/summary/source IP). Each group is OR within itself."""
     conds = []
     if sel_kinds:
         conds.append(ActivityLog.kind.in_(sel_kinds))
-    provs = _clean_dc(dc)
-    if provs:
-        conds.append(or_(*[ActivityLog.path.like(f"%{p}%") for d in provs for p in PROVIDER_PATHS[d]]))
     classes = _clean_status(status)
     if classes:
         conds.append(or_(*[and_(ActivityLog.status >= STATUS_RANGES[s][0],
@@ -103,13 +77,12 @@ def _clean_page_size(page_size: int) -> int:
 
 
 def _activity_url(kinds: list[str], page_size: int, q: str = "",
-                  dc: list[str] | None = None, status: list[str] | None = None) -> str:
-    """Build /activity?… so a delete/clear redirect preserves the view (filters, search, dc, status)."""
+                  status: list[str] | None = None) -> str:
+    """Build /activity?… so a delete/clear redirect preserves the view (filters, search, status)."""
     params = [("kinds", k) for k in _clean_kinds(kinds)]
     params.append(("page_size", _clean_page_size(page_size)))
     if (q or "").strip():
         params.append(("q", q.strip()))
-    params += [("dc", d) for d in _clean_dc(dc or [])]
     params += [("status", s) for s in _clean_status(status or [])]
     return "/activity?" + urlencode(params)
 
@@ -117,7 +90,7 @@ def _activity_url(kinds: list[str], page_size: int, q: str = "",
 @router.get("/activity", response_class=HTMLResponse)
 def activity_page(request: Request, kinds: list[str] = Query(default=[]),
                   page_size: int = Query(DEFAULT_PAGE_SIZE), q: str = Query(""),
-                  dc: list[str] = Query(default=[]), status: list[str] = Query(default=[]),
+                  status: list[str] = Query(default=[]),
                   db: Session = Depends(get_db)):
     user = get_user_or_none(request, db)
     if user is None:
@@ -126,14 +99,10 @@ def activity_page(request: Request, kinds: list[str] = Query(default=[]),
     for k, n in db.execute(select(ActivityLog.kind, func.count()).group_by(ActivityLog.kind)).all():
         counts[k] = n
         counts["all"] += n
-    dc_counts = {prov: db.scalar(select(func.count()).select_from(ActivityLog).where(
-        or_(*[ActivityLog.path.like(f"%{p}%") for p in paths]))) or 0
-        for prov, paths in PROVIDER_PATHS.items()}
     return templates.TemplateResponse(request, "activity.html", {
         "counts": counts, "kind_labels": KIND_LABELS, "selected": _clean_kinds(kinds),
         "page_size": _clean_page_size(page_size), "page_sizes": PAGE_SIZES,
-        "provider_labels": PROVIDER_LABELS, "dc_counts": dc_counts,
-        "q": q, "selected_dc": _clean_dc(dc),
+        "q": q,
         "selected_status": _clean_status(status), "status_classes": list(STATUS_RANGES),
         "flash": _pop_flash(request),
     })
@@ -141,13 +110,13 @@ def activity_page(request: Request, kinds: list[str] = Query(default=[]),
 
 @router.get("/activity/rows", response_class=HTMLResponse)
 def activity_rows(request: Request, kinds: list[str] = Query(default=[]), page: int = 1,
-                  page_size: int = DEFAULT_PAGE_SIZE, q: str = "", dc: list[str] = Query(default=[]),
+                  page_size: int = DEFAULT_PAGE_SIZE, q: str = "",
                   status: list[str] = Query(default=[]), db: Session = Depends(get_db)):
     if get_user_or_none(request, db) is None:
         return HTMLResponse("", status_code=401)
     sel = _clean_kinds(kinds)
     ps = _clean_page_size(page_size)
-    conds = _filter_conds(sel, dc, q, status)
+    conds = _filter_conds(sel, q, status)
     stats = _stats(db, conds)
     total = stats["total"]
     pages = max(1, (total + ps - 1) // ps)
@@ -179,8 +148,7 @@ def activity_detail(log_id: int, request: Request, db: Session = Depends(get_db)
 @router.post("/activity/delete")
 def activity_delete(request: Request, ids: list[int] = Form(default=[]),
                     kinds: list[str] = Form(default=[]), page_size: int = Form(DEFAULT_PAGE_SIZE),
-                    q: str = Form(""), dc: list[str] = Form(default=[]),
-                    status: list[str] = Form(default=[]), ajax: str = Form(""),
+                    q: str = Form(""), status: list[str] = Form(default=[]), ajax: str = Form(""),
                     db: Session = Depends(get_db)):
     """Delete the selected record(s) — one or many. ``ajax`` is set by the per-row hover delete, which
     deletes one record in place and reloads the rows itself (no flash, no full-page redirect)."""
@@ -194,18 +162,18 @@ def activity_delete(request: Request, ids: list[int] = Form(default=[]),
         return Response(status_code=204)
     _flash(request, f"Deleted {n} log entr{'y' if n == 1 else 'ies'}." if n else "No records selected.",
            "success" if n else "error")
-    return RedirectResponse(_activity_url(kinds, page_size, q, dc, status), status_code=303)
+    return RedirectResponse(_activity_url(kinds, page_size, q, status), status_code=303)
 
 
 @router.post("/activity/clear")
 def activity_clear(request: Request, kinds: list[str] = Form(default=[]),
                    page_size: int = Form(DEFAULT_PAGE_SIZE), q: str = Form(""),
-                   dc: list[str] = Form(default=[]), status: list[str] = Form(default=[]),
+                   status: list[str] = Form(default=[]),
                    db: Session = Depends(get_db)):
-    """Clear everything matching the current view (checked kinds / data center type / status / search)."""
+    """Clear everything matching the current view (checked kinds / status / search)."""
     if get_user_or_none(request, db) is None:
         return RedirectResponse("/login", status_code=303)
-    conds = _filter_conds(_clean_kinds(kinds), dc, q, status)
+    conds = _filter_conds(_clean_kinds(kinds), q, status)
     stmt = delete(ActivityLog)
     if conds:
         stmt = stmt.where(and_(*conds))
@@ -213,4 +181,4 @@ def activity_clear(request: Request, kinds: list[str] = Form(default=[]),
     db.commit()
     scope = " matching the filter" if conds else ""
     _flash(request, f"Cleared {n}{scope} log entr{'y' if n == 1 else 'ies'}.")
-    return RedirectResponse(_activity_url(kinds, page_size, q, dc, status), status_code=303)
+    return RedirectResponse(_activity_url(kinds, page_size, q, status), status_code=303)

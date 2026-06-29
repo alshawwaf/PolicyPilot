@@ -2,6 +2,12 @@
 {% block title %}{{ ms.name }} — policy{% endblock %}
 {% block main_class %}wide{% endblock %}
 {% block content %}
+<style>
+  .viewer-eyebrow { font-size:11px; font-weight:800; letter-spacing:.5px; text-transform:uppercase;
+    color:var(--faint); }
+  #mgmt-viewer .toolbar { align-items:center; gap:10px; flex-wrap:wrap; }
+  #rulebase pre, .modal pre { background:var(--subtle-bg); border:1px solid var(--line); border-radius:9px; }
+</style>
 <div class="page-head">
   <span class="icon-chip lg"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 5v14c0 1.66-4 3-9 3s-9-1.34-9-3V5"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/></svg></span>
   <div class="ph-main">
@@ -18,8 +24,8 @@
 <div class="card"><p class="muted">No saved credential on this server, so policy can't be pulled. <a href="/management/{{ ms.id }}/edit">Add a password on Edit</a> (stored encrypted), then return here.</p></div>
 {% else %}
 <div class="card" id="mgmt-viewer" data-id="{{ ms.id }}" style="padding:14px 18px;">
-  <div class="row" style="align-items:center; gap:10px; flex-wrap:wrap;">
-    <span class="muted" style="font-size:11px; font-weight:700; letter-spacing:.5px;">ACCESS LAYER</span>
+  <div class="row toolbar">
+    <span class="viewer-eyebrow">Access layer</span>
     <span id="layer-picker" class="filterbar" style="margin:0;"><span class="muted">Loading layers…</span></span>
     <a id="export-link" class="btn secondary" href="/management/{{ ms.id }}/export" style="margin-left:auto;">Export to IaC →</a>
   </div>

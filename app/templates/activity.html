@@ -10,14 +10,14 @@
     transition:opacity .12s, background .12s, color .12s; }
   .acttable .rowdel svg { display:block; }
   .act-row:hover .rowdel, .rowdel:focus-visible { opacity:1; }
-  .acttable .rowdel:hover { background:var(--bad-bg, #fde8ec); color:var(--bad-fg, #c4314b); }
+  .acttable .rowdel:hover { background:var(--danger-bg); color:var(--danger); }
   @media (hover: none) { .acttable .rowdel { opacity:1; } }   /* touch: no hover, so always show */
 </style>
 <div class="page-head">
   <span class="icon-chip lg"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span>
   <div class="ph-main">
     <h1>Activity log</h1>
-    <p class="ph-sub">Every API call the portal served — methods, status, timing and source. Filter by status, type or data center, then expand a row for the full request/response record.</p>
+    <p class="ph-sub">Every API call the portal served — methods, status, timing and source. Filter by status or type, then expand a row for the full request/response record.</p>
   </div>
 </div>
 <form method="post" action="/activity/delete" id="act-form">
@@ -56,14 +56,6 @@
         <div class="msel-panel">
           {% for k, label in kind_labels.items() %}
           <label class="msel-opt"><input type="checkbox" name="kinds" value="{{ k }}" class="kind-cb" {{ 'checked' if k in selected else '' }}>{{ label }} <span class="fcount">{{ counts.get(k, 0) }}</span></label>
-          {% endfor %}
-        </div>
-      </div>
-      <div class="msel" id="msel-dc">
-        <button type="button" class="msel-btn">Data center <span class="msel-badge" hidden></span><span class="msel-caret">▾</span></button>
-        <div class="msel-panel">
-          {% for prov, plabel in provider_labels.items() %}
-          <label class="msel-opt"><input type="checkbox" name="dc" value="{{ prov }}" class="dc-cb" {{ 'checked' if prov in selected_dc else '' }}>{{ plabel }} <span class="fcount">{{ dc_counts.get(prov, 0) }}</span></label>
           {% endfor %}
         </div>
       </div>
@@ -106,7 +98,6 @@
       return Array.prototype.slice.call(form.querySelectorAll('.' + cls + ':checked')).map(function (c) { return c.value; });
     }
     function selectedKinds() { return checkedVals('kind-cb'); }
-    function selectedDc() { return checkedVals('dc-cb'); }
     function selectedStatus() { return checkedVals('status-cb'); }
     function searchText() { return (qInput.value || '').trim(); }
     function rowCbs() { return Array.prototype.slice.call(rowsEl.querySelectorAll('.row-cb')); }
@@ -119,7 +110,6 @@
     function query(extra) {
       var p = new URLSearchParams();
       selectedKinds().forEach(function (k) { p.append('kinds', k); });
-      selectedDc().forEach(function (d) { p.append('dc', d); });
       selectedStatus().forEach(function (s) { p.append('status', s); });
       p.set('page_size', psSel.value);
       if (searchText()) p.set('q', searchText());
@@ -138,7 +128,7 @@
       psHidden.value = psSel.value;            // keep the delete/clear form in sync with the view
       qHidden.value = searchText();
       updateBadges();
-      var anyFilter = selectedKinds().length || selectedDc().length || selectedStatus().length || searchText();
+      var anyFilter = selectedKinds().length || selectedStatus().length || searchText();
       clearBtn.textContent = anyFilter ? 'Clear filtered' : 'Clear all';
       $('reset-filters').hidden = !anyFilter;
       updateExportLinks();                       // keep CSV / PDF export matching the current filters
@@ -173,7 +163,7 @@
     function deleteOne(id) {
       window.appConfirm('Delete this log record? This cannot be undone.', { okText: 'Delete' }).then(function (ok) {
         if (!ok) return;
-        var body = query();          // current view (kinds / dc / status / page_size / q)
+        var body = query();          // current view (kinds / status / page_size / q)
         body.append('ids', id);
         body.set('ajax', '1');
         fetch('/activity/delete', {
@@ -201,17 +191,17 @@
       }
     });
 
-    // Any filter checkbox (Status / Type / Data center) re-queries.
+    // Any filter checkbox (Status / Type) re-queries.
     form.addEventListener('change', function (e) {
       var t = e.target;
-      if (t.classList.contains('kind-cb') || t.classList.contains('dc-cb') || t.classList.contains('status-cb')) reload();
+      if (t.classList.contains('kind-cb') || t.classList.contains('status-cb')) reload();
     });
     psSel.addEventListener('change', reload);
 
     // (.msel open/close + badge paint is handled globally in base.html)
 
     $('reset-filters').addEventListener('click', function () {
-      form.querySelectorAll('.kind-cb, .dc-cb, .status-cb').forEach(function (c) { c.checked = false; });
+      form.querySelectorAll('.kind-cb, .status-cb').forEach(function (c) { c.checked = false; });
       qInput.value = '';
       reload();
     });

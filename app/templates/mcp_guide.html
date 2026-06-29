@@ -2,9 +2,7 @@
 {% block title %}MCP for agents{% endblock %}
 {% block content %}
 <style>
-  .mcp-hero h1 { margin:0 0 4px; }
-  .mcp-sub { color:var(--muted); max-width:900px; line-height:1.55; margin:0 0 14px; }
-  .mcp-status { display:flex; gap:8px; flex-wrap:wrap; margin:0 0 16px; }
+  .mcp-status { display:flex; gap:8px; flex-wrap:wrap; margin:0 0 18px; }
   .mcp-status .pill { font-size:12px; }
   .mcp-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:10px; }
   .mcp-tool { border:1px solid var(--line); border-radius:11px; padding:12px 13px; background:var(--surface-2); }
@@ -12,8 +10,9 @@
   .mcp-tool p { margin:5px 0 0; font-size:12.5px; color:var(--muted); line-height:1.5; }
   .mcp-tabs { display:flex; gap:6px; flex-wrap:wrap; margin:6px 0 10px; }
   .mcp-tabs button { padding:7px 15px; border:1px solid var(--line); border-radius:9px; background:transparent;
-    color:var(--text); font-weight:600; font-size:13px; cursor:pointer; }
-  .mcp-tabs button.active { background:var(--accent); color:#fff; border-color:var(--accent); }
+    color:var(--text); font-weight:600; font-size:13px; cursor:pointer; transition:border-color .14s, color .14s; }
+  .mcp-tabs button:hover { border-color:var(--accent); color:var(--accent); }
+  .mcp-tabs button.active { background:var(--accent-grad); color:var(--on-accent); border-color:transparent; }
   .mcp-field { margin:0 0 12px; }
   .mcp-field-lab { font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.03em; margin:0 0 4px; }
   .mcp-cfg { position:relative; }
@@ -30,19 +29,27 @@
   .mcp-tokrow .copybtn { flex:0 0 auto; padding:8px 14px; }   /* button height matches the input; stays on the row */
   .endpoint { font-size:12px; }
   #mcp-url { cursor:pointer; border-bottom:1px dashed var(--line); }   /* click to copy */
-  .copybtn.copied { background:var(--accent); color:#fff; border-color:var(--accent); }
+  .copybtn.copied { background:var(--accent-grad); color:var(--on-accent); border-color:transparent; }
   .mcp-note { font-size:12.5px; color:var(--muted); line-height:1.55; max-width:900px; }
   .mcp-note code { font-family:ui-monospace,monospace; }
+  .mcp-card-head { display:flex; align-items:center; gap:10px; margin:0 0 6px; }
+  .mcp-card-head .icon-chip { width:34px; height:34px; border-radius:10px; }
+  .mcp-card-head .icon-chip svg { width:18px; height:18px; }
+  .mcp-card-head h3 { margin:0; font-size:15.5px; }
 </style>
 
-<div class="mcp-hero">
-  <h1><span class="icon-chip lg"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v1H7a2 2 0 0 0-2 2v3H4a2 2 0 1 0 0 4h1v3a2 2 0 0 0 2 2h3v1a3 3 0 1 0 6 0v-1h3a2 2 0 0 0 2-2v-3h1a2 2 0 1 0 0-4h-1V8a2 2 0 0 0-2-2h-2V5a3 3 0 0 0-3-3z"/></svg></span> MCP for agents</h1>
+<div class="page-head">
+  <span class="icon-chip lg"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v1H7a2 2 0 0 0-2 2v3H4a2 2 0 1 0 0 4h1v3a2 2 0 0 0 2 2h3v1a3 3 0 1 0 6 0v-1h3a2 2 0 0 0 2-2v-3h1a2 2 0 1 0 0-4h-1V8a2 2 0 0 0-2-2h-2V5a3 3 0 0 0-3-3z"/></svg></span>
+  <div class="ph-main">
+    <h1>MCP for agents</h1>
+    <p class="ph-sub">Connect an LLM agent (n8n, Claude Desktop, Cursor, VS Code) to PolicyPilot over the Model
+      Context Protocol. The agent gets typed tools to reason about and act on your Check Point management access
+      policy — decide on a request, correlate a service or app name, analyze a layer, and apply a gated change
+      via the Management Web API. Same idea as
+      <a href="https://mcp.checkpoint.com/" target="_blank" rel="noopener">Check Point's MCP servers</a>,
+      focused on the access-automation engine.</p>
+  </div>
 </div>
-<p class="mcp-sub">Drive PolicyPilot from an LLM agent (n8n, Claude Desktop, Cursor, VS Code) over the Model
-Context Protocol. The agent gets typed tools to <b>reason about and act on</b> Check Point access
-policy — decide on a request, correlate a service/app name, analyse a layer, and (gated) apply a change.
-Same idea as <a href="https://mcp.checkpoint.com/" target="_blank" rel="noopener">Check Point's MCP servers</a>,
-focused on the access-automation engine.</p>
 
 <div class="mcp-status">
   {% if sdk_installed %}<span class="pill ok">MCP SDK installed</span>{% else %}<span class="pill" style="background:var(--warn-bg);color:var(--warn);">MCP SDK not installed — <code>pip install mcp</code> (Artifactory)</span>{% endif %}
@@ -51,7 +58,10 @@ focused on the access-automation engine.</p>
 </div>
 
 <div class="card">
-  <h3 style="margin:0 0 6px;">Connect a client</h3>
+  <div class="mcp-card-head">
+    <span class="icon-chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></svg></span>
+    <h3>Connect a client</h3>
+  </div>
   <div class="mcp-keyhead">MCP API key</div>
   <div class="mcp-tokrow">
     <input id="mcp-tok" placeholder="generate a key, or paste an mcp-scope key" autocomplete="off">
@@ -74,12 +84,15 @@ focused on the access-automation engine.</p>
 </div>
 
 <div class="card">
-  <h3 style="margin:0 0 6px;">Suggested agent system prompt</h3>
+  <div class="mcp-card-head">
+    <span class="icon-chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg></span>
+    <h3>Suggested agent system prompt</h3>
+  </div>
   <p class="mcp-note" style="margin:0 0 10px;">Paste this into your agent's <b>system message</b>. It teaches the order —
-    <b>pick the management server &amp; layer → decide (read-only) → apply on your OK</b> — so a smaller model doesn't guess
-    a server/layer or loop. Written for n8n's <b>built-in MCP Client Tool</b> (and Claude Desktop / Cursor / VS Code),
+    <b>pick the management server and layer, decide (read-only), then apply on your OK</b> — so a smaller model doesn't guess
+    a server or layer, or loop. Written for n8n's <b>built-in MCP Client Tool</b> (and Claude Desktop, Cursor, VS Code),
     where each PolicyPilot tool is exposed to the agent directly (it calls <code>list_management_servers</code>,
-    <code>decide_access</code>, … by name).</p>
+    <code>decide_access</code>, and the rest by name).</p>
   <div class="mcp-sys-actions">
     <button type="button" class="copybtn" id="mcp-sys-toggle" aria-expanded="false">Show prompt</button>
     <button type="button" class="copybtn" id="mcp-sys-copy">Copy</button>
@@ -90,7 +103,14 @@ focused on the access-automation engine.</p>
 </div>
 
 <div class="card">
-  <h3 style="margin:0 0 8px;">Tools the agent gets ({{ tools|length }})</h3>
+  <div class="mcp-card-head">
+    <span class="icon-chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg></span>
+    <h3>Tools the agent gets ({{ tools|length }})</h3>
+  </div>
+  <p class="mcp-note" style="margin:0 0 12px;">Every tool acts on the Check Point <b>management (SMS) access
+    policy</b> over the Management Web API — list servers and layers, decide and apply a change, remove access,
+    amend a rule, list and revert changes, correlate a service or app, and analyze a layer. The agent does not
+    drive dynamic layers.</p>
   <div class="mcp-grid">
     {% for t in tools %}
     <div class="mcp-tool"><code>{{ t.name }}</code><p>{{ t.summary }}</p></div>
@@ -99,15 +119,18 @@ focused on the access-automation engine.</p>
 </div>
 
 <div class="card">
-  <h3 style="margin:0 0 8px;">Safety</h3>
+  <div class="mcp-card-head">
+    <span class="icon-chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></span>
+    <h3>Safety</h3>
+  </div>
   <p class="mcp-note">Every call needs <code>Authorization: Bearer &lt;key&gt;</code>, where the bearer is an
   active <b>MCP-scope API key</b> (generated above, or in <b>Settings → API keys</b> — individually
-  revocable, SHA-256-hashed at rest). Create or revoke takes effect with no redeploy — no active key →
-  <b>503</b> (endpoint disabled), wrong/missing key → <b>401</b>. <b>decide_access</b>, the analyse tools,
-  and the correlate/coverage tools are read-only. <b>apply_access</b> with <code>publish=false</code>
-  dry-runs (validate then discard); <code>publish=true</code> is <b>refused</b> unless an admin enables
+  revocable, SHA-256-hashed at rest). Create or revoke takes effect with no redeploy — no active key returns a
+  <b>503</b> (endpoint disabled), a wrong or missing key returns a <b>401</b>. <b>decide_access</b>, the analyze
+  tools, and the correlate and coverage tools are read-only. <b>apply_access</b> with <code>publish=false</code>
+  dry-runs (validate, then discard); <code>publish=true</code> is <b>refused</b> unless an admin enables
   <b>Settings → MCP / agent → "Let the MCP agent publish to live policy"</b>. The engine's own guarantees
-  still hold — an unknown/ambiguous service returns a review + suggestions, never a wrong call to the SMS.</p>
+  still hold — an unknown or ambiguous service returns a review plus suggestions, never a wrong call to the SMS.</p>
 </div>
 
 <script>

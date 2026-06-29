@@ -25,6 +25,15 @@
 {% set fn = user.first_name or '' %}{% set ln = user.last_name or '' %}
 {% set initials = ((fn[:1] ~ ln[:1]) if (fn or ln) else user.username[:2]) | upper %}
 
+<div class="page-head">
+  <span class="icon-chip lg"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span>
+  <div class="ph-main">
+    <h1>Account</h1>
+    <p class="ph-sub">Your profile and sign-in for PolicyPilot. Changes apply right away.</p>
+  </div>
+  <div class="ph-actions"><a class="btn secondary" href="/">← Back to portal</a></div>
+</div>
+
 <div class="card" style="margin-bottom:4px;">
   <div class="acct-id">
     <span class="avatar">{{ initials }}</span>
@@ -37,7 +46,6 @@
       </div>
       <div class="muted small" style="margin-top:7px;">Member since {{ user.created_at.strftime('%B %-d, %Y') }}</div>
     </div>
-    <a class="btn secondary" href="/">← Back to portal</a>
   </div>
 </div>
 

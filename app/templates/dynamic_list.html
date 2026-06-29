@@ -7,17 +7,19 @@
   <span class="icon-chip lg"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg></span>
   <div class="ph-main">
     <h1>Dynamic Layers</h1>
-    <p class="ph-sub">Author Access Control rules here, then push them to a gateway with <code>set-dynamic-content</code> — saved on the portal, reflected on the gateway (no policy install).</p>
+    <p class="ph-sub">Author an access rulebase in the portal, then push it to a gateway via the Gaia API
+      (<code>set-dynamic-content</code>) — out-of-band of SmartConsole, no policy install. A manual capability
+      you drive from here, separate from access automation.</p>
   </div>
   <div class="ph-actions">
-    <a class="btn" href="/layers/new">+ New Dynamic Layer</a>
+    <a class="btn" href="/layers/new">+ New dynamic layer</a>
   </div>
 </div>
 
 {% if not rows %}
 <div class="card">{{ empty_state('No dynamic layers yet',
-   'Create one to author a rulebase and apply it to the built-in mock or a real R82 gateway.',
-   '+ New Dynamic Layer', '/layers/new') }}</div>
+   'Create one to author an access rulebase and push it to a gateway via the Gaia API.',
+   '+ New dynamic layer', '/layers/new') }}</div>
 {% else %}
 <div class="statrow" style="margin:2px 0 20px;">
   <div class="stat"><span class="n">{{ rows|length }}</span><span class="l">Dynamic Layers</span></div>

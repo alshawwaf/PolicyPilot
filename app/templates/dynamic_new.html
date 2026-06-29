@@ -1,11 +1,11 @@
 {% extends "base.html" %}
-{% block title %}{{ 'Edit Dynamic Layer' if is_edit else 'New Dynamic Layer' }}{% endblock %}
+{% block title %}{{ 'Edit dynamic layer' if is_edit else 'New dynamic layer' }}{% endblock %}
 {% block content %}
 <div class="page-head">
   <span class="icon-chip lg"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg></span>
   <div class="ph-main">
-    <h1>{{ 'Edit Dynamic Layer' if is_edit else 'New Dynamic Layer' }}</h1>
-    <p class="ph-sub">Author objects and a rulebase; the portal builds the exact <code>set-dynamic-content</code> payload.{% if is_edit %} Save your changes, then <b>Apply</b> on the layer page to re-push.{% else %} Apply it to the built-in mock or a real R82 gateway.{% endif %}</p>
+    <h1>{{ 'Edit dynamic layer' if is_edit else 'New dynamic layer' }}</h1>
+    <p class="ph-sub">Author objects and an access rulebase; the portal builds the exact <code>set-dynamic-content</code> payload.{% if is_edit %} Save your changes, then push from the layer page via the Gaia API.{% else %} Save it, then push it to a gateway via the Gaia API — out-of-band of SmartConsole.{% endif %}</p>
   </div>
 </div>
 {% if error %}<div class="err" style="margin:12px 0;">{{ error }}</div>{% endif %}

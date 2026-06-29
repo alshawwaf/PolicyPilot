@@ -16,9 +16,10 @@
   .ax-tabs a[href*="api=gaia"]:not(.active) { color:#22d3ee; border-color:rgba(34,211,238,.40); }
   .ax-tabs a[href*="api=gaia"].active { background:var(--accent-grad-2);
     box-shadow:0 3px 12px rgba(6,182,212,.32); }
-  .ax-bar { display:flex; gap:14px; align-items:flex-end; flex-wrap:wrap; margin:6px 0 10px; font-size:13px; }
-  .ax-bar label { display:flex; flex-direction:column; gap:3px; font-size:11px; color:var(--subtle-fg);
-    text-transform:uppercase; letter-spacing:.03em; }
+  .ax-controls { padding:14px 16px; margin-bottom:14px; }
+  .ax-bar { display:flex; gap:14px; align-items:flex-end; flex-wrap:wrap; font-size:13px; }
+  .ax-bar label { display:flex; flex-direction:column; gap:4px; font-size:11px; font-weight:700;
+    color:var(--faint); text-transform:uppercase; letter-spacing:.4px; }
   .ax-bar select, .ax-bar input { padding:6px 9px; min-width:180px; }
   .ax-bar input.url { min-width:340px; font-family:ui-monospace,monospace; }
   .ax-bar button { padding:7px 16px; font-weight:600; }
@@ -26,21 +27,22 @@
      input{width:100%}) so it renders as a small box, not a full-width bar. */
   .ax-bar input[type="checkbox"] { width:auto; min-width:0; padding:0; margin:0; accent-color:var(--accent);
     flex:0 0 auto; width:15px; height:15px; cursor:pointer; }
-  /* One collapsed "how it works" disclosure instead of two big always-on explainer blocks. */
-  .ax-help { max-width:980px; margin:2px 0 14px; border:1px solid var(--line); border-radius:9px;
-    background:var(--surface-2); font-size:12.5px; overflow:hidden; }
-  .ax-help > summary { cursor:pointer; padding:9px 14px; color:var(--text-2); font-weight:600;
+  /* One collapsed "how it works" disclosure instead of two big always-on explainer blocks. Nested inside
+     the control card, so it borrows the card's surface and only adds a top divider when the card has fields
+     above it. */
+  .ax-help { margin:12px 0 0; padding-top:12px; border-top:1px solid var(--line-soft); font-size:12.5px; }
+  .ax-help > summary { cursor:pointer; color:var(--text-2); font-weight:600;
     list-style:none; display:flex; align-items:center; gap:8px; }
   .ax-help > summary::-webkit-details-marker { display:none; }
   .ax-help > summary::after { content:"▾"; margin-left:auto; color:var(--muted); transition:transform .15s; }
-  .ax-help[open] > summary { border-bottom:1px solid var(--line); }
   .ax-help[open] > summary::after { transform:rotate(180deg); }
-  .ax-help-body { padding:11px 14px 13px; line-height:1.6; color:var(--text-2); }
+  .ax-help-body { padding:11px 0 2px; line-height:1.6; color:var(--text-2); }
   .ax-help-body p { margin:0 0 9px; } .ax-help-body p:last-child { margin:0; }
   .ax-help-body code { font-family:ui-monospace,monospace; }
   .ax-help-body b { color:var(--text); }
   #ax-status { font-size:12.5px; margin:8px 0; min-height:1.2em; }
-  #ax-status.err { color:var(--bad-fg,#c4314b); font-weight:600; }
+  #ax-status.err { color:var(--danger); font-weight:600; }
+  #ax-status.ok { color:var(--ok); font-weight:600; }
   /* --- Theme Swagger UI onto the portal's own variables (follows dark/light automatically) --------- */
   #swagger-ui { background:var(--surface); border:1px solid var(--line); border-radius:12px;
     padding:6px 16px 16px; }
@@ -181,6 +183,7 @@
   <a href="/api-explorer?api=gaia" class="{{ 'active' if api_type=='gaia' else '' }}">Gaia API</a>
 </div>
 
+<div class="card ax-controls">
 <div class="ax-bar">
   <label>API version
     <select id="ax-version">
@@ -213,7 +216,7 @@
 </div>
 
 <details class="ax-help">
-  <summary>How “Try it out” &amp; Export work</summary>
+  <summary>How "Try it out" &amp; Export work</summary>
   <div class="ax-help-body">
     <p><b>Try it out</b> runs <b>through the portal</b> by default (server-side), so it reaches your
     <b>saved</b> servers without the browser's CORS block — just <b>Authorize</b> with a session id (sid,
@@ -226,6 +229,7 @@
     the version or target.</p>
   </div>
 </details>
+</div>
 
 <div id="ax-status">Loading {{ api_type }} {{ version or 'latest' }} spec…</div>
 <div id="swagger-ui"></div>

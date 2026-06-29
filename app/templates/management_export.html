@@ -2,6 +2,14 @@
 {% block title %}{{ ms.name }} — export policy{% endblock %}
 {% block main_class %}wide{% endblock %}
 {% block content %}
+<style>
+  .viewer-eyebrow { font-size:11px; font-weight:800; letter-spacing:.5px; text-transform:uppercase;
+    color:var(--faint); }
+  #export-root .toolbar { align-items:center; gap:10px; flex-wrap:wrap; }
+  #code { max-height:60vh; overflow:auto; background:var(--subtle-bg); color:var(--subtle-fg);
+    border:1px solid var(--line); border-radius:9px; padding:14px; font-size:12.5px; line-height:1.5;
+    white-space:pre; margin:0; }
+</style>
 <div class="page-head">
   <span class="icon-chip lg"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></span>
   <div class="ph-main">
@@ -17,8 +25,8 @@
 <div class="card"><p class="muted">No saved credential on this server, so policy can't be pulled. <a href="/management/{{ ms.id }}/edit">Add a password on Edit</a> (stored encrypted), then return here.</p></div>
 {% else %}
 <div class="card" id="export-root" data-id="{{ ms.id }}" data-layer="{{ layer }}" style="padding:14px 18px;">
-  <div class="row" style="align-items:center; gap:10px; flex-wrap:wrap;">
-    <span class="muted" style="font-size:11px; font-weight:700; letter-spacing:.5px;">ACCESS LAYER</span>
+  <div class="row toolbar">
+    <span class="viewer-eyebrow">Access layer</span>
     <select id="layer-select" style="min-width:220px;"><option>Loading layers…</option></select>
     <button class="btn" id="gen-btn" type="button" disabled>Generate IaC</button>
     <span id="gen-status" class="muted" style="font-size:13px;"></span>
@@ -37,7 +45,7 @@
       <button class="copybtn" type="button" id="download-btn">Download</button>
       <span class="muted" id="file-name" style="font-size:12px; align-self:center;"></span>
     </div>
-    <pre id="code" style="max-height:60vh; overflow:auto; background:var(--subtle-bg); border:1px solid var(--line); border-radius:9px; padding:14px; font-size:12.5px; line-height:1.5; white-space:pre; margin:0;"></pre>
+    <pre id="code"></pre>
   </div>
 </div>
 {% endif %}

@@ -39,7 +39,7 @@
     <input type="checkbox" id="auto_trust" name="auto_trust" value="1" {{ 'checked' if auto_on else '' }}>
     <label for="auto_trust">Trust this gateway's certificate automatically <span class="muted" style="font-weight:400;">— pin it for you on save</span></label>
   </div>
-  <p class="muted">Recommended for self-signed lab gateways. When you save, the portal fetches and pins whatever certificate the gateway presents (you'll see its fingerprint), then verifies against that pinned certificate on every connect after — TLS verification is never turned off. If the gateway isn't reachable yet, it pins automatically on the first connect instead. Untick only to paste a specific certificate yourself below.</p>
+  <p class="muted">Recommended for gateways with self-signed certificates. When you save, the portal fetches and pins whatever certificate the gateway presents (you'll see its fingerprint), then verifies against that pinned certificate on every connect after — TLS verification is never turned off. If the gateway isn't reachable yet, it pins automatically on the first connect instead. Untick only to paste a specific certificate yourself below.</p>
   <div class="subpanel" id="tls-subpanel">
     <div class="row" style="align-items:center; gap:10px;">
       <button type="button" class="secondary" id="fetch-cert">

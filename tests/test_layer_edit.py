@@ -38,7 +38,7 @@ def test_builder_edit_mode_posts_to_edit_and_returns_to_layer():
     html = _render("dynamic_new.html",
                    **_builder(action="/layers/5/edit", is_edit=True, cancel_url="/layers/5"))
     assert 'action="/layers/5/edit"' in html
-    assert "Edit Dynamic Layer" in html and "Save changes" in html
+    assert "Edit dynamic layer" in html and "Save changes" in html
     assert 'href="/layers/5"' in html  # Cancel returns to the layer, not the list
 
 

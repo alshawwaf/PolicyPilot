@@ -2,11 +2,30 @@
 {% block title %}{{ ms.name }} — access automation{% endblock %}
 {% block main_class %}wide{% endblock %}
 {% block content %}
+<style>
+  /* ---- Section heads inside the workflow cards ---- */
+  .aa-cardhead { display:flex; align-items:flex-start; justify-content:space-between; gap:12px;
+    margin:0 0 14px; flex-wrap:wrap; }
+  .aa-cardhead h2 { display:flex; align-items:center; gap:9px; font-size:16px; margin:0; }
+  .aa-cardhead .aa-sub { color:var(--muted); font-size:12.5px; line-height:1.55; margin:5px 0 0; max-width:74ch; }
+  .aa-step { display:inline-flex; align-items:center; justify-content:center; width:24px; height:24px;
+    border-radius:8px; background:var(--accent-grad); color:var(--on-accent); font-weight:800; font-size:12.5px;
+    box-shadow:0 2px 8px var(--accent-soft); flex:0 0 auto; }
+  .aa-field-note { color:var(--muted); font-size:12px; line-height:1.55; margin:8px 0 0; }
+  .aa-field-note b { color:var(--text); }
+  .aa-field-note code, .aa-field-note em { font-style:normal; }
+  /* the three-step action row sits in its own subtle tray so it reads as the commit point */
+  .aa-actions { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:16px; padding:12px 14px;
+    background:var(--surface-2); border:1px solid var(--line); border-radius:14px; }
+  .aa-actions .aa-actions-hint { flex:1; min-width:160px; text-align:right; color:var(--faint); font-size:11.5px; }
+  /* legend chips under the diagram */
+  .aa-legend { display:flex; gap:8px; flex-wrap:wrap; justify-content:center; margin-top:14px; }
+</style>
 <div class="page-head">
   <span class="icon-chip lg"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></span>
   <div class="ph-main">
     <h1>{{ ms.name }} <span class="pill">Access automation</span></h1>
-    <p class="ph-sub"><code>{{ ms.host }}:{{ ms.port }}</code>{% if ms.domain %} · domain <b>{{ ms.domain }}</b>{% endif %} · decided + applied live over the <code>web_api</code>.</p>
+    <p class="ph-sub">Describe an access request and PolicyPilot computes the minimal correct change — reuse, widen, or create — then applies it live over the <code>web_api</code>. <code>{{ ms.host }}:{{ ms.port }}</code>{% if ms.domain %} · domain <b>{{ ms.domain }}</b>{% endif %}.</p>
   </div>
   <div class="ph-actions">
     <a class="btn secondary" href="/access-automation">← All servers</a>
@@ -17,6 +36,12 @@
 <div class="card"><p class="muted">No saved credential on this server, so access automation can't run. <a href="/management/{{ ms.id }}/edit">Add a password on Edit</a> (stored encrypted), then return here.</p></div>
 {% else %}
 <div class="card" id="aa" data-id="{{ ms.id }}">
+  <div class="aa-cardhead">
+    <div>
+      <h2><span class="aa-step">1</span> Describe the access</h2>
+      <p class="aa-sub">Pick a layer, then state the request as <code>source → destination : service</code>. Optionally attach a ticket id for the audit trail.</p>
+    </div>
+  </div>
   <div class="row endalign">
     <div style="min-width:240px;">
       <label>Access layer
@@ -95,12 +120,13 @@
       <input id="aa-app" placeholder="Facebook" list="aa-applist" autocomplete="off">
       <datalist id="aa-applist"></datalist></label></div>
   </div>
-  <p class="muted" style="margin:2px 0 0; font-size:12px;">Pick the <b>Service type</b> — Check Point isn’t only TCP/UDP. Port-based (TCP/UDP/SCTP) takes a <b>port</b>; ICMP, RPC, DCE-RPC, GTP, Compound/Citrix TCP, “Other” (an IP protocol) and a services group are matched by <b>name</b> (correlated to the real predefined object); Application/Site matches an app. The engine reasons about each kind correctly — distinct protocols never falsely overlap a port.</p>
-  <p class="muted" style="margin:6px 0 0; font-size:12px;">Source and destination aren’t only IPs. Switch either <b>type</b> to a <b>Domain</b> (e.g. <code>alshawwaf.ca</code>, or <code>.alshawwaf.ca</code> for sub-domains), <b>Access role</b>, <b>Dynamic object</b>, <b>Updatable object</b> or <b>Security zone</b> to ask, say, “does host <code>10.1.1.222</code> have access to the domain <code>alshawwaf.ca</code>?”. Each object kind is its own match space, so the engine reasons in <em>identity</em> terms — a domain matches a rule’s domain object (exact or a parent), and is never confused with an IP cell. Domains and dynamic objects are created if missing; access-roles, security-zones and updatable-objects are reused (defined in Identity Awareness / topology / Check Point’s repository).</p>
-  <div class="row" style="margin-top:14px; gap:8px;">
+  <p class="aa-field-note">Check Point isn’t only TCP/UDP. Port-based (TCP/UDP/SCTP) takes a <b>port</b>; ICMP, RPC, DCE-RPC, GTP, Compound/Citrix TCP, “Other” (an IP protocol) and a services group are matched by <b>name</b> against the real predefined object; Application/Site matches an app. The engine reasons about each kind on its own, so distinct protocols never falsely overlap a port.</p>
+  <p class="aa-field-note">Source and destination aren’t only IPs either. Switch either <b>type</b> to a <b>Domain</b> (<code>alshawwaf.ca</code>, or <code>.alshawwaf.ca</code> for sub-domains), <b>Access role</b>, <b>Dynamic object</b>, <b>Updatable object</b> or <b>Security zone</b> — so you can ask, say, “does host <code>10.1.1.222</code> have access to the domain <code>alshawwaf.ca</code>?”. Each object kind is its own match space, so the engine reasons in <em>identity</em> terms — a domain matches a rule’s domain object (exact or a parent), never an IP cell. Domains and dynamic objects are created if missing; access-roles, security-zones and updatable-objects are reused (defined in Identity Awareness, topology, or Check Point’s repository).</p>
+  <div class="aa-actions">
     <button type="button" class="btn" id="aa-preview">Preview decision</button>
     <button type="button" class="btn secondary" id="aa-validate" disabled>Dry-run apply (validate)</button>
     <button type="button" class="btn" id="aa-publish" disabled>Apply &amp; publish</button>
+    <span class="aa-actions-hint">Preview first — apply unlocks once there’s a change to make.</span>
   </div>
   <div id="aa-confirm" hidden class="err" style="margin-top:12px; padding:10px 12px;">
     This writes to <b>live policy</b> on <code>{{ ms.host }}</code> and publishes — it can't be undone here.
@@ -111,10 +137,10 @@
 </div>
 
 <div class="card" id="aa-history" data-id="{{ ms.id }}">
-  <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:12px;">
+  <div class="aa-cardhead">
     <div>
-      <h2 style="margin:0;">Recent changes — rollback</h2>
-      <p class="muted" style="margin:4px 0 0; max-width:70ch;">Every change <b>published</b> to this server (from this form, the agent, or the webhook) is recorded with its exact inverse. Roll one back to undo just that change by first-match: PolicyPilot deletes the rule it added, re-enables the rule it disabled, or removes the object it widened in — never a full-database revision rollback. A revoke that <b>disabled</b> a rule can also be <b>finalized by deleting</b> that rule. If a rule was removed out-of-band, the rollback completes anyway. Dry-runs aren’t listed; objects a change created are left in place. Use <b>✕</b> to drop an entry from this list, or <b>Clear resolved</b> to tidy the done ones (neither touches live policy).</p>
+      <h2><span class="aa-step">2</span> Recent changes &amp; rollback</h2>
+      <p class="aa-sub">Every change <b>published</b> to this server — from this form, the agent, or the webhook — is recorded with its exact inverse. Roll one back to undo just that change by first-match: PolicyPilot deletes the rule it added, re-enables the rule it disabled, or removes the object it widened in — never a full-database revision rollback. A revoke that <b>disabled</b> a rule can also be <b>finalized by deleting</b> that rule. If a rule was removed out-of-band, the rollback completes anyway. Dry-runs aren’t listed; objects a change created are left in place. Use <b>✕</b> to drop an entry from this list, or <b>Clear resolved</b> to tidy the done ones — neither touches live policy.</p>
     </div>
     <div style="flex:0 0 auto; display:flex; gap:8px;">
       <button type="button" class="copybtn" id="aah-clear">Clear resolved</button>
@@ -149,8 +175,12 @@ Content-Type: application/json
 {% endif %}
 
 <div class="card">
-  <h2 style="margin-top:0;">How it decides — behind the scenes</h2>
-  <p class="muted" style="margin:4px 0 0;">Every request runs the same <b>first-match, top-down</b> decision tree the market leaders use — always aiming at an actionable result, never a hand-off to a human. The rules it follows, top to bottom:</p>
+  <div class="aa-cardhead">
+    <div>
+      <h2>How it decides</h2>
+      <p class="aa-sub">Every request runs the same <b>first-match, top-down</b> walk of the rulebase — always aiming at an actionable result, never a hand-off to a human. The rules it follows, top to bottom:</p>
+    </div>
+  </div>
   <ul class="aa-rules">
     <li style="--c:var(--ok);"><b>Reuse first.</b> If a rule already permits the traffic, it’s a no-op — just attach it to the ticket.</li>
     <li style="--c:var(--accent);"><b>Widen only on an exact match.</b> Extend an existing rule only when it already matches the request in the other two columns — so it never grants access nobody asked for.</li>
@@ -263,7 +293,7 @@ Content-Type: application/json
   <div class="dtwrap" id="aa-flow-wrap"><div class="dtcanvas" id="aa-flow-canvas"></div></div>
   <script id="dt-graph-data" type="application/json">{{ decision_graph_json|safe }}</script>
   <script id="dt-options-data" type="application/json">{{ aa_options_json|safe }}</script>
-  <div class="row" style="gap:8px;margin-top:14px;flex-wrap:wrap;justify-content:center;">
+  <div class="aa-legend">
     <span class="pill ok">No-op · already allowed</span>
     <span class="pill" style="background:var(--info-bg);color:var(--info);">Widen · extend a rule</span>
     <span class="pill" style="background:var(--warn-bg);color:var(--warn);">Create · new rule (above a deny if one blocks it)</span>

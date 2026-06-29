@@ -4,9 +4,7 @@ sent as ``Authorization: Bearer <key>`` (mint one in Settings → API keys). No 
 thin, documented wrapper over services.mcp_tools (so behaviour + safety match MCP exactly: reads/preview/
 correlate are always available; apply only PUBLISHES when the admin enabled the publish toggle).
 
-NOTE the prefix is /dbapi/v1, not /api/v1 — the latter is taken by the Kubernetes/NSX-T datacenter mocks
-(they emulate those vendors' /api/v1 surface, including a catch-all). Auto-documented in the portal's
-OpenAPI (/docs, /openapi.json)."""
+The prefix is /dbapi/v1. Auto-documented in the portal's OpenAPI (/docs, /openapi.json)."""
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Header, HTTPException

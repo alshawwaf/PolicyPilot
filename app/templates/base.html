@@ -273,7 +273,7 @@
       overflow:auto; font-size:12.5px; line-height:1.65; border:1px solid var(--line-soft); }
     code { background:var(--subtle-bg); color:var(--subtle-fg); padding:1.5px 6px; border-radius:5px;
       font-size:12.5px; font-family:ui-monospace,monospace; }
-    /* The Log Exporter command panel follows the theme (no stark black box on the light page) with a
+    /* The generated-command code panel follows the theme (no stark black box on the light page) with a
        cool accent bar marking it as a copy-me command. */
     #cmd-pre { background:var(--surface-3); color:var(--text); border:1px solid var(--line);
       border-left:3px solid #3b82f6; }
@@ -589,12 +589,17 @@
     <nav class="nav-main" id="nav-main">
       <a href="/">Home</a>
       <a href="/access-automation">Access automation</a>
+      <a href="/layers">Dynamic Layers</a>
       <div class="menu">
-        <a href="#" class="menu-trigger" data-match="/layers,/gateways,/management,/api-explorer,/mcp-guide">Servers &amp; Agents ▾</a>
+        <a href="#" class="menu-trigger" data-match="/management,/gateways">Connections ▾</a>
         <div class="menu-items">
           <a href="/management">Management Servers</a>
           <a href="/gateways">Gateways</a>
-          <a href="/layers">Dynamic Layers</a>
+        </div>
+      </div>
+      <div class="menu">
+        <a href="#" class="menu-trigger" data-match="/mcp-guide,/api-explorer">Agents &amp; API ▾</a>
+        <div class="menu-items">
           <a href="/mcp-guide">MCP for agents</a>
           <a href="/api-explorer">API explorer</a>
         </div>
@@ -749,7 +754,7 @@
           .then(function (r) { return r.text(); })
           .then(function (html) {
             bodyEl.innerHTML = fragmentOf(html, view); runScripts(bodyEl);
-            // FORM mode wires the submit hijack + focuses the first field. A VIEW (e.g. a datacenter
+            // FORM mode wires the submit hijack + focuses the first field. A VIEW (e.g. a read-only detail
             // detail) keeps its OWN scripts (inline edit, copy, delete) and must not be hijacked.
             if (view) { initFieldHelp(bodyEl); }
             else { wire(); var f = bodyEl.querySelector('input:not([type=hidden]),select,textarea'); if (f) f.focus(); }

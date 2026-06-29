@@ -1,5 +1,5 @@
 {# Copyable connection-field rows for the detail pages. Pass edit="<field>" to add an inline editor
-   (wired by the detail page's JS to POST /datacenters/{id}/quick-edit). #}
+   (wired by the detail page's JS to POST its quick-edit endpoint). #}
 {% macro cval(label, value, hint="", edit="") %}
 <div class="copyfield"{% if edit %} data-cf-field="{{ edit }}"{% endif %}>
   <span class="cf-label">{{ label }}</span>

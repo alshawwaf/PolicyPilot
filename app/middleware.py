@@ -16,7 +16,7 @@ _MAX_BODY = 8000
 def _excluded(path: str) -> bool:
     if path.startswith(("/activity", "/healthz", "/favicon", "/static")):
         return True
-    if path.endswith("/polls-fragment") or "/apply-status/" in path:
+    if "/apply-status/" in path:
         return True
     # The API-explorer proxy relays the user's REAL Management/Gateway request+response bodies (which can
     # carry credentials / a session sid). Don't persist those to the activity log — it's a passthrough to
@@ -27,19 +27,8 @@ def _excluded(path: str) -> bool:
 
 
 def _kind(path: str) -> str:
-    if path.startswith("/gaia_api"):
-        return "gaia_mock"
-    if path.startswith(("/gdc/", "/netfeed/", "/ioc/")):
-        return "feed_poll"
-    # Datacenter mocks — token-prefixed, plus the apex (bare-host) vCenter/NSX-T endpoints.
-    if (path.startswith(("/openstack/", "/vcenter/", "/nsxt/", "/policy/", "/sdk", "/rest/",
-                          "/global-manager/", "/proxmox/", "/api2/json", "/aci/", "/k8s/", "/nutanix/",
-                          "/api/nutanix/", "/api/vmm/", "/api/prism/",
-                          "/api/aaaLogin", "/api/aaaRefresh", "/api/aaaLogout",
-                          "/api/node/", "/api/class/", "/api/mo/"))
-            or path.startswith("/api/session") or path.startswith("/api/v1/") or path == "/api"):
-        return "datacenter"
-    if path.startswith("/api"):
+    # The machine surfaces (REST API, MCP, the inbound ticket webhook) vs. the portal UI.
+    if path.startswith(("/dbapi", "/mcp")) or path == "/access-automation/webhook":
         return "api"
     return "ui"
 

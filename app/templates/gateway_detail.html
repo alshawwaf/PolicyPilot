@@ -2,6 +2,12 @@
 {% import "_layers_view.html" as lv %}
 {% block title %}{{ gw.name }}{% endblock %}
 {% block content %}
+<style>
+  .conn-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:14px 22px; margin:6px 0 2px; }
+  .conn-item .conn-l { display:block; font-size:10.5px; font-weight:700; letter-spacing:.4px;
+    text-transform:uppercase; color:var(--faint); margin-bottom:5px; }
+  .conn-item .conn-v { font-size:13.5px; color:var(--text); }
+</style>
 <div class="page-head">
   <span class="icon-chip lg"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></span>
   <div class="ph-main">
@@ -19,10 +25,17 @@
 
 <div class="card">
   <h2 style="margin-top:0;">Connection</h2>
-  <p class="muted">Address <code>{{ gw.host }}:{{ gw.port }}</code> · Username <code>{{ gw.username or '—' }}</code> ·
-    TLS {% if gw.cert_pem %}<span class="pill ok">pinned certificate</span>{% elif gw.auto_trust %}<span class="pill">auto-trust · pins on first connect</span>{% else %}<span class="pill faint">system trust</span>{% endif %} ·
-    Password {% if has_password %}<span class="pill ok">saved (encrypted)</span>{% else %}<span class="pill faint">entered per apply</span>{% endif %}</p>
-  <p class="muted">Edit these on the <a href="/gateways/{{ gw.id }}/edit">gateway profile</a>.{% if not has_password %} The password is entered per fetch/apply; save one on the profile to skip retyping.{% endif %}</p>
+  <div class="conn-grid">
+    <div class="conn-item"><span class="conn-l">Address</span>
+      <span class="conn-v"><code>{{ gw.host }}:{{ gw.port }}</code></span></div>
+    <div class="conn-item"><span class="conn-l">Username</span>
+      <span class="conn-v"><code>{{ gw.username or '—' }}</code></span></div>
+    <div class="conn-item"><span class="conn-l">TLS</span>
+      <span class="conn-v">{% if gw.cert_pem %}<span class="pill ok">pinned certificate</span>{% elif gw.auto_trust %}<span class="pill">auto-trust · pins on first connect</span>{% else %}<span class="pill faint">system trust</span>{% endif %}</span></div>
+    <div class="conn-item"><span class="conn-l">Password</span>
+      <span class="conn-v">{% if has_password %}<span class="pill ok">saved (encrypted)</span>{% else %}<span class="pill faint">entered per apply</span>{% endif %}</span></div>
+  </div>
+  <p class="muted" style="margin-bottom:0;">Edit these on the <a href="/gateways/{{ gw.id }}/edit">gateway profile</a>.{% if not has_password %} The password is entered per fetch/apply; save one on the profile to skip retyping.{% endif %}</p>
 </div>
 
 <div class="card">
@@ -37,7 +50,7 @@
       {% else %}
       <input name="password" type="password" placeholder="Password (used for this call, never stored)" required>
       {% endif %}</div>
-    <button type="submit">⤓ Fetch now</button>
+    <button class="btn" type="submit">⤓ Fetch now</button>
   </form>
 
   {% if snapshot %}

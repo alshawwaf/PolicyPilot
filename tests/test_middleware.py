@@ -5,20 +5,19 @@ from app.middleware import _excluded, _kind, _parse_request
 
 
 def test_kind_classification():
-    assert _kind("/gaia_api/v1.9/login") == "gaia_mock"
-    assert _kind("/gdc/abc.json") == "feed_poll"
-    assert _kind("/netfeed/x") == "feed_poll"
-    assert _kind("/api/feeds") == "api"
+    assert _kind("/dbapi/v1/servers") == "api"
+    assert _kind("/mcp/") == "api"
+    assert _kind("/access-automation/webhook") == "api"
     assert _kind("/layers/1") == "ui"
+    assert _kind("/access-automation") == "ui"
 
 
 def test_exclusions():
     assert _excluded("/activity/rows")          # log viewer — avoid feedback loop
     assert _excluded("/healthz")
     assert _excluded("/layers/1/apply-status/xyz")
-    assert _excluded("/feeds/1/polls-fragment")
-    assert not _excluded("/api/feeds")
-    assert not _excluded("/gdc/x.json")
+    assert _excluded("/api-explorer/proxy")     # relays the user's own server creds — never persist
+    assert not _excluded("/dbapi/v1/servers")
     assert not _excluded("/login")
 
 

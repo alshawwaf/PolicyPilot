@@ -1,4 +1,4 @@
-"""Export builder: the Activity log (honours the page's status/type/data-center/search filters)."""
+"""Export builder: the Activity log (honours the page's status/type/search filters)."""
 from sqlalchemy import and_, select
 
 from ...models import ActivityLog
@@ -11,10 +11,9 @@ def build(db, user, qp) -> ExportTable:
     from ...routers.activity import KIND_LABELS, _clean_kinds, _filter_conds
 
     sel = _clean_kinds(qp.getlist("kinds"))
-    dc = qp.getlist("dc")
     status = qp.getlist("status")
     q = qp.get("q", "")
-    conds = _filter_conds(sel, dc, q, status)
+    conds = _filter_conds(sel, q, status)
 
     stmt = select(ActivityLog)
     if conds:

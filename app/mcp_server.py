@@ -43,15 +43,16 @@ def have_mcp() -> bool:
 
 
 def tool_catalog() -> list:
-    """[{name, summary}] for the tools an agent gets — names + the first docstring line. Works without
-    the SDK installed (reads services.mcp_tools directly), so the /mcp-guide page always renders."""
+    """[{name, summary}] for the tools an agent gets — each tool's name + its full docstring flattened to a
+    single line (the /mcp-guide page shows it inside a collapsible card). Works without the SDK installed
+    (reads services.mcp_tools directly), so the page always renders."""
     from .services import mcp_tools as t
     out = []
     for name in _TOOLS:
         fn = getattr(t, name, None)
         summary = ""
         if fn and fn.__doc__:
-            summary = " ".join(fn.__doc__.strip().split())   # collapse the docstring to one line
+            summary = " ".join(fn.__doc__.split())           # flatten the docstring to one line (whitespace)
         out.append({"name": name, "summary": summary})
     return out
 

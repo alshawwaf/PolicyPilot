@@ -1,9 +1,9 @@
-"""ORM models: portal users, simulated feeds, and the live poll log."""
+"""ORM models: portal users, management servers + gateways (and their encrypted secrets), dynamic-layer
+policies + apply tasks, applied-change history, API keys, settings/state, notifications, and the activity log."""
 import datetime as dt
-import enum
 import uuid
 
-from sqlalchemy import JSON, Boolean, DateTime, Enum, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .db import Base
@@ -94,7 +94,7 @@ class ActivityLog(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
-    kind: Mapped[str] = mapped_column(String(32), index=True)  # feed_poll|gaia_mock|layer_apply
+    kind: Mapped[str] = mapped_column(String(32), index=True)  # api | ui | gateway_read | layer_apply
     direction: Mapped[str] = mapped_column(String(12), default="inbound")  # inbound|outbound
     method: Mapped[str] = mapped_column(String(10), default="")
     path: Mapped[str] = mapped_column(String(400), default="")

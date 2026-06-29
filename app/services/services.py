@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import time
 
-from .applications import _norm, _score, _server_key   # shared, pure matchers
+from .applications import _score, _server_key   # shared, pure matchers
 
 _TTL = 60.0
 _cache: dict = {}

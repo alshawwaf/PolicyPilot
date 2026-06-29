@@ -31,9 +31,11 @@ is the fallback), so you rotate from the UI with no redeploy. If at-rest encrypt
 (`secret_available()` is False — neither `PILOT_ENCRYPTION_KEY` nor `PILOT_SESSION_SECRET` set) the
 save **refuses** to store cleartext and tells you to set the key or keep using the env vars.
 
-- **`mcp_token`** (MCP / agent) — bearer the `/mcp` client sends; setting it *enables* the endpoint.
-  Fallback: `PILOT_MCP_TOKEN`. Two **separate** companion toggles (both default OFF) gate the two
-  agent-drivable rails:
+- **`/mcp` activation** (MCP / agent) — the mounted `/mcp` endpoint is enabled by minting an active
+  **mcp-scope API key** (Settings → API keys, or right on `/mcp-guide`); the bearer the client sends is that
+  key. There is no separate token setting. (`PILOT_MCP_TOKEN` applies only to the standalone
+  `python -m app.mcp_server` run mode, not the portal-mounted endpoint.) Two **separate** toggles (both
+  default OFF) gate the two agent-drivable rails:
   - **`mcp_allow_publish`** — *Let the MCP agent publish to live policy.* Gates whether an agent may
     commit + publish rules to a live **SMS** (the Management rail). With it off, agents can still decide,
     preview, and dry-run (validate-and-discard), but `apply_access(publish=true)` is refused.

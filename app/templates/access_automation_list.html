@@ -2,7 +2,7 @@
 {% from "_macros.html" import export_menu %}
 {% block title %}Access automation{% endblock %}
 {% block content %}
-{% from "_macros.html" import row_actions, columns_menu %}
+{% from "_macros.html" import row_actions, columns_menu, empty_state %}
 <div class="page-head">
   <span class="icon-chip lg"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></span>
   <div class="ph-main">
@@ -15,7 +15,9 @@
 </div>
 
 {% if not rows %}
-<div class="card"><p class="muted">No management servers yet. <a href="/management/new">Add one</a> (with a stored credential), then return here to run access automation against its layers.</p></div>
+<div class="card">{{ empty_state('No management servers yet',
+  'Add a management server (with a stored credential), then return here to turn a ticket request into the minimal correct change on its layers.',
+  '+ New management server', '/management/new', 'New management server') }}</div>
 {% else %}
 <div class="statrow" style="margin:2px 0 20px;">
   <div class="stat"><span class="n">{{ rows|length }}</span><span class="l">Management Servers</span></div>

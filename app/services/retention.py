@@ -19,7 +19,7 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from ..db import SessionLocal
-from ..models import ActivityLog, AppState, User, utcnow
+from ..models import ActivityLog, AppState, LoginThrottle, User, utcnow
 from . import app_settings, idempotency, notifications
 
 log = logging.getLogger("policypilot.retention")
@@ -61,7 +61,22 @@ def sweep(db: Session) -> dict:
     pruned = idempotency.prune(db)            # drop expired idempotency records (fixed 24h TTL)
     if pruned:
         db.commit()
+    _prune_login_throttle(db)                 # drop stale brute-force counters (failed-only IPs never clear)
     return deleted
+
+
+def _prune_login_throttle(db: Session) -> int:
+    """Drop login-throttle rows that are no longer locked and whose window has long passed — a failed-only
+    IP (scanner / rotating source) never clears its row via a successful login, so without this the table
+    grows unbounded on a public deployment. A stale row past its window carries no security value."""
+    from .login_guard import WINDOW
+    now = utcnow()
+    cutoff = now - dt.timedelta(seconds=2 * WINDOW)
+    res = db.execute(delete(LoginThrottle).where(
+        LoginThrottle.first_fail < cutoff,
+        (LoginThrottle.locked_until.is_(None)) | (LoginThrottle.locked_until < now)))
+    db.commit()
+    return res.rowcount or 0
 
 
 def _maybe_notify(db: Session, deleted: dict) -> None:

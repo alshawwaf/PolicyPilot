@@ -64,9 +64,10 @@ def remember(key: str, result) -> None:
 
 
 def prune(db) -> int:
-    """Delete records past the TTL. Returns the count removed. Caller owns the session + commit."""
+    """Delete records past the TTL with a single set-based DELETE. Returns the count removed. Caller owns the
+    session + commit. ``created_at < cutoff`` is safe — all writes use the same tz-aware ``utcnow()`` (the
+    same pattern as retention._trim_by_age), so the stored values sort consistently against the cutoff."""
+    from sqlalchemy import delete
     cutoff = utcnow() - _TTL
-    stale = [r for r in db.query(IdempotencyRecord).all() if _as_aware(r.created_at) < cutoff]
-    for r in stale:
-        db.delete(r)
-    return len(stale)
+    res = db.execute(delete(IdempotencyRecord).where(IdempotencyRecord.created_at < cutoff))
+    return res.rowcount or 0

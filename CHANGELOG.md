@@ -7,6 +7,28 @@ All notable changes to **PolicyPilot** are documented here. This project follows
 
 Post-1.0.0 hardening of the agent surface, ahead of broader live validation.
 
+### Customer-readiness audit pass
+A full multi-dimension audit (security, engine, MCP, data, UX, docs, deploy, cruft, tests) found no blockers
+and no confirmed majors; the verified items were closed:
+- **Webhook idempotency** — the ticketing webhook (the most redelivery-prone publish surface) now wires the
+  same `idempotency` store as the MCP/REST apply paths, keyed on `server:ticket_id`: a redelivered ticket
+  replays the first committed result instead of publishing again. + a 429 rate-limit test and a
+  replay-not-double-publish test (the webhook rail was previously untested for both).
+- **Docs accuracy** — README badge/prose + `docs/mcp-n8n.md` now say **21** MCP tools (was 19, contradicting
+  `/version`); test badge → 675; `docs/settings.md` `/mcp` activation rewritten to the real mcp-scope API-key
+  mechanism (the non-existent `mcp_token` setting is gone).
+- **Deploy hygiene** — `docker-compose.yml` now forwards `PILOT_ENCRYPTION_KEY` (so a compose deploy can't
+  silently derive the at-rest key from the session secret and orphan credentials on rotation); removed the
+  dead SIEM `PILOT_SYSLOG_PORT` ports and the Nutanix `:9440` Caddy port (lab leftovers).
+- **Data hygiene** — `idempotency.prune` is now a single set-based DELETE; the retention sweep also prunes
+  stale `LoginThrottle` rows (failed-only IPs never self-clear); `notifications._prune` got an `id`
+  tiebreaker for deterministic trim.
+- **Coverage** — a route-driven test asserts every live page redirects an anonymous caller to `/login` (and
+  data endpoints deny, never 200), so a future unguarded route fails CI.
+- **Cruft** — fixed the stale `models.py` module docstring + `ActivityLog.kind` comment; removed dead imports
+  (`enum`, SQLAlchemy `Enum`, `_norm`); the flagship Access-automation empty state now uses the shared macro;
+  the MCP-guide `tool_catalog` docstring matches reality.
+
 ### Policy Manager — staged, hidden until fully developed
 - The dedicated **Policy Manager** landing is built (`app/routers/policy_manager.py` + template) but
   **intentionally not surfaced yet** — no nav entry, no home link, and the route is unmounted (`/policy-manager`

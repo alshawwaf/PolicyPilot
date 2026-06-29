@@ -1,6 +1,6 @@
 # MCP server — connect PolicyPilot to n8n / an LLM agent
 
-PolicyPilot exposes its access-automation brain as **19 MCP tools** an LLM agent (via n8n's *MCP Client
+PolicyPilot exposes its access-automation brain as **21 MCP tools** an LLM agent (via n8n's *MCP Client
 Tool* node, or any MCP client) can call over a single endpoint, `/mcp`. The tools cover **two rails**:
 
 - **Management access policy** — decide/apply changes on an SMS via the Management web_api (correlate a
@@ -96,7 +96,7 @@ In the **AI Agent** → add an **MCP Client Tool** node:
 
 n8n discovers the tools automatically (`tools/list`). The agent can then call them by name. Both rails
 live on the **same** `/mcp` endpoint and the same mcp-scope key — a single MCP Client Tool node sees all
-19 tools.
+21 tools.
 
 **Starter workflows** — import either of the two ready-made n8n agents from `docs/` (each is one rail with
 a tuned system prompt, the MCP Client Tool node, and a chat trigger), then point its credential at your
@@ -108,7 +108,7 @@ a tuned system prompt, the MCP Client Tool node, and a chat trigger), then point
 
 ## 3. Tools
 
-19 tools across two rails. The **Writes?** column notes which gate (if any) controls live writes — the two
+21 tools across two rails. The **Writes?** column notes which gate (if any) controls live writes — the two
 rails have **separate** gates (see §4).
 
 ### Management access policy (13 tools — SMS via the Management web_api)

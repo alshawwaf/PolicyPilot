@@ -3,12 +3,8 @@
 # the gateway sees a publicly-trusted HTTPS endpoint.
 #
 # For a local/lab demo set PILOT_DOMAIN=localhost — Caddy issues an internal cert.
-#
-# Served on 443 (all DC types) AND 9440: CloudGuard's Nutanix connector hardcodes Prism Central's
-# port 9440 and its Hostname field rejects a scheme/port, so the portal must answer on 9440 with the
-# same cert for Nutanix Test Connection to reach it. Caddy serves the same site on both ports.
 
-{$PILOT_DOMAIN}, {$PILOT_DOMAIN}:9440 {
+{$PILOT_DOMAIN} {
 	encode gzip
 	reverse_proxy app:8000
 }

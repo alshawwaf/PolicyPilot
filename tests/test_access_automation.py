@@ -1063,6 +1063,19 @@ class _WReq:
         return self._body
 
 
+def _isolate_idempotency(monkeypatch):
+    """Point the webhook's idempotency store at a fresh in-memory DB so a key from a prior test/run can't
+    replay (the real store persists in the default DB across runs)."""
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+    from sqlalchemy.pool import StaticPool
+    from app.db import Base
+    from app.services import idempotency
+    eng = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(eng)
+    monkeypatch.setattr(idempotency, "SessionLocal", sessionmaker(bind=eng))
+
+
 def _webhook_auth(monkeypatch):
     monkeypatch.setattr(aar.app_settings, "get_secret_or_env", lambda k, env: "t0k")
     monkeypatch.setattr(aar.app_settings, "get_or_env", lambda k, env: env)
@@ -1071,6 +1084,7 @@ def _webhook_auth(monkeypatch):
     monkeypatch.setattr(aar.mgmt_creds, "get_secret", lambda db, ms: "secret")
     monkeypatch.setattr(aar, "ensure_pinned", lambda db, ms: None)
     monkeypatch.setattr(aar.ticketing, "notify", lambda ticket, result: {"skipped": "test"})
+    _isolate_idempotency(monkeypatch)
 
 
 def test_webhook_applied_reflects_reality_not_intent(monkeypatch):
@@ -1137,6 +1151,7 @@ def _webhook_key_auth(monkeypatch, *, can_write):
     monkeypatch.setattr(aar.mgmt_creds, "get_secret", lambda db, ms: "secret")
     monkeypatch.setattr(aar, "ensure_pinned", lambda db, ms: None)
     monkeypatch.setattr(aar.ticketing, "notify", lambda ticket, result: {"skipped": "test"})
+    _isolate_idempotency(monkeypatch)
 
 
 def test_webhook_readonly_key_cannot_apply(monkeypatch):
@@ -1165,6 +1180,48 @@ def test_webhook_write_key_can_apply(monkeypatch):
     out = json.loads(_run(aar.aa_webhook(_WReq(body, token="rw-key"), db=db)).body)
     assert seen["publish"] is True and out["published"] is True
     db.close()
+
+
+def test_webhook_rate_limit_returns_429(monkeypatch):
+    # Over the per-key cap -> 429 before the engine is touched (the third write rail's limiter, untested before).
+    from app.services import rate_limit
+    _webhook_auth(monkeypatch)
+    called = {"execute": False}
+    monkeypatch.setattr(aa, "execute", lambda *a, **k: called.update(execute=True) or {})
+    monkeypatch.setattr(rate_limit, "allow", lambda ident: False)
+    db = _webhook_db()
+    body = {"ticket_id": "INC-RL", "server_id": 1, "layer": "L", "source": "10.0.0.5",
+            "destination": "1.1.1.1", "port": "443", "apply": True}
+    resp = _run(aar.aa_webhook(_WReq(body), db=db))
+    assert resp.status_code == 429 and called["execute"] is False
+    db.close()
+
+
+def test_webhook_idempotency_replays_not_double_publishes(monkeypatch):
+    # A redelivered ticket replays the first committed result instead of publishing again.
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+    from sqlalchemy.pool import StaticPool
+    from app.db import Base
+    from app.services import idempotency
+    _webhook_auth(monkeypatch)
+    eng = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(eng)
+    monkeypatch.setattr(idempotency, "SessionLocal", sessionmaker(bind=eng))
+    calls = {"n": 0}
+
+    def _execute(*a, **k):
+        calls["n"] += 1
+        return {"ok": True, "applied": True, "published": True, "outcome": "create", "call": calls["n"]}
+
+    monkeypatch.setattr(aa, "execute", _execute)
+    body = {"ticket_id": "INC-IDEM", "server_id": 1, "layer": "L", "source": "10.0.0.5",
+            "destination": "1.1.1.1", "port": "443", "apply": True}
+    first = json.loads(_run(aar.aa_webhook(_WReq(body), db=_webhook_db())).body)
+    second = json.loads(_run(aar.aa_webhook(_WReq(body), db=_webhook_db())).body)
+    assert calls["n"] == 1                                   # the SMS was published to exactly once
+    assert first["idempotent_replay"] is False and second["idempotent_replay"] is True
+    assert second["result"]["call"] == 1                     # the FIRST committed result, replayed
 
 
 # --- template rendering -----------------------------------------------------------------------

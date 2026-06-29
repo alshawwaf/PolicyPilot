@@ -10,8 +10,8 @@ LLM agent over MCP.*
 
 ![Version](https://img.shields.io/badge/version-1.0.0-3b82f6)
 ![Validated](https://img.shields.io/badge/validated-R82.10-7b3ff2)
-![Tests](https://img.shields.io/badge/tests-626%20passing-34d399)
-![MCP tools](https://img.shields.io/badge/MCP%20tools-19-7b3ff2)
+![Tests](https://img.shields.io/badge/tests-675%20passing-34d399)
+![MCP tools](https://img.shields.io/badge/MCP%20tools-21-7b3ff2)
 ![Python](https://img.shields.io/badge/python-3.12%2B-3b82f6)
 ![TLS](https://img.shields.io/badge/TLS-always%20verified-15935a)
 ![License](https://img.shields.io/badge/license-proprietary-5b6678)
@@ -34,7 +34,7 @@ one-click rollback. No more hand-editing rulebases or guessing where a rule belo
 ## 🛤 Two automation rails, one engine
 
 The same decision brain drives two ways to apply a change — **both fully agent-drivable over the same `/mcp`
-endpoint** (19 tools total, mcp-scope key as `Authorization: Bearer`):
+endpoint** (21 tools total, mcp-scope key as `Authorization: Bearer`):
 
 | Rail | What it does | How | Publish gate |
 |---|---|---|---|
@@ -69,7 +69,7 @@ rulebase.
 
 ## 🎛 Drive it four ways
 
-- 🤖 **[MCP server](docs/mcp-n8n.md)** — both rails as **19 tools** an LLM agent (n8n, Claude Desktop, Cursor,
+- 🤖 **[MCP server](docs/mcp-n8n.md)** — both rails as **21 tools** an LLM agent (n8n, Claude Desktop, Cursor,
   VS Code, any MCP client) calls over `/mcp`. Two ready-made n8n workflows ship in `docs/`:
   **[management access agent](docs/policypilot-management-agent.json)** and
   **[dynamic-layer agent](docs/policypilot-dynamic-layer-agent.json)**, both connecting to the same `/mcp` with

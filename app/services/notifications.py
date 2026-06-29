@@ -21,7 +21,9 @@ def add(db: Session, owner_id: int, text: str, kind: str = "success") -> None:
 def _prune(db: Session, owner_id: int) -> None:
     stale = db.scalars(
         select(Notification.id).where(Notification.owner_id == owner_id)
-        .order_by(Notification.created_at.desc()).offset(_MAX_PER_USER)).all()
+        # id tiebreaker so the trim order matches recent() exactly when timestamps collide (audit writes one
+        # row per user in a tight loop) — otherwise a just-shown notification could be trimmed instead.
+        .order_by(Notification.created_at.desc(), Notification.id.desc()).offset(_MAX_PER_USER)).all()
     if stale:
         db.execute(delete(Notification).where(Notification.id.in_(stale)))
         db.commit()

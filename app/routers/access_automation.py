@@ -545,17 +545,29 @@ async def aa_webhook(request: Request, db: Session = Depends(get_db)):
         return JSONResponse({"error": "This webhook API key is read-only — it cannot apply changes. "
                                       "Send apply=false to preview, or use a write-enabled webhook key."},
                             status_code=403)
-    if ticket.apply:
+    # Idempotency: the webhook is the most redelivery-prone publish surface (ITSM/n8n retry on a slow 200),
+    # so a retry with the same ticket REPLAYS the first committed result instead of publishing again —
+    # mirroring the MCP/REST apply paths. Keyed on server + ticket id (only when a ticket id is present).
+    from ..services import idempotency
+    idem_key = f"webhook:{ms.id}:{ticket.ticket_id.strip()}" if (ticket.apply and ticket.ticket_id.strip()) else ""
+    replayed = False
+    result = idempotency.replay(idem_key) if idem_key else None
+    if result is not None:
+        replayed = True
+    elif ticket.apply:
         result = aa.execute(ms, secret, ticket.request, ticket.layer, package=ticket.package,
                             ticket_id=ticket.ticket_id, publish=True)
         _record_change_safe(db, server=ms, result=result, request=change_log.snapshot_request(ticket.request),
                             layer=ticket.layer, package=ticket.package, ticket_id=ticket.ticket_id,
                             actor="webhook")
+        if idem_key and isinstance(result, dict) and result.get("published"):
+            idempotency.remember(idem_key, result)
     else:
         result = aa.preview(ms, secret, ticket.request, ticket.layer, package=ticket.package)
 
     # Push the result back to the originating system (generic callback_url, or the ServiceNow adapter).
-    callback = ticketing.notify(ticket, result)
+    # A replayed result was already pushed back on the first delivery — don't double-notify.
+    callback = {"skipped": "idempotent_replay"} if replayed else ticketing.notify(ticket, result)
     # Report what actually HAPPENED, not the request's intent: a no_op / review / unresolved-object run
     # commits nothing even when ticket.apply was true, so a consumer keying on the top-level flag must not
     # read "access granted". `published` mirrors the real commit; `outcome` lets the caller branch precisely.
@@ -563,5 +575,6 @@ async def aa_webhook(request: Request, db: Session = Depends(get_db)):
                          "applied": bool(result.get("applied")),
                          "published": bool(result.get("published")),
                          "outcome": result.get("outcome"),
+                         "idempotent_replay": replayed,
                          "result": result, "callback": callback},
                         status_code=200 if result.get("ok") else 400)

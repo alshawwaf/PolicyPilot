@@ -7,7 +7,7 @@ refreshing only when a new revision is published. Every knob here is editable fr
 page so an admin controls the behaviour from the portal — no code or env edits.
 
 Stored in the ``AppState`` key/value table so a change from any worker/replica is shared; a small
-in-process cache keeps these off the hot path (mirrors the SIEM pause toggle)."""
+in-process cache keeps these off the hot path."""
 from __future__ import annotations
 
 import logging
@@ -100,9 +100,8 @@ SETTINGS: list[Setting] = [
             "3-logins-per-minute throttle. 0 = fail immediately.", min=0, max=5),
 
     # --- Storage & retention -------------------------------------------------------------------------
-    # The two high-volume tables (the Activity log and the built-in SIEM receiver) are bounded so a
-    # long-running demo — a Data Center importing on a schedule, or Log Exporter streaming for days —
-    # can never fill the disk. A background sweep (started in main.lifespan) enforces these caps.
+    # The Activity log grows with every served request, so it's bounded — a background sweep (started in
+    # main.lifespan) trims it to the caps below so a long-running demo can never fill the disk.
     Setting("activity_max_records", "int", 5000,
             "Activity log — keep newest N",
             "Hard cap on the Activity log table: older entries are trimmed (cheap indexed delete) so the "
@@ -112,11 +111,6 @@ SETTINGS: list[Setting] = [
             "Activity log — also delete older than (days)",
             "Additionally drop Activity log entries older than this many days, regardless of count. "
             "0 = keep by record count only.", group="Storage & retention", min=0, max=3650),
-    Setting("siem_max_records", "int", 2000,
-            "SIEM receiver — keep newest N",
-            "Hard cap on the built-in SIEM (Log Exporter) table so a flooding gateway can't fill the disk "
-            "— it's a live demo viewer, not a log archive. 0 = unlimited (not recommended).",
-            group="Storage & retention", min=0, max=2_000_000),
     Setting("retention_sweep_min", "int", 5,
             "Housekeeping interval (minutes)",
             "How often the background pass enforces the caps above. Trimming is a cheap indexed range "
@@ -303,7 +297,7 @@ SETTINGS: list[Setting] = [
     Setting("base_url", "str", "",
             "Public base URL",
             "The public URL this portal is reached at (e.g. https://policypilot.example.com), stamped into the "
-            "feed / GDC / Keystone / gaia_api URLs shown to the SE and the MCP/webhook endpoints on the "
+            "MCP / webhook / gaia_api endpoint URLs shown on the "
             "guide pages. Set it here to change the displayed URLs with no redeploy. Leave blank to use "
             "PILOT_BASE_URL (or http://localhost:8000 in dev). NOTE: the session-cookie 'Secure' flag is "
             "still decided at startup from PILOT_BASE_URL's scheme, so for HTTPS cookie hardening set the "

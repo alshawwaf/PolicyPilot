@@ -18,7 +18,7 @@ from .middleware import ActivityLogMiddleware, SecurityHeadersMiddleware
 
 
 def _setup_logging() -> None:
-    """Emit the app's own ``policypilot.*`` logs (SIEM bind, MCP mount, credential/cache warnings) to stderr at
+    """Emit the app's own ``policypilot.*`` logs (MCP mount, credential / cache warnings) to stderr at
     INFO by default — uvicorn doesn't configure our loggers, so without this they're silent in a PoV. A
     dedicated handler (propagate off) avoids double-logging when a parent handler also exists."""
     raw = os.environ.get("PILOT_LOG_LEVEL", "INFO").strip()

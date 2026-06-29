@@ -1,5 +1,5 @@
-"""Storage guardrail — the retention sweep trims the Activity log + SIEM tables to the configured caps,
-and posts a (throttled) notification when it does."""
+"""Storage guardrail — the retention sweep trims the Activity log to the configured caps, and posts a
+(throttled) notification when it does."""
 import datetime as dt
 
 from sqlalchemy import create_engine, func, select
@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from app import models
 from app.db import Base
-from app.models import ActivityLog, AppState, Notification, SiemLog, User
+from app.models import ActivityLog, AppState, Notification, User
 
 
 def _db():
@@ -31,7 +31,7 @@ def test_trim_by_count_keeps_newest(monkeypatch):
         for i in range(50):
             db.add(ActivityLog(kind="ui", path=f"/p{i}"))
         db.commit()
-        retention = _settings(monkeypatch, activity_max_records=10, siem_max_records=0,
+        retention = _settings(monkeypatch, activity_max_records=10,
                               activity_max_age_days=0, retention_notify=False)
         deleted = retention.sweep(db)
         assert deleted["activity"] == 40
@@ -44,13 +44,13 @@ def test_trim_by_count_keeps_newest(monkeypatch):
 def test_unlimited_when_zero(monkeypatch):
     with _db() as db:
         for i in range(20):
-            db.add(SiemLog(raw=f"line {i}"))
+            db.add(ActivityLog(kind="ui", path=f"/p{i}"))
         db.commit()
-        retention = _settings(monkeypatch, siem_max_records=0, activity_max_records=0,
+        retention = _settings(monkeypatch, activity_max_records=0,
                               activity_max_age_days=0, retention_notify=False)
         deleted = retention.sweep(db)
-        assert deleted["siem"] == 0
-        assert db.scalar(select(func.count()).select_from(SiemLog)) == 20
+        assert deleted["activity"] == 0
+        assert db.scalar(select(func.count()).select_from(ActivityLog)) == 20
 
 
 def test_trim_by_age(monkeypatch):
@@ -61,7 +61,7 @@ def test_trim_by_age(monkeypatch):
         db.add(ActivityLog(kind="ui", path="/recent", at=recent))
         db.commit()
         retention = _settings(monkeypatch, activity_max_records=0, activity_max_age_days=30,
-                              siem_max_records=0, retention_notify=False)
+                              retention_notify=False)
         deleted = retention.sweep(db)
         assert deleted["activity"] == 1
         assert db.scalars(select(ActivityLog.path)).all() == ["/recent"]
@@ -73,15 +73,15 @@ def test_notify_is_throttled(monkeypatch):
         for i in range(30):
             db.add(ActivityLog(kind="ui", path=f"/p{i}"))
         db.commit()
-        retention = _settings(monkeypatch, activity_max_records=5, siem_max_records=0,
+        retention = _settings(monkeypatch, activity_max_records=5,
                               activity_max_age_days=0, retention_notify=True)
         # first sweep trims -> one notification
         retention.sweep(db)
-        retention._maybe_notify(db, {"activity": 25, "siem": 0})
+        retention._maybe_notify(db, {"activity": 25})
         assert db.scalar(select(func.count()).select_from(Notification)) == 1
         assert db.get(AppState, retention._LAST_NOTIFY_KEY) is not None
         # an immediate second trim does NOT notify again (throttled to 1/hour)
-        retention._maybe_notify(db, {"activity": 3, "siem": 0})
+        retention._maybe_notify(db, {"activity": 3})
         assert db.scalar(select(func.count()).select_from(Notification)) == 1
 
 
@@ -90,5 +90,5 @@ def test_notify_disabled(monkeypatch):
         db.add(User(username="admin", password_hash="x"))
         db.commit()
         retention = _settings(monkeypatch, retention_notify=False)
-        retention._maybe_notify(db, {"activity": 99, "siem": 0})
+        retention._maybe_notify(db, {"activity": 99})
         assert db.scalar(select(func.count()).select_from(Notification)) == 0

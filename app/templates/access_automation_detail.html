@@ -514,14 +514,17 @@ Content-Type: application/json
       var b = e.target.closest ? e.target.closest('[data-takeover]') : null;
       if (!b) return;
       var uid = b.getAttribute('data-takeover');
-      if (!window.confirm('Take over that session and DISCARD its unpublished changes to release the lock? This cannot be undone.')) return;
-      b.disabled = true; b.textContent = 'Releasing…';
-      fetch('/access-automation/' + id + '/take-over', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ session_uid: uid })
-      }).then(function (r) { return r.json(); }).then(function (j) {
-        if (j.ok) { result.innerHTML = '<div class="ok">✓ Session taken over and discarded — locks released. Re-running preview…</div>'; call('preview', 'preview'); }
-        else { result.innerHTML = '<div class="err">' + esc(j.error || 'Take-over failed.') + '</div>'; }
-      }).catch(function () { result.innerHTML = '<div class="err">Take-over request failed.</div>'; });
+      window.appConfirm('Take over that session and DISCARD its unpublished changes to release the lock? This cannot be undone.',
+        { title: 'Take over session', okText: 'Take over & discard' }).then(function (ok) {
+        if (!ok) return;
+        b.disabled = true; b.textContent = 'Releasing…';
+        fetch('/access-automation/' + id + '/take-over', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ session_uid: uid })
+        }).then(function (r) { return r.json(); }).then(function (j) {
+          if (j.ok) { result.innerHTML = '<div class="ok">✓ Session taken over and discarded — locks released. Re-running preview…</div>'; call('preview', 'preview'); }
+          else { result.innerHTML = '<div class="err">' + esc(j.error || 'Take-over failed.') + '</div>'; }
+        }).catch(function () { result.innerHTML = '<div class="err">Take-over request failed.</div>'; });
+      });
     });
 
     // Pick a suggested application/service chip -> fill the right field and re-evaluate.

@@ -222,29 +222,10 @@ class GatewayLayerSnapshot(Base):
     gateway: Mapped["Gateway"] = relationship(back_populates="snapshot")
 
 
-class SiemLog(Base):
-    """A log line received by the built-in SIEM receiver from Check Point's Log Exporter (syslog /
-    CEF / LEEF / JSON over TCP or UDP). Parsed best-effort into structured fields; the raw line is
-    kept too. Not owner-scoped (logs arrive from gateways, like the ActivityLog)."""
-
-    __tablename__ = "siem_logs"
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
-    source_ip: Mapped[str] = mapped_column(String(64), default="")
-    transport: Mapped[str] = mapped_column(String(8), default="udp")     # udp | tcp
-    fmt: Mapped[str] = mapped_column(String(16), default="syslog", index=True)  # cef|leef|json|syslog|raw
-    severity: Mapped[str] = mapped_column(String(24), default="")
-    host: Mapped[str] = mapped_column(String(120), default="")
-    summary: Mapped[str] = mapped_column(String(400), default="")
-    fields: Mapped[dict] = mapped_column(JSON, default=dict)
-    raw: Mapped[str] = mapped_column(Text, default="")
-
-
 class AppState(Base):
-    """A tiny key→value store for cross-process runtime flags that must be shared across uvicorn
-    workers / Swarm replicas (which each have their own memory) — e.g. the SIEM receiver's
-    pause toggle. Kept in the DB so a Pause/Resume from any process reaches the listener's process."""
+    """A tiny key→value store for cross-process runtime flags + portal settings that must be shared
+    across uvicorn workers / Swarm replicas (which each have their own memory) — e.g. the cached
+    settings map. Kept in the DB so a change from any process reaches the others."""
 
     __tablename__ = "app_state"
 

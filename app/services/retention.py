@@ -1,12 +1,11 @@
-"""Storage guardrail — bound the two high-volume tables so a long-running demo can never fill the disk
+"""Storage guardrail — bound the high-volume Activity log so a long-running demo can never fill the disk
 or slow the database.
 
-The Activity log grows with every served request and the SIEM receiver grows with every Log Exporter
-line, so leaving either running unattended (a Data Center importing on a schedule, or a gateway
-streaming logs for days) is exactly the kind of "production crash / data loss" risk we must prevent.
-A small background pass — started in ``main.lifespan`` and run every few minutes — enforces the
-admin-configurable caps from the **Settings** page: keep the newest N records, and/or delete anything
-older than N days. Every delete is a cheap, indexed range/age delete that runs only when over cap.
+The Activity log grows with every served request, so leaving the portal running unattended is exactly the
+kind of "production crash / data loss" risk we must prevent. A small background pass — started in
+``main.lifespan`` and run every few minutes — enforces the admin-configurable caps from the **Settings**
+page: keep the newest N records, and/or delete anything older than N days. Every delete is a cheap, indexed
+range/age delete that runs only when over cap.
 
 Defensive by design: a failure is logged and the loop keeps going. Housekeeping must never crash the
 app, and trimming the oldest demo traffic is expected, not a fault.
@@ -20,7 +19,7 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from ..db import SessionLocal
-from ..models import ActivityLog, AppState, SiemLog, User, utcnow
+from ..models import ActivityLog, AppState, User, utcnow
 from . import app_settings, notifications
 
 log = logging.getLogger("policypilot.retention")
@@ -54,12 +53,11 @@ def _trim_by_age(db: Session, model, days: int) -> int:
 
 
 def sweep(db: Session) -> dict:
-    """Enforce every configured cap once. Returns ``{"activity": n, "siem": m}`` (rows deleted)."""
+    """Enforce every configured cap once. Returns ``{"activity": n}`` (rows deleted)."""
     vals = app_settings.all_values()
-    deleted = {"activity": 0, "siem": 0}
+    deleted = {"activity": 0}
     deleted["activity"] += _trim_by_count(db, ActivityLog, int(vals.get("activity_max_records", 0)))
     deleted["activity"] += _trim_by_age(db, ActivityLog, int(vals.get("activity_max_age_days", 0)))
-    deleted["siem"] += _trim_by_count(db, SiemLog, int(vals.get("siem_max_records", 0)))
     return deleted
 
 
@@ -82,8 +80,6 @@ def _maybe_notify(db: Session, deleted: dict) -> None:
     parts = []
     if deleted.get("activity"):
         parts.append(f"{deleted['activity']:,} activity-log")
-    if deleted.get("siem"):
-        parts.append(f"{deleted['siem']:,} SIEM")
     text = ("Storage housekeeping: trimmed " + " and ".join(parts) +
             " record(s) to stay within the configured retention cap.")
     for uid in db.scalars(select(User.id)).all():

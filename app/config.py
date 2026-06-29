@@ -32,20 +32,6 @@ class Settings(BaseSettings):
 
     database_url: str = "sqlite:///./data/policypilot.db"
 
-    # Default Generic DC poll interval hint shown in the UI (seconds). Min 10 per sk167210.
-    default_gdc_interval: int = 10
-
-    # SIEM receiver: the TCP+UDP port the built-in Log Exporter listener binds. On by default (5514,
-    # a high port that needs no root); set 0 to disable. Binding is best-effort — if the port is taken
-    # the app still runs. For *external* gateways to reach it, the port must also be published at the
-    # deployment edge (docker-compose does; on Dokploy add a TCP+UDP entrypoint). Point Check Point's
-    # cp_log_export target-port here.
-    syslog_port: int = 5514
-
-    # SIEM receiver retention: keep only the newest N log records (a flooding gateway can't fill the
-    # disk — older rows are trimmed). It's a live demo viewer, not a log archive.
-    syslog_max_records: int = 2000
-
     # Access automation — generic ticketing webhook (ServiceNow, Jira, Remedy, custom portal …).
     # The inbound webhook (POST /access-automation/webhook) is DISABLED unless a shared secret is set;
     # the caller must send it as the X-PolicyPilot-Token header.

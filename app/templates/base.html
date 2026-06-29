@@ -635,12 +635,7 @@
   </header>
   <main class="{% block main_class %}{% endblock %}">{% block content %}{% endblock %}</main>
 
-  {% block footer %}
-  <footer style="max-width:1180px; margin:40px auto 24px; padding:14px 20px 0; border-top:1px solid var(--line);
-                 color:var(--faint); font-size:12px; text-align:center;">
-    <strong style="color:var(--muted);">PolicyPilot</strong> v{{ app_version }}
-  </footer>
-  {% endblock %}
+  {% block footer %}{% endblock %}
 
   {% if flash %}
   <div id="toast" class="toast {{ flash.type }}">{{ flash.text }}</div>
@@ -819,37 +814,64 @@
       setTimeout(function () { t.classList.add('hide'); }, 3500);
       setTimeout(function () { t.remove(); }, 4000);
     })();
-    // In-app confirm modal (replaces native confirm()).
+    // In-app confirm modal — replaces native confirm() everywhere. Two ways to use it:
+    //   • declarative: any element with data-confirm="msg" inside a form (optional data-confirm-title /
+    //     data-confirm-ok) opens the modal and submits the form on confirm.
+    //   • programmatic: window.appConfirm(msg, {title, okText, danger}) -> Promise<boolean> for JS flows.
+    // window.appToast(msg, type) shows a styled toast (type: 'success' | 'error' | 'info').
     (function () {
       var overlay = document.getElementById('modal-overlay');
+      var titleEl = document.getElementById('modal-title');
       var msg = document.getElementById('modal-msg');
       var okBtn = document.getElementById('modal-ok');
       var cancelBtn = document.getElementById('modal-cancel');
-      var pendingForm = null;
-      var pendingSubmitter = null;
-      function open(message, form, submitter) { msg.textContent = message; pendingForm = form; pendingSubmitter = submitter || null; overlay.hidden = false; }
-      function close() { overlay.hidden = true; pendingForm = null; pendingSubmitter = null; }
+      var pForm = null, pSub = null, pResolve = null;
+      function reset() { pForm = null; pSub = null; pResolve = null; }
+      function open(o) {
+        titleEl.textContent = o.title || 'Please confirm';
+        msg.textContent = o.message || '';
+        okBtn.textContent = o.okText || 'Confirm';
+        okBtn.classList.toggle('danger', o.danger !== false);   // destructive by default; pass danger:false to soften
+        pForm = o.form || null; pSub = o.submitter || null; pResolve = o.resolve || null;
+        overlay.hidden = false;
+        setTimeout(function () { try { (pResolve ? cancelBtn : okBtn).focus(); } catch (e) {} }, 30);
+      }
+      function settle(result) {
+        overlay.hidden = true;
+        var r = pResolve, form = pForm, sub = pSub; reset();
+        if (r) { r(!!result); return; }
+        if (result && form) {
+          // requestSubmit(submitter) preserves the clicked button's formaction; .submit() drops it.
+          if (form.requestSubmit) form.requestSubmit(sub && sub.form === form ? sub : undefined);
+          else form.submit();
+        }
+      }
+      window.appConfirm = function (message, o) {
+        o = o || {};
+        return new Promise(function (resolve) {
+          open({ message: message, title: o.title, okText: o.okText, danger: o.danger, resolve: resolve });
+        });
+      };
+      window.appToast = function (message, type) {
+        var t = document.createElement('div');
+        t.className = 'toast ' + (type || 'success');
+        t.textContent = message;
+        document.body.appendChild(t);
+        setTimeout(function () { t.classList.add('hide'); }, 3500);
+        setTimeout(function () { t.remove(); }, 4000);
+      };
       document.addEventListener('click', function (e) {
         var el = e.target.closest('[data-confirm]');
         if (!el) return;
         e.preventDefault();
         var sub = (el.tagName === 'BUTTON' || el.type === 'submit') ? el : null;
-        open(el.getAttribute('data-confirm'), el.closest('form'), sub);
+        open({ message: el.getAttribute('data-confirm'), title: el.getAttribute('data-confirm-title'),
+               okText: el.getAttribute('data-confirm-ok'), form: el.closest('form'), submitter: sub });
       });
-      okBtn.addEventListener('click', function () {
-        if (!pendingForm) return;
-        // requestSubmit(submitter) preserves the clicked button's formaction (e.g. Activity "Clear all");
-        // .submit() drops it. Fall back to .submit() only where requestSubmit is unavailable.
-        if (pendingForm.requestSubmit) {
-          pendingForm.requestSubmit(pendingSubmitter && pendingSubmitter.form === pendingForm ? pendingSubmitter : undefined);
-        } else {
-          pendingForm.submit();
-        }
-        close();
-      });
-      cancelBtn.addEventListener('click', close);
-      overlay.addEventListener('click', function (e) { if (e.target === overlay) close(); });
-      document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !overlay.hidden) close(); });
+      okBtn.addEventListener('click', function () { settle(true); });
+      cancelBtn.addEventListener('click', function () { settle(false); });
+      overlay.addEventListener('click', function (e) { if (e.target === overlay) settle(false); });
+      document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !overlay.hidden) settle(false); });
     })();
     // Dropdown menus.
     (function () {

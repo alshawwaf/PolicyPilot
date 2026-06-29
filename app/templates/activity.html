@@ -171,13 +171,15 @@
     window.gotoPage = function (n) { page = Math.max(1, n); load(); window.scrollTo({ top: 0, behavior: 'smooth' }); };
 
     function deleteOne(id) {
-      if (!window.confirm('Delete this log record? This cannot be undone.')) return;
-      var body = query();          // current view (kinds / dc / status / page_size / q)
-      body.append('ids', id);
-      body.set('ajax', '1');
-      fetch('/activity/delete', {
-        method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: body.toString()
-      }).then(function () { load(); }).catch(function () {});
+      window.appConfirm('Delete this log record? This cannot be undone.', { okText: 'Delete' }).then(function (ok) {
+        if (!ok) return;
+        var body = query();          // current view (kinds / dc / status / page_size / q)
+        body.append('ids', id);
+        body.set('ajax', '1');
+        fetch('/activity/delete', {
+          method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: body.toString()
+        }).then(function () { load(); }).catch(function () {});
+      });
     }
 
     rowsEl.addEventListener('click', function (e) {

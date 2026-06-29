@@ -63,7 +63,7 @@
     border:1.5px solid rgba(255,255,255,.5); }
 
   /* ---- Launchpad ---- */
-  .os-launch { position:absolute; inset:0; z-index:60; display:none; align-items:flex-start; justify-content:center;
+  .os-launch { position:absolute; inset:0; z-index:100000; display:none; align-items:flex-start; justify-content:center;
     background:rgba(8,11,20,.6); backdrop-filter:blur(22px); -webkit-backdrop-filter:blur(22px); padding:54px 24px; }
   .os-launch.open { display:flex; }
   .os-launch-grid { display:grid; grid-template-columns:repeat(auto-fill,150px); gap:18px; align-content:start;
@@ -82,7 +82,7 @@
   .os-launch-x { position:absolute; top:16px; right:20px; }
 
   /* ---- Right-click context menu ---- */
-  .os-ctx { position:absolute; z-index:80; min-width:212px; padding:6px; display:none;
+  .os-ctx { position:absolute; z-index:100002; min-width:212px; padding:6px; display:none;
     background:rgba(20,26,44,.97); backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px);
     border:1px solid rgba(255,255,255,.12); border-radius:12px; box-shadow:0 18px 50px rgba(0,0,0,.5); }
   html[data-theme="light"] .os-ctx { background:rgba(255,255,255,.98); border-color:var(--line); box-shadow:0 18px 44px rgba(16,24,40,.2); }
@@ -127,10 +127,6 @@
 </style>
 
 <div class="os-desktop" id="os-desktop">
-  <div class="os-hello" id="os-hello">
-    <h2>Welcome back{% if user %}, {{ user.username }}{% endif %}</h2>
-    <p>Open apps from the dock — drag, resize from any edge, stack as many as you like. The launchpad (▦) lets you add icons to the dock or desktop.</p>
-  </div>
   <div class="os-launch" id="os-launch"><div class="os-launch-grid" id="os-launch-grid"></div>
     <button type="button" class="btn secondary os-launch-x" id="os-launch-x">Done</button></div>
   <div class="os-dock" id="os-dock"></div>
@@ -139,6 +135,9 @@
 <script>window.PP_LAYOUT = {{ layout | tojson }}; window.PP_ADMIN = {{ is_admin | tojson }};</script>
 <script>
 (function () {
+  // The desktop must never render inside a window. If this page is somehow loaded in an iframe (a window
+  // navigated to "/"), break out to the real top-level desktop instead of nesting one.
+  if (window.self !== window.top) { try { window.top.location.replace('/'); } catch (e) {} return; }
   var desktop = document.getElementById('os-desktop'), dock = document.getElementById('os-dock'),
       hello = document.getElementById('os-hello'), launch = document.getElementById('os-launch'),
       lgrid = document.getElementById('os-launch-grid');
@@ -162,7 +161,8 @@
     pin: '<path d="M9 4h6l-1 6 3 3v2H7v-2l3-3-1-6z"/><path d="M12 15v5"/>',
     eyeoff: '<path d="M9.9 4.24A9 9 0 0 1 12 4c7 0 10 8 10 8a18 18 0 0 1-2.4 3.5M6.6 6.6A18 18 0 0 0 2 12s3 8 10 8a9 9 0 0 0 3.5-.7"/><line x1="2" y1="2" x2="22" y2="22"/>',
     external: '<path d="M14 3h7v7"/><path d="M21 3l-9 9"/><path d="M21 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5"/>',
-    star: '<polygon points="12 2 15 9 22 9.3 16.5 14 18.5 21 12 17 5.5 21 7.5 14 2 9.3 9 9"/>'
+    star: '<polygon points="12 2 15 9 22 9.3 16.5 14 18.5 21 12 17 5.5 21 7.5 14 2 9.3 9 9"/>',
+    pulse: '<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>'
   };
   function svg(p) { return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">' + p + '</svg>'; }
   var COUNTS = { layers: {{ counts.layers|default(0) }}, management: {{ counts.management|default(0) }}, gateways: {{ counts.gateways|default(0) }} };
@@ -175,9 +175,10 @@
     apiexplorer: { label: 'API explorer',       href: '/api-explorer',      ic: I.code,    grad: 'linear-gradient(135deg,#22d3ee,#3b82f6)' },
     settings:    { label: 'Settings',           href: '/settings',          ic: I.sliders, grad: 'linear-gradient(135deg,#a855f7,#7b3ff2)' },
     activity:    { label: 'Activity',           href: '/activity',          ic: I.clock,   grad: 'linear-gradient(135deg,#ec4899,#f43f5e)' },
+    system:      { label: 'System',             href: '/system',            ic: I.pulse,   grad: 'linear-gradient(135deg,#10b981,#22d3ee)' },
     account:     { label: 'Account',            href: '/account',           ic: I.user,    grad: 'linear-gradient(135deg,#94a3b8,#64748b)' }
   };
-  var ORDER = ['access', 'layers', 'management', 'gateways', 'agents', 'apiexplorer', 'settings', 'activity', 'account'];
+  var ORDER = ['access', 'layers', 'management', 'gateways', 'agents', 'apiexplorer', 'settings', 'activity', 'system', 'account'];
   var wins = {}, z = 100, openCount = 0;
 
   function clamp(v, lo, hi) { return Math.max(lo, Math.min(v, hi)); }
@@ -284,7 +285,30 @@
   }
 
   /* ---- desktop icons ---- */
-  function nextSlot(n) { var col = Math.floor(n / 6), row = n % 6; return { x: 24 + col * 104, y: 18 + row * 92 }; }
+  // Desktop icons snap to an aligned grid (104px cols x 92px rows from a 24,18 origin) and never stack on
+  // another icon — a dropped icon lands in the nearest FREE cell, so it tucks neatly beside its neighbours.
+  var GX = 104, GY = 92, OX = 24, OY = 18;
+  function cellOf(x, y) { return { col: Math.max(0, Math.round((x - OX) / GX)), row: Math.max(0, Math.round((y - OY) / GY)) }; }
+  function slotXY(col, row) { return { x: OX + col * GX, y: OY + row * GY }; }
+  function occupied(col, row, exceptKey) {
+    return LAYOUT.desktop.some(function (i) {
+      if (i.key === exceptKey) return false;
+      var c = cellOf(i.x || 0, i.y || 0); return c.col === col && c.row === row;
+    });
+  }
+  function nextSlot() {
+    for (var row = 0; row < 6; row++) for (var col = 0; col < 12; col++) if (!occupied(col, row, null)) return slotXY(col, row);
+    return slotXY(0, 0);
+  }
+  function snapSlot(x, y, key) {
+    var c = cellOf(x, y);
+    if (!occupied(c.col, c.row, key)) return slotXY(c.col, c.row);
+    for (var d = 1; d < 30; d++) {
+      var tries = [[c.col, c.row + d], [c.col, Math.max(0, c.row - d)], [c.col + 1, c.row + d], [Math.max(0, c.col - 1), c.row + d], [c.col + 1, c.row], [Math.max(0, c.col - 1), c.row]];
+      for (var t = 0; t < tries.length; t++) if (!occupied(tries[t][0], tries[t][1], key)) return slotXY(tries[t][0], tries[t][1]);
+    }
+    return slotXY(c.col, c.row);
+  }
   function renderDesktopIcons() {
     desktop.querySelectorAll('.os-deskicon').forEach(function (n) { n.remove(); });
     LAYOUT.desktop.forEach(function (it) {
@@ -303,8 +327,10 @@
         }
         function up() {
           document.removeEventListener('mousemove', mv); document.removeEventListener('mouseup', up);
-          if (moved) { it.x = parseInt(el.style.left, 10); it.y = parseInt(el.style.top, 10); saveLayout(); }
-          else openApp(it.key);
+          if (moved) {
+            var s = snapSlot(parseInt(el.style.left, 10), parseInt(el.style.top, 10), it.key);
+            it.x = s.x; it.y = s.y; el.style.left = s.x + 'px'; el.style.top = s.y + 'px'; saveLayout();
+          } else openApp(it.key);
         }
         document.addEventListener('mousemove', mv); document.addEventListener('mouseup', up); e.preventDefault();
       });
@@ -319,7 +345,7 @@
   function toggleDesktop(k) {
     var i = -1; LAYOUT.desktop.forEach(function (it, n) { if (it.key === k) i = n; });
     if (i >= 0) LAYOUT.desktop.splice(i, 1);
-    else { var s = nextSlot(LAYOUT.desktop.length); LAYOUT.desktop.push({ key: k, x: s.x, y: s.y }); }
+    else { var s = nextSlot(); LAYOUT.desktop.push({ key: k, x: s.x, y: s.y }); }
     renderDesktopIcons(); saveLayout();
   }
 
@@ -412,6 +438,12 @@
       e.preventDefault();
       showCtx(e.clientX - r.left, e.clientY - r.top, [{ label: 'Set this layout as everyone’s default', ic: I.star, fn: saveDefault }]);
     }
+  });
+
+  // An embedded page asked to return to the desktop (a "/" link inside a window) — minimize windows
+  // instead of nesting a desktop in the window.
+  window.addEventListener('message', function (e) {
+    if (e.origin === window.location.origin && e.data && e.data.pp === 'showDesktop') showDesktop();
   });
 
   renderDock(); renderDesktopIcons();

@@ -14,8 +14,21 @@
   </script>
   <script>
     /* When this page is loaded inside a desktop window (an iframe on the desktop shell), drop its own
-       top-nav chrome so the window shows just the tool, not a nested navbar. Runs before first paint. */
-    (function () { try { if (window.self !== window.top) document.documentElement.classList.add('embedded'); } catch (e) { document.documentElement.classList.add('embedded'); } })();
+       top-nav chrome so the window shows just the tool, not a nested navbar. Runs before first paint.
+       Also: a link to "/" inside a window must NOT load a nested desktop — ask the parent to show the
+       real desktop instead. */
+    (function () {
+      var framed; try { framed = window.self !== window.top; } catch (e) { framed = true; }
+      if (!framed) return;
+      document.documentElement.classList.add('embedded');
+      document.addEventListener('click', function (e) {
+        var a = e.target.closest && e.target.closest('a[href]'); if (!a) return;
+        var u; try { u = new URL(a.href, location.origin); } catch (x) { return; }
+        if (u.origin === location.origin && u.pathname === '/') {
+          e.preventDefault(); try { window.parent.postMessage({ pp: 'showDesktop' }, location.origin); } catch (e2) {}
+        }
+      });
+    })();
   </script>
   <script src="https://unpkg.com/htmx.org@2.0.3" crossorigin="anonymous"></script>
   <style>

@@ -7,6 +7,19 @@ All notable changes to **PolicyPilot** are documented here. This project follows
 
 Post-1.0.0 hardening of the agent surface, ahead of broader live validation.
 
+### Desktop polish + a System app + OS login
+- **System app** (new): a desktop "System" tool (`/system`) showing live service health — DB/service
+  status, operating mode, uptime, load average, peak memory, CPUs, runtime/version, inventory counts,
+  activity totals + error rate + avg latency, and the agent-surface conformance self-check. Auto-refreshes
+  every 5s from a read-only `/system/data` JSON endpoint. Useful for a production deployment.
+- **OS login**: the sign-in page is now a macOS lock-screen — full wallpaper, a centred gradient avatar,
+  frosted username/password fields, no menubar.
+- Desktop fixes: the **Launchpad / right-click menu now sit above open windows** (were hidden behind them);
+  a window can no longer **nest the desktop** (a "/" link inside a window asks the parent to show the
+  desktop, and the desktop refuses to render inside a frame); removed the "Welcome back" text behind the
+  windows; **desktop icons snap to an aligned grid** on drop (nearest free cell — they tuck beside
+  neighbours instead of landing anywhere).
+
 ### Desktop UI — the portal as a macOS-style desktop
 - The Home page is now a **desktop**: a colourful **dock** of app icons, where each tool opens as a
   **draggable / resizable / minimisable / zoomable window** with macOS traffic-light controls. Multiple

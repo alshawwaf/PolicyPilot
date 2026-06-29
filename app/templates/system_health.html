@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+{% block title %}System{% endblock %}
+{% block content %}
+<style>
+  #sysh .cap { font-size:11px; letter-spacing:.5px; text-transform:uppercase; color:var(--faint); font-weight:700; margin:22px 2px 9px; }
+  #sysh .sh-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(168px,1fr)); gap:12px; }
+  #sysh .sh-stat { background:var(--surface); border:1px solid var(--line); border-radius:13px; padding:14px 16px; }
+  #sysh .sh-stat .l { font-size:11.5px; color:var(--muted); }
+  #sysh .sh-stat .v { font-size:24px; font-weight:650; margin-top:5px; }
+  #sysh .sh-stat .v.sm { font-size:15px; }
+  #sysh .sh-status { display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:12px; }
+  #sysh .sh-big { background:var(--surface); border:1px solid var(--line); border-radius:14px; padding:16px 18px; display:flex; align-items:center; gap:13px; }
+  #sysh .sh-big .dot { width:11px; height:11px; border-radius:50%; flex:none; }
+  #sysh .dot.ok { background:#28c840; box-shadow:0 0 10px rgba(40,200,64,.6); }
+  #sysh .dot.bad { background:#ff5f57; box-shadow:0 0 10px rgba(255,95,87,.6); }
+  #sysh .dot.warn { background:#febc2e; }
+  #sysh .sh-big .l { font-size:11.5px; color:var(--muted); }
+  #sysh .sh-big .v { font-size:17px; font-weight:650; margin-top:1px; }
+  #sysh .live { display:inline-flex; align-items:center; gap:6px; font-size:12px; color:var(--ok,#5dcaa5); margin-left:8px; }
+  #sysh .live .ld { width:7px; height:7px; border-radius:50%; background:var(--ok,#5dcaa5); animation:shp 1.6s ease-in-out infinite; }
+  @keyframes shp { 0%,100%{opacity:.4} 50%{opacity:1} }
+  #sysh .sh-checks { background:var(--surface); border:1px solid var(--line); border-radius:14px; overflow:hidden; }
+  #sysh .sh-chk { display:flex; align-items:center; gap:12px; padding:11px 16px; border-top:1px solid var(--line-soft); font-size:13px; }
+  #sysh .sh-chk:first-child { border-top:0; }
+  #sysh .sh-chk .nm { font-weight:600; }
+  #sysh .sh-chk .dt { color:var(--muted); font-size:12px; margin-left:auto; text-align:right; }
+  #sysh .sh-chk .ic { width:18px; height:18px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:11px; flex:none; }
+  #sysh .ic.ok { background:rgba(40,200,64,.18); color:#28c840; } #sysh .ic.bad { background:rgba(255,95,87,.18); color:#ff5f57; }
+</style>
+<div id="sysh">
+<div class="page-head">
+  <span class="icon-chip lg" style="background:linear-gradient(135deg,#10b981,#22d3ee)"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></span>
+  <div class="ph-main"><h1>System</h1>
+    <p class="ph-sub">Live health of the PolicyPilot service — process, database, activity, and the agent surface.<span class="live"><span class="ld"></span>live · 5s</span></p></div>
+</div>
+
+<div class="sh-status">
+  <div class="sh-big"><span class="dot {{ 'ok' if health.db_ok else 'bad' }}" id="d-db"></span><div><div class="l">Service / database</div><div class="v" id="v-db">{{ 'Operational' if health.db_ok else 'Database down' }}</div></div></div>
+  <div class="sh-big"><span class="dot {{ 'ok' if health.conformance.ok else 'warn' }}" id="d-conf"></span><div><div class="l">Agent surface</div><div class="v">{{ 'Healthy · ' ~ health.conformance.tools ~ ' tools' if health.conformance.ok else 'Needs attention' }}</div></div></div>
+  <div class="sh-big"><span class="dot ok"></span><div><div class="l">Operating mode</div><div class="v" id="v-mode">{{ health.mode }}</div></div></div>
+  <div class="sh-big"><span class="dot ok"></span><div><div class="l">Uptime</div><div class="v" id="v-uptime">{{ health.uptime }}</div></div></div>
+</div>
+
+<div class="cap">Process</div>
+<div class="sh-grid">
+  <div class="sh-stat"><div class="l">Load average (1·5·15m)</div><div class="v" id="v-load">{{ (health.load|join(' · ')) if health.load else '—' }}</div></div>
+  <div class="sh-stat"><div class="l">Memory · peak RSS (MB)</div><div class="v" id="v-mem">{{ health.mem_mb if health.mem_mb is not none else '—' }}</div></div>
+  <div class="sh-stat"><div class="l">CPUs</div><div class="v">{{ health.cpus or '—' }}</div></div>
+  <div class="sh-stat"><div class="l">Runtime</div><div class="v sm">Python {{ health.python }} · {{ health.os }}</div></div>
+  <div class="sh-stat"><div class="l">Version</div><div class="v sm">{{ health.version }}</div></div>
+  <div class="sh-stat"><div class="l">Agent rate limit / min</div><div class="v">{{ health.rate if health.rate else 'none' }}</div></div>
+</div>
+
+<div class="cap">Inventory</div>
+<div class="sh-grid">
+  <div class="sh-stat"><div class="l">Connections (SMS)</div><div class="v" id="v-c-connections">{{ health.counts.connections }}</div></div>
+  <div class="sh-stat"><div class="l">Gateways</div><div class="v" id="v-c-gateways">{{ health.counts.gateways }}</div></div>
+  <div class="sh-stat"><div class="l">Dynamic layers</div><div class="v" id="v-c-layers">{{ health.counts.layers }}</div></div>
+  <div class="sh-stat"><div class="l">API keys</div><div class="v" id="v-c-api_keys">{{ health.counts.api_keys }}</div></div>
+  <div class="sh-stat"><div class="l">Users</div><div class="v" id="v-c-users">{{ health.counts.users }}</div></div>
+</div>
+
+<div class="cap">Activity</div>
+<div class="sh-grid">
+  <div class="sh-stat"><div class="l">Total events</div><div class="v" id="v-a-total">{{ health.activity.total }}</div></div>
+  <div class="sh-stat"><div class="l">Errors ≥400 (rate)</div><div class="v" id="v-a-errors">{{ health.activity.errors }} · {{ health.activity.error_pct }}%</div></div>
+  <div class="sh-stat"><div class="l">Avg latency (ms)</div><div class="v" id="v-a-avg">{{ health.activity.avg_ms }}</div></div>
+  <div class="sh-stat"><div class="l">Last hour</div><div class="v" id="v-a-hour">{{ health.activity.last_hour }}</div></div>
+</div>
+
+<div class="cap">Agent surface — conformance (read-only self-check)</div>
+<div class="sh-checks">
+  {% for c in health.conformance.checks %}
+  <div class="sh-chk"><span class="ic {{ 'ok' if c.ok else 'bad' }}">{{ '✓' if c.ok else '✕' }}</span>
+    <span class="nm">{{ c.name.replace('_', ' ')|capitalize }}</span><span class="dt">{{ c.detail }}</span></div>
+  {% else %}
+  <div class="sh-chk"><span class="dt">No checks reported.</span></div>
+  {% endfor %}
+</div>
+</div>
+
+<script>
+(function () {
+  function set(id, v) { var e = document.getElementById(id); if (e && v !== undefined && v !== null) e.textContent = v; }
+  function poll() {
+    fetch('/system/data', { headers: { 'Accept': 'application/json' } })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (h) {
+        if (!h) return;
+        var d = document.getElementById('d-db'); if (d) d.className = 'dot ' + (h.db_ok ? 'ok' : 'bad');
+        set('v-db', h.db_ok ? 'Operational' : 'Database down');
+        set('v-mode', h.mode); set('v-uptime', h.uptime);
+        set('v-load', h.load ? h.load.join(' · ') : '—');
+        set('v-mem', h.mem_mb === null || h.mem_mb === undefined ? '—' : h.mem_mb);
+        ['connections', 'gateways', 'layers', 'api_keys', 'users'].forEach(function (k) { set('v-c-' + k, h.counts[k]); });
+        set('v-a-total', h.activity.total);
+        set('v-a-errors', h.activity.errors + ' · ' + h.activity.error_pct + '%');
+        set('v-a-avg', h.activity.avg_ms); set('v-a-hour', h.activity.last_hour);
+      }).catch(function () {});
+  }
+  setInterval(poll, 5000);
+})();
+</script>
+{% endblock %}

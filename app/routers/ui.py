@@ -1,6 +1,15 @@
-"""Server-rendered portal UI (Jinja2 + HTMX) — auth, home, MCP guide, API explorer."""
+"""Server-rendered portal UI (Jinja2 + HTMX) — auth, home, MCP guide, API explorer, system health."""
+import datetime as dt
+import os
+import platform
 import re
+import time
 from pathlib import Path
+
+try:
+    import resource  # POSIX-only; used for process RSS in the system-health view
+except ImportError:  # pragma: no cover — non-POSIX
+    resource = None
 
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
@@ -10,7 +19,8 @@ from sqlalchemy.orm import Session
 
 from ..config import get_settings
 from ..db import get_db
-from ..models import DynamicLayer, GlobalPref, Gateway, ManagementServer, User, UserDesktopPref
+from ..models import (ActivityLog, ApiKey, DynamicLayer, GlobalPref, Gateway, ManagementServer, User,
+                      UserDesktopPref)
 from ..security import get_user_or_none, hash_password, password_strength_error, verify_password
 from ..services import coverage, login_guard
 
@@ -302,8 +312,9 @@ def update_profile(
 # --- Desktop layout (OS-style Home): which apps are on the dock + which icons sit on the desktop ------
 # Server-side allowlist of app keys (anything else in a saved layout is dropped — no junk/injection).
 DESKTOP_APP_KEYS = {"access", "layers", "management", "gateways", "agents", "apiexplorer",
-                    "settings", "activity", "account"}
-DEFAULT_DESKTOP_LAYOUT = {"dock": ["access", "layers", "management", "gateways", "agents", "settings", "activity"],
+                    "settings", "activity", "account", "system"}
+DEFAULT_DESKTOP_LAYOUT = {"dock": ["access", "layers", "management", "gateways", "agents", "settings",
+                                   "activity", "system"],
                           "desktop": []}
 
 
@@ -348,6 +359,90 @@ def _load_desktop_layout(db: Session, user: User) -> dict:
     if row and isinstance(row.layout, dict) and row.layout:
         return _sanitize_layout(row.layout)
     return _global_default_layout(db) or {k: list(v) for k, v in DEFAULT_DESKTOP_LAYOUT.items()}
+
+
+# --- System health (a desktop "System" app: process + DB + activity + agent-surface health) -----------
+_PROCESS_START = time.time()
+
+
+def _fmt_uptime(secs: float) -> str:
+    d, r = divmod(int(secs), 86400); h, r = divmod(r, 3600); m, _s = divmod(r, 60)
+    out = []
+    if d: out.append(f"{d}d")
+    if h or d: out.append(f"{h}h")
+    out.append(f"{m}m")
+    return " ".join(out)
+
+
+def _system_health(db: Session) -> dict:
+    from ..services import app_settings, conformance
+    db_ok = True
+    try:
+        db.execute(select(func.count()).select_from(User))
+    except Exception:  # noqa: BLE001
+        db_ok = False
+    load = None
+    try:
+        load = [round(x, 2) for x in os.getloadavg()]
+    except (OSError, AttributeError):
+        pass
+    mem_mb = None
+    if resource is not None:
+        try:
+            rss = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+            mem_mb = round(rss / (1024 * 1024), 1) if rss > 500000 else round(rss / 1024, 1)  # macOS bytes vs linux KB
+        except Exception:  # noqa: BLE001
+            pass
+
+    def _c(model):
+        return db.scalar(select(func.count()).select_from(model)) or 0
+
+    counts = {"users": _c(User), "connections": _c(ManagementServer), "gateways": _c(Gateway),
+              "layers": _c(DynamicLayer), "api_keys": _c(ApiKey), "events": _c(ActivityLog)}
+    errs = db.scalar(select(func.count()).select_from(ActivityLog).where(ActivityLog.status >= 400)) or 0
+    avg_ms = db.scalar(select(func.avg(ActivityLog.duration_ms))) or 0
+    since = dt.datetime.now(dt.timezone.utc) - dt.timedelta(hours=1)
+    last_hour = db.scalar(select(func.count()).select_from(ActivityLog).where(ActivityLog.at >= since)) or 0
+    vals = app_settings.all_values()
+    p, a, pr = vals.get("mcp_allow_publish"), vals.get("aa_autopilot"), vals.get("aa_profile")
+    mode = ("Autonomous" if (p and a and pr == "aggressive")
+            else "Supervised" if (p and not a and pr == "balanced")
+            else "Read-only" if (not p and not a and pr == "balanced") else "Custom")
+    try:
+        conf = conformance.run()
+    except Exception:  # noqa: BLE001
+        conf = {"ok": False, "tools": 0, "checks": []}
+    return {
+        "version": _app_version, "uptime": _fmt_uptime(time.time() - _PROCESS_START),
+        "db_ok": db_ok, "load": load, "cpus": os.cpu_count(), "mem_mb": mem_mb,
+        "python": platform.python_version(), "os": platform.system(),
+        "counts": counts,
+        "activity": {"total": counts["events"], "errors": errs, "avg_ms": round(float(avg_ms)),
+                     "error_pct": round(100.0 * errs / counts["events"], 1) if counts["events"] else 0.0,
+                     "last_hour": last_hour},
+        "mode": mode, "publish": bool(p), "autopilot": bool(a), "rate": vals.get("agent_rate_limit_per_min") or 0,
+        "conformance": {"ok": bool(conf.get("ok")), "tools": conf.get("tools", 0),
+                        "checks": [{"name": c.get("name"), "ok": bool(c.get("ok")), "detail": c.get("detail", "")}
+                                   for c in conf.get("checks", [])]},
+    }
+
+
+@router.get("/system", response_class=HTMLResponse)
+def system_health_page(request: Request, db: Session = Depends(get_db)):
+    user = get_user_or_none(request, db)
+    if user is None:
+        return RedirectResponse("/login", status_code=303)
+    return templates.TemplateResponse(request, "system_health.html",
+                                      {"user": user, "health": _system_health(db), "flash": _pop_flash(request)})
+
+
+@router.get("/system/data")
+def system_health_data(request: Request, db: Session = Depends(get_db)):
+    """JSON snapshot for the System app's live auto-refresh (read-only)."""
+    user = get_user_or_none(request, db)
+    if user is None:
+        return Response(status_code=401)
+    return JSONResponse(_system_health(db))
 
 
 @router.get("/", response_class=HTMLResponse)

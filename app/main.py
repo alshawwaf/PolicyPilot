@@ -18,14 +18,14 @@ from .middleware import ActivityLogMiddleware, SecurityHeadersMiddleware
 
 
 def _setup_logging() -> None:
-    """Emit the app's own ``dcsim.*`` logs (SIEM bind, MCP mount, credential/cache warnings) to stderr at
+    """Emit the app's own ``policypilot.*`` logs (SIEM bind, MCP mount, credential/cache warnings) to stderr at
     INFO by default — uvicorn doesn't configure our loggers, so without this they're silent in a PoV. A
     dedicated handler (propagate off) avoids double-logging when a parent handler also exists."""
-    raw = os.environ.get("DCSIM_LOG_LEVEL", "INFO").strip()
+    raw = os.environ.get("PILOT_LOG_LEVEL", "INFO").strip()
     lvl = int(raw) if raw.isdigit() else logging.getLevelName(raw.upper())
     if not isinstance(lvl, int):          # an unknown level name -> don't abort boot, fall back to INFO
         lvl = logging.INFO
-    log = logging.getLogger("dcsim")
+    log = logging.getLogger("policypilot")
     if not log.handlers:
         h = logging.StreamHandler(sys.stderr)
         h.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s %(message)s"))
@@ -50,7 +50,7 @@ def _seed_admin(settings) -> None:
             banner = "=" * 64
             print(banner, file=sys.stderr)
             print(f"  Portal admin created:  {settings.admin_username} / {password}", file=sys.stderr)
-            print("  Set DCSIM_ADMIN_PASSWORD to pin your own password.", file=sys.stderr)
+            print("  Set PILOT_ADMIN_PASSWORD to pin your own password.", file=sys.stderr)
             print(banner, file=sys.stderr)
 
 
@@ -64,7 +64,7 @@ async def _retention_loop():
         try:
             await asyncio.to_thread(retention.run_once)
         except Exception:  # noqa: BLE001 — housekeeping must never crash the app
-            logging.getLogger("dcsim.retention").exception("retention loop iteration failed")
+            logging.getLogger("policypilot.retention").exception("retention loop iteration failed")
         try:
             interval = max(1, int(app_settings.get("retention_sweep_min"))) * 60
         except Exception:  # noqa: BLE001
@@ -113,7 +113,7 @@ def create_app() -> FastAPI:
     if not session_secret:
         session_secret = secrets.token_urlsafe(32)
         print(
-            "WARNING: DCSIM_SESSION_SECRET not set — using an ephemeral key "
+            "WARNING: PILOT_SESSION_SECRET not set — using an ephemeral key "
             "(sessions drop on restart). Set it in production.",
             file=sys.stderr,
         )

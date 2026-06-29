@@ -61,7 +61,7 @@ types are **counted and commented**, never dropped silently or crashed on (see `
 - **TLS verification is always on.** Against a pinned certificate (trust-on-first-use, the SSH `known_hosts`
   model — pinned on save via `pin_now`, otherwise lazily on first connect via `ensure_pinned`) when one is
   set, else system trust. There is **no** skip-verify path; TLS 1.2+ is enforced.
-- **Secrets are encrypted at rest** (AES-256-GCM, `mgmt_creds`); set `DCSIM_ENCRYPTION_KEY` in prod. If
+- **Secrets are encrypted at rest** (AES-256-GCM, `mgmt_creds`); set `PILOT_ENCRYPTION_KEY` in prod. If
   encryption is unavailable the password is simply not stored (you'll be told), never written in cleartext.
 - **Session-safe.** Reads share one long-lived read-only session per (server, domain) — Check Point throttles
   remote logins (3/admin/domain/60s) and caps concurrent sessions — re-logging-in transparently on expiry.

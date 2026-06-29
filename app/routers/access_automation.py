@@ -173,7 +173,7 @@ def _record_change_safe(db, **kw) -> None:
         change_log.record(db, **kw)
     except Exception:  # noqa: BLE001
         import logging
-        logging.getLogger("dcsim.access_automation").exception("recording change for rollback failed")
+        logging.getLogger("policypilot.access_automation").exception("recording change for rollback failed")
 
 
 def _run(db: Session, sid: int, user: User, body: AccessReqBody, *, do_apply: bool):
@@ -425,7 +425,7 @@ def aa_revert(sid: int, cid: int, body: RevertBody, request: Request, db: Sessio
         except Exception:  # noqa: BLE001
             db.rollback()
             import logging
-            logging.getLogger("dcsim.access_automation").exception("releasing revert claim failed")
+            logging.getLogger("policypilot.access_automation").exception("releasing revert claim failed")
     return JSONResponse({**result, "change_id": cid}, status_code=200 if result.get("ok") else 400)
 
 
@@ -459,7 +459,7 @@ def aa_clear_resolved(sid: int, request: Request, db: Session = Depends(get_db))
 # --- Generic ticketing webhook (no portal session; authenticated by a shared token) ----------
 def _allowed_server_ids() -> set:
     """Optional allowlist (Settings → Ticketing webhook → 'Restrict the webhook to server ids', falling
-    back to DCSIM_WEBHOOK_SERVER_IDS), comma-separated server ids. UNSET = every saved server.
+    back to PILOT_WEBHOOK_SERVER_IDS), comma-separated server ids. UNSET = every saved server.
     Set-but-unparseable FAILS CLOSED (raises): silently dropping a mistyped entry (e.g. "prod-3") would
     yield an empty set, which the caller reads as "allow all" — widening the blast radius of the publish
     token from a couple servers to every tenant. A scoping typo must be an error, not permission."""
@@ -485,23 +485,23 @@ async def aa_webhook(request: Request, db: Session = Depends(get_db)):
     curl …): the caller POSTs an access request → we decide + (optionally) apply → return the result
     JSON, and push it back via the caller's ``callback_url`` or the built-in ServiceNow adapter.
 
-    Auth: the shared secret DCSIM_WEBHOOK_TOKEN must arrive as the X-DCSim-Token header. If the token
+    Auth: the shared secret PILOT_WEBHOOK_TOKEN must arrive as the X-PolicyPilot-Token header. If the token
     is unset the webhook is DISABLED (503) — it never runs unauthenticated. The token grants policy
     publish on every allowed management server, so treat it as a top-tier secret; optionally scope it
-    with DCSIM_WEBHOOK_SERVER_IDS."""
-    # Auth: the X-DCSim-Token header must match the legacy webhook token (Settings/env) OR an active
+    with PILOT_WEBHOOK_SERVER_IDS."""
+    # Auth: the X-PolicyPilot-Token header must match the legacy webhook token (Settings/env) OR an active
     # webhook-scoped API key (Settings → API keys). Either one enables the endpoint.
-    presented = request.headers.get("x-dcsim-token", "")
+    presented = request.headers.get("x-policypilot-token", "")
     legacy = (app_settings.get_secret_or_env("webhook_token", get_settings().webhook_token) or "").strip()
     if not (legacy or api_keys.any_active("webhook")):
         return JSONResponse({"error": "Webhook disabled — add a webhook key in Settings → API keys, or "
                                       "set a token in Settings → Ticketing webhook (or the "
-                                      "DCSIM_WEBHOOK_TOKEN env var) to enable it."},
+                                      "PILOT_WEBHOOK_TOKEN env var) to enable it."},
                             status_code=503)
     ok = bool(presented) and ((legacy and hmac.compare_digest(presented, legacy))
                               or api_keys.verify(presented, "webhook"))
     if not ok:
-        return JSONResponse({"error": "Invalid or missing X-DCSim-Token."}, status_code=401)
+        return JSONResponse({"error": "Invalid or missing X-PolicyPilot-Token."}, status_code=401)
 
     try:
         data = await request.json()

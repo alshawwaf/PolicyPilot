@@ -8,7 +8,7 @@ Activate: install `mcp` via Artifactory; the endpoint mounts at /mcp whenever th
 ENABLED by generating an mcp-scope API key (on the MCP page or Settings → API keys). An agent authenticates
 with `Authorization: Bearer <that key>`; create/revoke takes effect with no redeploy. Writes are further
 gated by the `mcp_allow_publish` Setting (default OFF). The standalone `serve()` entrypoint is a separate
-run mode that still uses a DCSIM_MCP_TOKEN env var. See docs/mcp-n8n.md."""
+run mode that still uses a PILOT_MCP_TOKEN env var. See docs/mcp-n8n.md."""
 from __future__ import annotations
 
 import contextlib
@@ -242,22 +242,22 @@ async def mcp_lifespan(app):
 
 
 def main():
-    """Run the MCP server standalone (alternative to mounting in the portal): reads DCSIM_MCP_TOKEN +
-    DCSIM_MCP_HOST/PORT and serves Streamable-HTTP. `python -m app.mcp_server`. This out-of-portal path
+    """Run the MCP server standalone (alternative to mounting in the portal): reads PILOT_MCP_TOKEN +
+    PILOT_MCP_HOST/PORT and serves Streamable-HTTP. `python -m app.mcp_server`. This out-of-portal path
     has no DB-backed Settings, so the token is env-only here (the portal Setting governs the mounted /mcp)."""
     import os
     if not _HAVE_MCP:
         raise SystemExit(f"the `mcp` SDK is not installed (install via Artifactory): {_IMPORT_ERR}")
-    token = os.environ.get("DCSIM_MCP_TOKEN", "")
+    token = os.environ.get("PILOT_MCP_TOKEN", "")
     if not token:
-        raise SystemExit("set DCSIM_MCP_TOKEN to a strong secret first")
+        raise SystemExit("set PILOT_MCP_TOKEN to a strong secret first")
     # Env-only auth in the standalone process (no DB-backed Settings / API keys here).
     app = build_mcp_app(verify_fn=lambda p: hmac.compare_digest(p, token), enabled_fn=lambda: True)
     if app is None:
         raise SystemExit("could not build the MCP app")
     import uvicorn
-    uvicorn.run(app, host=os.environ.get("DCSIM_MCP_HOST", "127.0.0.1"),
-                port=int(os.environ.get("DCSIM_MCP_PORT", "8765")))
+    uvicorn.run(app, host=os.environ.get("PILOT_MCP_HOST", "127.0.0.1"),
+                port=int(os.environ.get("PILOT_MCP_PORT", "8765")))
 
 
 if __name__ == "__main__":

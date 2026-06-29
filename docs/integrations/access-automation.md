@@ -111,18 +111,18 @@ that object's own space — the same way it already treats a service request as 
 `POST /access-automation/webhook` lets any ticketing system (ServiceNow, Jira, Remedy, curl …) POST an
 access request and get back the decision — and, optionally, have it applied and written back.
 
-- **Auth:** the shared secret must arrive as the **`X-DCSim-Token`** header, matching a webhook-scoped
-  **API key** (Settings → API keys) or the legacy token (`DCSIM_WEBHOOK_TOKEN` / Settings). If neither
+- **Auth:** the shared secret must arrive as the **`X-PolicyPilot-Token`** header, matching a webhook-scoped
+  **API key** (Settings → API keys) or the legacy token (`PILOT_WEBHOOK_TOKEN` / Settings). If neither
   is set the endpoint is **disabled (503)** — it never runs unauthenticated.
 - **Body:** vendor-neutral JSON with generous aliases — `server_id` (which saved server), `layer`,
   `source`/`src`, `destination`/`dst`, `protocol`+`port` (or `service` / `application`), optional
   `source_kind`/`destination_kind` (default `ip`; or `domain` / `access-role` / `dynamic-object` /
   `updatable-object` / `security-zone` — then the value is the object identity, e.g. an FQDN), optional
   `package`, `ticket_id`, and `apply` (`true` → apply + publish; default → preview only).
-- **Scope:** an optional allowlist (`DCSIM_WEBHOOK_SERVER_IDS` / Settings) restricts the token to
+- **Scope:** an optional allowlist (`PILOT_WEBHOOK_SERVER_IDS` / Settings) restricts the token to
   specific server ids. A *malformed* allowlist **fails closed** (500) rather than degrading to allow-all.
 - **Write-back:** the result is pushed to the caller's `callback_url` if supplied, else the built-in
-  **ServiceNow Table API** adapter writes a work note to the incident (`DCSIM_SERVICENOW_*` / Settings).
+  **ServiceNow Table API** adapter writes a work note to the incident (`PILOT_SERVICENOW_*` / Settings).
 
 ## Security notes
 

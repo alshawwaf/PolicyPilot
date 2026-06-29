@@ -14,10 +14,10 @@ from sqlalchemy.orm import Session
 from ..models import Gateway, GatewaySecret
 from . import crypto
 
-_log = logging.getLogger("dcsim.creds")
+_log = logging.getLogger("policypilot.creds")
 
 # HKDF context label — unchanged, so gateway secrets stored before the crypto refactor still decrypt.
-_INFO = b"dcsim-gateway-password-v1"
+_INFO = b"policypilot-gateway-password-v1"
 
 
 def available() -> bool:

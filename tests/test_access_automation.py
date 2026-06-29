@@ -986,7 +986,7 @@ def test_notify_posts_to_generic_callback_url(monkeypatch):
                              "applied": True, "published": True})
     assert res["ok"] and res["via"] == "callback_url"
     assert captured["url"] == "https://itsm/cb" and captured["verify"] is True   # TLS never disabled
-    assert captured["headers"]["X-DCSim-Token"] == "t0k"
+    assert captured["headers"]["X-PolicyPilot-Token"] == "t0k"
     assert captured["json"]["ticket_id"] == "INC9" and captured["json"]["outcome"] == "create"
 
 
@@ -1014,7 +1014,7 @@ def test_webhook_disabled_without_token(monkeypatch):
 def test_webhook_rejects_bad_token(monkeypatch):
     monkeypatch.setattr(aar.app_settings, "get_secret_or_env", lambda k, env: "s3cret")
     monkeypatch.setattr(aar, "get_settings", lambda: types.SimpleNamespace(webhook_token="s3cret"))
-    req = types.SimpleNamespace(headers={"x-dcsim-token": "wrong"})
+    req = types.SimpleNamespace(headers={"x-policypilot-token": "wrong"})
     resp = _run(aar.aa_webhook(req, db=None))
     assert resp.status_code == 401
 
@@ -1056,7 +1056,7 @@ def _webhook_db():
 
 class _WReq:
     def __init__(self, body, token="t0k"):
-        self.headers = {"x-dcsim-token": token}
+        self.headers = {"x-policypilot-token": token}
         self._body = body
 
     async def json(self):
@@ -1144,7 +1144,7 @@ def test_access_automation_detail_renders_form_and_webhook():
     html = _render("access_automation_detail.html", ms=ms, has_secret=True, flash=None, request=req,
                    decision_graph_json=json.dumps(dt.to_graph()))
     assert "Preview decision" in html and "aa-source" in html
-    assert "/access-automation/webhook" in html and "X-DCSim-Token" in html
+    assert "/access-automation/webhook" in html and "X-PolicyPilot-Token" in html
     assert "callback_url" in html and "any ITSM" in html
     # Internet object: a destination-only kind (App Control / URL Filtering), with the JS that couples it
     # to an Application service (pick an app -> destination defaults to Internet).

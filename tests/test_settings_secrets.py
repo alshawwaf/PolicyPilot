@@ -21,7 +21,7 @@ def sdb(monkeypatch):
     monkeypatch.setattr(app_settings, "SessionLocal", sessionmaker(bind=eng))
     app_settings._cache["at"] = -1e9
     app_settings._secret_cache.clear()
-    monkeypatch.setenv("DCSIM_SESSION_SECRET", "unit-test-secret-please-ignore")
+    monkeypatch.setenv("PILOT_SESSION_SECRET", "unit-test-secret-please-ignore")
     get_settings.cache_clear()
     yield app_settings
     app_settings._secret_cache.clear()
@@ -131,8 +131,8 @@ def test_servicenow_cfg_resolves_from_settings(sdb):
 # --- base_url resolver (Setting over env) --------------------------------------------------------
 def test_base_url_resolves_setting_then_env(sdb):
     assert sdb.base_url() == "http://localhost:8000"     # nothing set -> env/default
-    sdb.save({"base_url": "https://dcsim.example.com"})
-    assert sdb.base_url() == "https://dcsim.example.com"  # Setting wins, no redeploy
+    sdb.save({"base_url": "https://policypilot.example.com"})
+    assert sdb.base_url() == "https://policypilot.example.com"  # Setting wins, no redeploy
 
 
 # --- TLS verification is never disablable (org policy) -------------------------------------------

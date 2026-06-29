@@ -8,7 +8,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY app ./app
 
-ENV DCSIM_DATABASE_URL=sqlite:////data/dcsim.db
+ENV PILOT_DATABASE_URL=sqlite:////data/policypilot.db
 VOLUME ["/data"]
 EXPOSE 8000
 

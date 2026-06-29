@@ -13,7 +13,7 @@ import logging
 from ..db import SessionLocal
 from ..models import ManagementServer
 
-logger = logging.getLogger("dcsim.mcp_tools")
+logger = logging.getLogger("policypilot.mcp_tools")
 
 
 def _resolve_server(db, server_ref):

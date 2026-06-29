@@ -111,7 +111,7 @@ def _safe_commit(db: Session) -> bool:
         return True
     except Exception:  # noqa: BLE001
         import logging
-        logging.getLogger("dcsim.change_log").exception("change-log status write failed")
+        logging.getLogger("policypilot.change_log").exception("change-log status write failed")
         try:
             db.rollback()
         except Exception:  # noqa: BLE001

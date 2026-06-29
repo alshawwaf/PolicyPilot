@@ -84,8 +84,8 @@ rulebase.
 ```bash
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-export DCSIM_ADMIN_PASSWORD='<choose-a-strong-password>'   # else a random one is printed at startup
-export DCSIM_SESSION_SECRET=$(openssl rand -base64 32)
+export PILOT_ADMIN_PASSWORD='<choose-a-strong-password>'   # else a random one is printed at startup
+export PILOT_SESSION_SECRET=$(openssl rand -base64 32)
 uvicorn app.main:app --reload
 ```
 
@@ -103,8 +103,8 @@ Open <http://localhost:8000>, sign in as `admin`, then:
 ## ☁️ Deploy (Dokploy)
 
 Build from the **`Dockerfile`**, expose port **8000**, add a domain (Traefik handles Let's Encrypt TLS), mount
-**`/data`** for the SQLite DB, and set the `DCSIM_*` env vars (`DCSIM_SESSION_SECRET`, `DCSIM_ENCRYPTION_KEY`,
-`DCSIM_BASE_URL`, `DCSIM_ADMIN_PASSWORD`). See **[DEPLOY.md](DEPLOY.md)**.
+**`/data`** for the SQLite DB, and set the `PILOT_*` env vars (`PILOT_SESSION_SECRET`, `PILOT_ENCRYPTION_KEY`,
+`PILOT_BASE_URL`, `PILOT_ADMIN_PASSWORD`). See **[DEPLOY.md](DEPLOY.md)**.
 
 ---
 
@@ -114,7 +114,7 @@ Build from the **`Dockerfile`**, expose port **8000**, add a domain (Traefik han
   **API keys** with optional expiry (shown once, SHA-256-hashed at rest).
 - **TLS to the SMS/gateway is always verified.** Self-signed lab boxes are handled by **cert pinning**
   (trust-on-first-use or a pasted cert) — verification is never disabled.
-- Saved management / gateway credentials are **AES-256-GCM encrypted at rest** (`DCSIM_ENCRYPTION_KEY`).
+- Saved management / gateway credentials are **AES-256-GCM encrypted at rest** (`PILOT_ENCRYPTION_KEY`).
 - **Publish is opt-in** — an agent cannot reach live policy unless an admin enables it; otherwise applies are
   dry-runs (validate + discard). Parameterized queries throughout; defensive HTTP headers (anti-clickjacking,
   nosniff, HSTS).

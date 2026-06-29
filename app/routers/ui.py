@@ -132,14 +132,14 @@ async def api_explorer_proxy(request: Request, db: Session = Depends(get_db)):
     user = get_user_or_none(request, db)
     if user is None:
         return JSONResponse({"error": "Not authenticated"}, status_code=401)
-    target = request.headers.get("x-dcsim-target", "").strip()
+    target = request.headers.get("x-policypilot-target", "").strip()
     try:                                          # a hostile header (bad IPv6 / port) must 400, not 500
         parsed = urlparse(target) if target else None
         port = parsed.port if parsed else None
     except ValueError:
         parsed, port = None, None
     if not parsed or parsed.scheme not in ("http", "https") or not parsed.hostname:
-        return JSONResponse({"error": "Missing or invalid X-Dcsim-Target URL."}, status_code=400)
+        return JSONResponse({"error": "Missing or invalid X-PolicyPilot-Target URL."}, status_code=400)
     port = port or (443 if parsed.scheme == "https" else 80)
     key = f"{parsed.hostname}:{port}".lower()
     server = _explorer_proxy_targets(db, user).get(key)
@@ -161,7 +161,7 @@ async def api_explorer_proxy(request: Request, db: Session = Depends(get_db)):
     # Transfer-Encoding alongside our Content-Length would be a request-smuggling primitive. Also never
     # forward the portal's own session cookie / forwarded-* headers upstream.
     drop = {"host", "cookie", "content-length", "connection", "accept-encoding",
-            "x-dcsim-target", "x-forwarded-for", "x-forwarded-host", "x-forwarded-proto",
+            "x-policypilot-target", "x-forwarded-for", "x-forwarded-host", "x-forwarded-proto",
             "transfer-encoding", "te", "trailer", "trailers", "upgrade", "keep-alive",
             "proxy-authorization", "proxy-authenticate"}
     fwd = {k: v for k, v in request.headers.items() if k.lower() not in drop}

@@ -18,7 +18,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app.services import coverage, coverage_build as cb  # noqa: E402
 
-SPEC_ROOT = os.environ.get("DCSIM_SPEC_ROOT", "/Users/khalid/Desktop/CP-Docs-To-Swagger/data/processed")
+SPEC_ROOT = os.environ.get("PILOT_SPEC_ROOT", "/Users/khalid/Desktop/CP-Docs-To-Swagger/data/processed")
 
 
 def _raw_spec(api_type: str, version: str):

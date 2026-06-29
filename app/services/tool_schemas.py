@@ -61,7 +61,7 @@ def terraform_resources(version: str = "") -> tuple[dict, str]:
     main_tf = ('terraform {\n  required_providers {\n    checkpoint = {\n'
                f'      source = "{TF_PROVIDER}"{constraint}\n    }}\n  }}\n}}\n')
     try:
-        with tempfile.TemporaryDirectory(prefix="dcsim-tfschema-") as tmp:
+        with tempfile.TemporaryDirectory(prefix="policypilot-tfschema-") as tmp:
             with open(f"{tmp}/main.tf", "w") as f:
                 f.write(main_tf)
             init = subprocess.run(["terraform", "init", "-no-color", "-input=false"],

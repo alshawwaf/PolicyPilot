@@ -123,8 +123,8 @@ async def settings_save(request: Request, db: Session = Depends(get_db)):
                 app_settings.set_secret(s.key, value)
             except RuntimeError:
                 secret_err = ("Can't store secrets: at-rest encryption is unavailable. Set "
-                              "DCSIM_ENCRYPTION_KEY (or DCSIM_SESSION_SECRET) and restart, or keep using "
-                              "the DCSIM_* env vars.")
+                              "PILOT_ENCRYPTION_KEY (or PILOT_SESSION_SECRET) and restart, or keep using "
+                              "the PILOT_* env vars.")
     _flash(request, secret_err or "Settings saved — they take effect immediately.")
     return RedirectResponse("/settings", status_code=303)
 

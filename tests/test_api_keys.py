@@ -26,7 +26,7 @@ def kdb(monkeypatch):
 
 def test_generate_returns_plaintext_and_stores_only_hash(kdb):
     row, secret = kdb.generate("n8n-prod", "mcp", created_by="admin")
-    assert secret.startswith("dcsim_mcp_") and len(secret) > 30
+    assert secret.startswith("policypilot_mcp_") and len(secret) > 30
     assert row.name == "n8n-prod" and row.scope == "mcp" and row.hint == secret[-4:]
     with kdb.SessionLocal() as db:
         stored = db.get(ApiKey, row.id)
@@ -113,10 +113,10 @@ def test_set_expiry_changes_authentication_immediately(kdb):
 
 
 def test_webhook_auth_header_is_redacted_in_activity_log():
-    # a webhook key/token rides in X-DCSim-Token; it must never be logged in the clear
+    # a webhook key/token rides in X-PolicyPilot-Token; it must never be logged in the clear
     from app.services import activity
-    out = activity.redact_headers({"X-DCSim-Token": "dcsim_webhook_supersecret", "accept": "application/json"})
-    assert out["X-DCSim-Token"] == "(masked)" and out["accept"] == "application/json"
+    out = activity.redact_headers({"X-PolicyPilot-Token": "policypilot_webhook_supersecret", "accept": "application/json"})
+    assert out["X-PolicyPilot-Token"] == "(masked)" and out["accept"] == "application/json"
 
 
 def test_active_fails_closed_on_db_error(monkeypatch):

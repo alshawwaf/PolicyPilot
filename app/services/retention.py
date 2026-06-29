@@ -23,7 +23,7 @@ from ..db import SessionLocal
 from ..models import ActivityLog, AppState, SiemLog, User, utcnow
 from . import app_settings, notifications
 
-log = logging.getLogger("dcsim.retention")
+log = logging.getLogger("policypilot.retention")
 
 _LAST_NOTIFY_KEY = "retention_last_notify"   # AppState: ISO timestamp of the last trim notification
 _NOTIFY_THROTTLE = dt.timedelta(hours=1)     # at most one "records trimmed" notification per hour

@@ -26,12 +26,12 @@ immediately. Keys are stored **hashed** (SHA-256) — a DB leak exposes no usabl
 
 Two simpler alternatives also work and take precedence/cascade automatically:
 - **Single shared token** — Settings → MCP / agent → "MCP bearer token" (stored encrypted, AES-256-GCM).
-- **Env var** `DCSIM_MCP_TOKEN` — a fallback for headless/automated deploys.
+- **Env var** `PILOT_MCP_TOKEN` — a fallback for headless/automated deploys.
 
 `/mcp` is **mounted whenever the SDK is installed**; while nothing is configured (no key, no token) it
 returns **503**. A request is authorized if its bearer matches **any active MCP key** OR the shared token.
 The **MCP for agents** page (`/mcp-guide`) shows live status and links to both. (The ticketing webhook is
-the same: a **webhook**-scope API key sent as `X-DCSim-Token`, or the shared webhook token.)
+the same: a **webhook**-scope API key sent as `X-PolicyPilot-Token`, or the shared webhook token.)
 
 **Self-serve onboarding page:** the portal has a **MCP for agents** page at **`/mcp-guide`** (under
 *Layers & Gateways*) — live status pills (SDK installed / endpoint enabled / publish gate), a
@@ -41,7 +41,7 @@ the live origin + a bearer token you type in), and the full tool catalog. Same i
 
 **Standalone alternative** (own port, e.g. if you don't want it on the portal): 
 ```bash
-DCSIM_MCP_TOKEN=... DCSIM_MCP_PORT=8765 python -m app.mcp_server
+PILOT_MCP_TOKEN=... PILOT_MCP_PORT=8765 python -m app.mcp_server
 ```
 
 ## 1b. REST API (any HTTP client)
@@ -70,7 +70,7 @@ Point service / application objects); each endpoint's exact request schema is al
 In the **AI Agent** → add an **MCP Client Tool** node:
 - **Endpoint / SSE URL:** `https://<policypilot-host>/mcp` (or `http://<host>:8765` standalone)
 - **Transport:** Streamable HTTP (or SSE, depending on your n8n version)
-- **Headers:** `Authorization: Bearer <DCSIM_MCP_TOKEN>`
+- **Headers:** `Authorization: Bearer <PILOT_MCP_TOKEN>`
 
 n8n discovers the tools automatically (`tools/list`). The agent can then call them by name.
 
@@ -101,7 +101,7 @@ whole dimension. Good for an agent to *understand* a policy before proposing a c
 
 - **Auth:** every call requires `Authorization: Bearer <key-or-token>` (constant-time checked). Valid
   credentials are any active **MCP API key** (Settings → API keys; hashed at rest, individually revocable)
-  or the shared **MCP token** (Settings → MCP / agent, encrypted at rest; `DCSIM_MCP_TOKEN` env fallback).
+  or the shared **MCP token** (Settings → MCP / agent, encrypted at rest; `PILOT_MCP_TOKEN` env fallback).
   Nothing configured → **503** (disabled); wrong/missing credential → **401**. A DB read failure fails
   **closed** (endpoint stays disabled / key set treated as empty), never open.
 - **No accidental writes:** `decide_access` is read-only; `apply_access` with `publish=false` rehearses

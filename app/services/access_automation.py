@@ -51,7 +51,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Optional
 
-logger = logging.getLogger("dcsim.access_automation")
+logger = logging.getLogger("policypilot.access_automation")
 
 try:  # keep the engine import-safe outside the app runtime (offline smoke test)
     from .mgmt_api import (MgmtError, MgmtSession, _is_lock_error, cached_raw, invalidate_cache,

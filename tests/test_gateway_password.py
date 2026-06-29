@@ -19,7 +19,7 @@ from app.services import gateway_creds  # noqa: E402
 
 @pytest.fixture(autouse=True)
 def _secret(monkeypatch):
-    monkeypatch.setenv("DCSIM_ENCRYPTION_KEY", "unit-test-key-do-not-use-in-prod-0001")
+    monkeypatch.setenv("PILOT_ENCRYPTION_KEY", "unit-test-key-do-not-use-in-prod-0001")
     get_settings.cache_clear()
     yield
     get_settings.cache_clear()
@@ -85,6 +85,6 @@ def test_store_get_and_clear_on_a_gateway():
 
 def test_rotating_the_key_invalidates_stored_secrets(monkeypatch):
     token = gateway_creds.encrypt("topsecret")
-    monkeypatch.setenv("DCSIM_ENCRYPTION_KEY", "a-totally-different-key-99999")
+    monkeypatch.setenv("PILOT_ENCRYPTION_KEY", "a-totally-different-key-99999")
     get_settings.cache_clear()
     assert gateway_creds.decrypt(token) is None  # AES-GCM tag fails under the wrong key

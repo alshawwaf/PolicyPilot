@@ -56,7 +56,7 @@
               {% endif %}
             {% else %}
               <span class="small" style="color:var(--warn);max-width:420px;">At-rest encryption unavailable —
-                set DCSIM_ENCRYPTION_KEY or DCSIM_SESSION_SECRET to store this in the portal, or keep using
+                set PILOT_ENCRYPTION_KEY or PILOT_SESSION_SECRET to store this in the portal, or keep using
                 the env var.</span>
             {% endif %}
           </label>
@@ -116,7 +116,7 @@
   <h2 style="margin-top:0;">API keys</h2>
   <p class="muted small" style="max-width:820px;margin-top:0;">Named, revocable keys for the machine
     endpoints. An <b>MCP</b> key is sent as <code>Authorization: Bearer &lt;key&gt;</code> to /mcp; a
-    <b>webhook</b> key is sent as the <code>X-DCSim-Token</code> header. Keys are stored hashed and shown
+    <b>webhook</b> key is sent as the <code>X-PolicyPilot-Token</code> header. Keys are stored hashed and shown
     <b>once</b> at creation — copy it then. Revoking is immediate. (The single shared token in MCP / agent
     and Ticketing webhook above still works too, as a fallback.)</p>
 
@@ -221,7 +221,7 @@
       var a = new Uint8Array(24);
       (window.crypto || window.msCrypto).getRandomValues(a);
       var s = btoa(String.fromCharCode.apply(null, a)).replace(/[^A-Za-z0-9]/g, '');
-      return 'dcsim_' + s.slice(0, 32);
+      return 'policypilot_' + s.slice(0, 32);
     }
     document.querySelectorAll('.gen-secret').forEach(function (btn) {
       btn.addEventListener('click', function () {

@@ -48,26 +48,26 @@ def _client(monkeypatch, *, user=True, allow=None):
 
 def test_requires_auth(monkeypatch):
     c = _client(monkeypatch, user=False)
-    assert c.post("/api-explorer/proxy", headers={"x-dcsim-target": "https://h/web_api"}).status_code == 401
+    assert c.post("/api-explorer/proxy", headers={"x-policypilot-target": "https://h/web_api"}).status_code == 401
 
 
 def test_missing_or_bad_target(monkeypatch):
     c = _client(monkeypatch)
     assert c.post("/api-explorer/proxy").status_code == 400                       # no target
-    assert c.post("/api-explorer/proxy", headers={"x-dcsim-target": "ftp://h/x"}).status_code == 400
+    assert c.post("/api-explorer/proxy", headers={"x-policypilot-target": "ftp://h/x"}).status_code == 400
 
 
 def test_malformed_target_is_400_not_500(monkeypatch):
-    # a hostile X-Dcsim-Target (bad IPv6 / out-of-range port) must be a clean 400, never a 500
+    # a hostile X-PolicyPilot-Target (bad IPv6 / out-of-range port) must be a clean 400, never a 500
     c = _client(monkeypatch, allow={"good.host:443": types.SimpleNamespace(cert_pem="")})
     for bad in ("https://[bad", "https://host:99999/x", "http://host:notaport/x"):
-        assert c.post("/api-explorer/proxy", headers={"x-dcsim-target": bad}).status_code == 400
+        assert c.post("/api-explorer/proxy", headers={"x-policypilot-target": bad}).status_code == 400
 
 
 def test_strips_hop_by_hop_headers(monkeypatch):
     c = _client(monkeypatch, allow={"good.host:443": types.SimpleNamespace(cert_pem="")})
     c.post("/api-explorer/proxy",
-           headers={"x-dcsim-target": "https://good.host/web_api/x", "transfer-encoding": "chunked",
+           headers={"x-policypilot-target": "https://good.host/web_api/x", "transfer-encoding": "chunked",
                     "te": "trailers", "upgrade": "h2c", "content-type": "application/json"},
            content=b"{}")
     fwd = {k.lower() for k in _CALLS["headers"]}
@@ -77,7 +77,7 @@ def test_strips_hop_by_hop_headers(monkeypatch):
 def test_rejects_non_saved_host_ssrf(monkeypatch):
     # an attacker-typed target that isn't a saved server must be refused, and never forwarded
     c = _client(monkeypatch, allow={"good.host:443": types.SimpleNamespace(cert_pem="")})
-    r = c.post("/api-explorer/proxy", headers={"x-dcsim-target": "http://169.254.169.254/latest/meta-data"})
+    r = c.post("/api-explorer/proxy", headers={"x-policypilot-target": "http://169.254.169.254/latest/meta-data"})
     assert r.status_code == 403 and "not one of your saved servers" in r.json()["error"]
     assert "method" not in _CALLS                                                # httpx never called
 
@@ -85,7 +85,7 @@ def test_rejects_non_saved_host_ssrf(monkeypatch):
 def test_forwards_to_saved_host_and_strips_cookie(monkeypatch):
     c = _client(monkeypatch, allow={"good.host:443": types.SimpleNamespace(cert_pem="")})
     r = c.post("/api-explorer/proxy",
-               headers={"x-dcsim-target": "https://good.host/web_api/login",
+               headers={"x-policypilot-target": "https://good.host/web_api/login",
                         "cookie": "session=secret", "x-chkp-sid": "SID123",
                         "content-type": "application/json"},
                content=b'{"user":"admin"}')
@@ -93,7 +93,7 @@ def test_forwards_to_saved_host_and_strips_cookie(monkeypatch):
     assert _CALLS["method"] == "POST" and _CALLS["url"] == "https://good.host/web_api/login"
     assert _CALLS["content"] == b'{"user":"admin"}'
     fwd = {k.lower(): v for k, v in _CALLS["headers"].items()}
-    assert "cookie" not in fwd and "x-dcsim-target" not in fwd                    # portal cookie never leaks
+    assert "cookie" not in fwd and "x-policypilot-target" not in fwd                    # portal cookie never leaks
     assert fwd.get("x-chkp-sid") == "SID123"                                      # CP session header passes
     assert _CALLS["client_kw"]["follow_redirects"] is False                       # no redirect-based SSRF
 
@@ -101,6 +101,6 @@ def test_forwards_to_saved_host_and_strips_cookie(monkeypatch):
 def test_default_port_match(monkeypatch):
     # a target with no explicit port matches a saved server on 443 (default)
     c = _client(monkeypatch, allow={"sms.lab:443": types.SimpleNamespace(cert_pem="")})
-    r = c.post("/api-explorer/proxy", headers={"x-dcsim-target": "https://sms.lab/web_api/show-hosts"},
+    r = c.post("/api-explorer/proxy", headers={"x-policypilot-target": "https://sms.lab/web_api/show-hosts"},
                content=b"{}")
     assert r.status_code == 201 and _CALLS["url"] == "https://sms.lab/web_api/show-hosts"

@@ -8,7 +8,7 @@
   <script>
     /* Set the theme before first paint (no flash). Dark is the default. */
     (function () {
-      try { document.documentElement.setAttribute('data-theme', localStorage.getItem('dcsim-theme') || 'dark'); }
+      try { document.documentElement.setAttribute('data-theme', localStorage.getItem('policypilot-theme') || 'dark'); }
       catch (e) { document.documentElement.setAttribute('data-theme', 'dark'); }
     })();
   </script>
@@ -794,7 +794,7 @@
       btn.addEventListener('click', function () {
         var next = document.documentElement.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
         document.documentElement.setAttribute('data-theme', next);
-        try { localStorage.setItem('dcsim-theme', next); } catch (e) {}
+        try { localStorage.setItem('policypilot-theme', next); } catch (e) {}
       });
     })();
     // Mark the active nav link for the current page.

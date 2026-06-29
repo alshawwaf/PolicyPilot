@@ -1,6 +1,6 @@
 """Generic AES-256-GCM encryption-at-rest (org policy: credentials at rest use AES-256+).
 
-The 32-byte key is derived from the app secret (``DCSIM_ENCRYPTION_KEY`` else the session secret) via
+The 32-byte key is derived from the app secret (``PILOT_ENCRYPTION_KEY`` else the session secret) via
 HKDF-SHA256. The ``info`` label gives **context separation** — gateway passwords and datacenter
 credentials derive different keys from the same secret, so a token from one context can't be decrypted
 in another. The ``cryptography`` lib is present in the deployed image but optional at runtime: if it's
@@ -41,7 +41,7 @@ def _key(info: bytes) -> bytes | None:
 
 def available() -> bool:
     """True when values can actually be encrypted (lib present + a secret configured)."""
-    return _key(b"dcsim-probe") is not None
+    return _key(b"policypilot-probe") is not None
 
 
 def encrypt(plaintext: str, info: bytes) -> str:

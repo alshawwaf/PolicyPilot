@@ -1,16 +1,16 @@
-"""Runtime configuration, sourced from environment / .env (prefix DCSIM_)."""
+"""Runtime configuration, sourced from environment / .env (prefix PILOT_)."""
 from functools import lru_cache
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", env_prefix="DCSIM_", extra="ignore")
+    model_config = SettingsConfigDict(env_file=".env", env_prefix="PILOT_", extra="ignore")
 
     app_name: str = "PolicyPilot"
 
     # Public base URL used to build the feed URLs shown to the SE. Behind Caddy
-    # this is the HTTPS domain (e.g. https://dcsim.example.com). Set via env.
+    # this is the HTTPS domain (e.g. https://policypilot.example.com). Set via env.
     base_url: str = "http://localhost:8000"
 
     # Cookie-signing key for portal sessions. MUST be set in production.
@@ -19,18 +19,18 @@ class Settings(BaseSettings):
 
     # Dedicated key for encrypting secrets at rest (saved gateway/DC passwords + the portal-set MCP /
     # webhook / ServiceNow secrets, AES-256-GCM). Falls back to session_secret. If both are empty, stored
-    # secrets cannot be decrypted after a restart — set DCSIM_ENCRYPTION_KEY (or DCSIM_SESSION_SECRET) in
-    # prod. RECOMMENDED: set DCSIM_ENCRYPTION_KEY independently of DCSIM_SESSION_SECRET — otherwise
+    # secrets cannot be decrypted after a restart — set PILOT_ENCRYPTION_KEY (or PILOT_SESSION_SECRET) in
+    # prod. RECOMMENDED: set PILOT_ENCRYPTION_KEY independently of PILOT_SESSION_SECRET — otherwise
     # rotating the session/cookie secret changes the derivation base and ORPHANS every stored secret
     # (they become undecryptable and silently fall back to env/disabled; you'd re-enter them in Settings).
     encryption_key: str = ""
 
-    # Seed portal admin. Never hardcode a password — set DCSIM_ADMIN_PASSWORD via env.
+    # Seed portal admin. Never hardcode a password — set PILOT_ADMIN_PASSWORD via env.
     # If empty, a random password is generated and printed once at startup (dev convenience).
     admin_username: str = "admin"
     admin_password: str = ""
 
-    database_url: str = "sqlite:///./data/dcsim.db"
+    database_url: str = "sqlite:///./data/policypilot.db"
 
     # Default Generic DC poll interval hint shown in the UI (seconds). Min 10 per sk167210.
     default_gdc_interval: int = 10
@@ -48,7 +48,7 @@ class Settings(BaseSettings):
 
     # Access automation — generic ticketing webhook (ServiceNow, Jira, Remedy, custom portal …).
     # The inbound webhook (POST /access-automation/webhook) is DISABLED unless a shared secret is set;
-    # the caller must send it as the X-DCSim-Token header.
+    # the caller must send it as the X-PolicyPilot-Token header.
     # SECURITY: this token grants policy publish on every ALLOWED management server, so treat it as a
     # top-tier secret. Optionally scope it to specific servers with the webhook_server_ids allowlist.
     # NOTE: these are now FALLBACKS — Settings → Ticketing webhook (DB-backed, token encrypted at rest)

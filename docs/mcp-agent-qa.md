@@ -41,7 +41,7 @@ first-match, exactly as in SmartConsole:
 | 1 | Silent Drop | Any | Any | bootp, NBT, nbsession, nbname, nbdatagram | **Drop** |
 | 2 | CP Updates | GW, SMS | Akamai Services, Check Point Services | http, https, proxy | Accept |
 | 3 | Management | jump_host, win_client, SMS, GW | GW, SMS | ssh_v2, https | Accept |
-| 4 | DCSIM | SMS, GW | `.example.com` *(domain)* | Any | Accept |
+| 4 | PILOT | SMS, GW | `.example.com` *(domain)* | Any | Accept |
 | 5 | Orchestrator | ubuntu25, cloudshare | SMS, GW | Any | Accept |
 | 6 | Stealth Rule | Any | GW | Any | **Drop** |
 | 7 | DNS Layer | Any | Any | dns | **Apply Layer** → `DNS_Layer` (inline) |

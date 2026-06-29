@@ -8,13 +8,13 @@ from app.schemas.dynamic_layer import validate_layer_content
 
 
 def test_setup_logging_tolerates_bad_level(monkeypatch):
-    # An invalid DCSIM_LOG_LEVEL must NOT abort boot — fall back to INFO; numeric strings are honored.
-    monkeypatch.setenv("DCSIM_LOG_LEVEL", "VERBOSE")
+    # An invalid PILOT_LOG_LEVEL must NOT abort boot — fall back to INFO; numeric strings are honored.
+    monkeypatch.setenv("PILOT_LOG_LEVEL", "VERBOSE")
     main._setup_logging()                                  # must not raise
-    assert logging.getLogger("dcsim").level == logging.INFO
-    monkeypatch.setenv("DCSIM_LOG_LEVEL", "10")
+    assert logging.getLogger("policypilot").level == logging.INFO
+    monkeypatch.setenv("PILOT_LOG_LEVEL", "10")
     main._setup_logging()
-    assert logging.getLogger("dcsim").level == 10
+    assert logging.getLogger("policypilot").level == 10
 
 
 def test_validate_layer_content_non_list_value_is_friendly():

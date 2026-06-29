@@ -9,7 +9,7 @@ session-reuse + policy-cache knobs.
 - Settings router (page + save + key create/revoke): [`app/routers/settings.py`](../app/routers/settings.py)
 - Setting definitions + secret store (AES-256-GCM, env fallback): [`app/services/app_settings.py`](../app/services/app_settings.py)
 - Named API keys (SHA-256 hashed, scoped, revocable): [`app/services/api_keys.py`](../app/services/api_keys.py)
-- Env-var fallbacks (`DCSIM_*`): [`app/config.py`](../app/config.py)
+- Env-var fallbacks (`PILOT_*`): [`app/config.py`](../app/config.py)
 
 ## Use it
 
@@ -26,26 +26,26 @@ session-reuse + policy-cache knobs.
 Secrets are **write-only**: the field renders blank, a blank submit means *keep current*, a value
 sets/rotates it, and a `<key>__clear` checkbox removes it. They're stored **encrypted at rest
 (AES-256-GCM)** and never round-tripped to the page — the UI only shows an is-set pill via
-`secret_status()`. A portal-set secret **takes precedence** over its `DCSIM_*` env var (the env var
+`secret_status()`. A portal-set secret **takes precedence** over its `PILOT_*` env var (the env var
 is the fallback), so you rotate from the UI with no redeploy. If at-rest encryption is unavailable
-(`secret_available()` is False — neither `DCSIM_ENCRYPTION_KEY` nor `DCSIM_SESSION_SECRET` set) the
+(`secret_available()` is False — neither `PILOT_ENCRYPTION_KEY` nor `PILOT_SESSION_SECRET` set) the
 save **refuses** to store cleartext and tells you to set the key or keep using the env vars.
 
 - **`mcp_token`** (MCP / agent) — bearer the `/mcp` client sends; setting it *enables* the endpoint.
-  Fallback: `DCSIM_MCP_TOKEN`. The companion **`mcp_allow_publish`** (default OFF) gates whether an
+  Fallback: `PILOT_MCP_TOKEN`. The companion **`mcp_allow_publish`** (default OFF) gates whether an
   agent may publish to a live SMS.
-- **`webhook_token`** (Ticketing webhook) — the `X-DCSim-Token` shared secret that enables
-  `POST /access-automation/webhook`. Fallback: `DCSIM_WEBHOOK_TOKEN`. Scope it with
+- **`webhook_token`** (Ticketing webhook) — the `X-PolicyPilot-Token` shared secret that enables
+  `POST /access-automation/webhook`. Fallback: `PILOT_WEBHOOK_TOKEN`. Scope it with
   **`webhook_server_ids`** (fails closed on a malformed value).
 - **`servicenow_password`** (ServiceNow write-back) — Table API password (instance/user/table are
-  plain strings). TLS verification is always on. Fallbacks: the matching `DCSIM_SERVICENOW_*` vars.
+  plain strings). TLS verification is always on. Fallbacks: the matching `PILOT_SERVICENOW_*` vars.
 
 ## 2. API keys
 
 Named, scoped, revocable bearer tokens for the machine endpoints. Generated via
 `POST /settings/api-keys`, **shown once** through a one-time session reveal (never written to the
 notification log), then only a **SHA-256 hash** remains — a DB leak exposes no usable credential.
-A token looks like `dcsim_<scope>_<random>` (256-bit). Optional **expiry** (presets 30 / 90 days /
+A token looks like `policypilot_<scope>_<random>` (256-bit). Optional **expiry** (presets 30 / 90 days /
 1 year / Never, or an explicit date) stops it authenticating after that time; the table flags
 expired / expiring-soon / unused keys. **Revoke** (`POST /settings/api-keys/{id}/revoke`) deletes
 the key and it stops authenticating immediately.
@@ -76,4 +76,4 @@ workers):
 
 > Storage & retention, Access-automation object-naming, and the Portal **`base_url`** also live on
 > this page; `base_url` restamps every emitted feed/GDC/Keystone/gaia_api and MCP/webhook URL with no
-> redeploy (the cookie `Secure` flag is still decided at startup from `DCSIM_BASE_URL`).
+> redeploy (the cookie `Secure` flag is still decided at startup from `PILOT_BASE_URL`).

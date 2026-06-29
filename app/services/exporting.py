@@ -89,7 +89,7 @@ def _load_builders() -> None:
             importlib.import_module(f"{exporters.__name__}.{mod.name}")
         except Exception:  # noqa: BLE001 — a broken exporter must not disable every other export
             import logging
-            logging.getLogger("dcsim.exporting").exception("failed to load exporter %s", mod.name)
+            logging.getLogger("policypilot.exporting").exception("failed to load exporter %s", mod.name)
 
 
 def build(table_id: str, db, user, params) -> Optional[ExportTable]:

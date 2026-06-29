@@ -6,10 +6,10 @@ generous field aliases into a canonical request; the result can be written back 
 
   * GENERIC  -- the caller supplies a ``callback_url`` and we POST the result JSON there (works for any
                vendor that exposes an inbound endpoint, and for the synchronous-response pattern too),
-  * BUILT-IN -- the ServiceNow Table API adapter writes a work note to the incident (DCSIM_SERVICENOW_*).
+  * BUILT-IN -- the ServiceNow Table API adapter writes a work note to the incident (PILOT_SERVICENOW_*).
 
 Security: TLS verification is ALWAYS on (never a skip-verify path). Inbound auth — the shared
-``DCSIM_WEBHOOK_TOKEN`` checked as ``X-DCSim-Token`` — is enforced by the router BEFORE this module runs,
+``PILOT_WEBHOOK_TOKEN`` checked as ``X-PolicyPilot-Token`` — is enforced by the router BEFORE this module runs,
 so a supplied ``callback_url`` always comes from an already-authenticated caller. Credentials come from
 env, never hardcoded.
 """
@@ -353,10 +353,10 @@ def notify(ticket: TicketRequest, result: dict) -> dict:
 
 def _post_callback(ticket: TicketRequest, result: dict) -> dict:
     """Generic write-back: POST the result to the caller-supplied URL. TLS verification stays on; the
-    optional ``callback_token`` is echoed as X-DCSim-Token so the receiver can authenticate us."""
+    optional ``callback_token`` is echoed as X-PolicyPilot-Token so the receiver can authenticate us."""
     headers = {"Content-Type": "application/json"}
     if ticket.callback_token:
-        headers["X-DCSim-Token"] = ticket.callback_token
+        headers["X-PolicyPilot-Token"] = ticket.callback_token
     payload = {"ticket_id": ticket.ticket_id,
                "applied": bool(result.get("applied")),   # what actually committed, not the request's intent
                "published": bool(result.get("published")),
@@ -374,7 +374,7 @@ def _post_callback(ticket: TicketRequest, result: dict) -> dict:
 # --- built-in ServiceNow Table API adapter (optional) ----------------------------------------
 def _servicenow_cfg() -> tuple[str, str, str, str]:
     """(instance, user, password, table) resolved from Settings → Ticket write-back, with the
-    DCSIM_SERVICENOW_* env vars as fallback. The password is decrypted from its encrypted-at-rest row."""
+    PILOT_SERVICENOW_* env vars as fallback. The password is decrypted from its encrypted-at-rest row."""
     s = get_settings()
     instance = app_settings.get_or_env("servicenow_instance", s.servicenow_instance)
     user = app_settings.get_or_env("servicenow_user", s.servicenow_user)

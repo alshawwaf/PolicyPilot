@@ -19,7 +19,7 @@ from ..db import SessionLocal
 from ..models import AppState
 from . import crypto
 
-_log = logging.getLogger("dcsim.settings")
+_log = logging.getLogger("policypilot.settings")
 _PREFIX = "set:"            # AppState key namespace, so settings never collide with other state
 _CACHE_TTL = 2.0
 _cache: dict = {"at": -1e9, "vals": {}}
@@ -32,7 +32,7 @@ _secret_cache: dict = {}    # key -> (monotonic_at, plaintext)
 
 
 def _secret_info(key: str) -> bytes:
-    return b"dcsim-setting:" + key.encode()
+    return b"policypilot-setting:" + key.encode()
 
 
 @dataclass(frozen=True)
@@ -260,17 +260,17 @@ SETTINGS: list[Setting] = [
     # here ENABLES it with no redeploy; clearing it disables it. The token grants policy publish on every
     # ALLOWED server, so it's stored encrypted and treated as top-tier.
     Setting("webhook_token", "secret", "",
-            "Inbound webhook token (X-DCSim-Token)",
-            "Shared secret a ticketing system sends as the `X-DCSim-Token` header to POST an access "
+            "Inbound webhook token (X-PolicyPilot-Token)",
+            "Shared secret a ticketing system sends as the `X-PolicyPilot-Token` header to POST an access "
             "request. Setting it here enables POST /access-automation/webhook with no redeploy; clearing "
-            "it falls back to the DCSIM_WEBHOOK_TOKEN env var (the endpoint is disabled only when BOTH are "
+            "it falls back to the PILOT_WEBHOOK_TOKEN env var (the endpoint is disabled only when BOTH are "
             "unset). Stored encrypted at rest.",
             group="Ticketing webhook", generate=True),
     Setting("webhook_server_ids", "str", "",
             "Restrict the webhook to server ids",
             "Comma-separated management-server ids the webhook may target (e.g. 1,3). LEAVE BLANK to allow "
             "all allowed servers. A malformed value is rejected (the webhook fails closed — it never "
-            "silently widens to all). Falls back to DCSIM_WEBHOOK_SERVER_IDS when blank.",
+            "silently widens to all). Falls back to PILOT_WEBHOOK_SERVER_IDS when blank.",
             group="Ticketing webhook", max=200),
 
     # --- Ticket write-back -----------------------------------------------------------------------------
@@ -282,31 +282,31 @@ SETTINGS: list[Setting] = [
             "ServiceNow instance URL",
             "Base URL of your ServiceNow instance, e.g. https://dev12345.service-now.com. The write-back "
             "is active only when instance + user + password are all set. Falls back to "
-            "DCSIM_SERVICENOW_INSTANCE when blank.",
+            "PILOT_SERVICENOW_INSTANCE when blank.",
             group="Ticket write-back", max=200),
     Setting("servicenow_user", "str", "",
             "ServiceNow user",
-            "Table API username for the write-back. Falls back to DCSIM_SERVICENOW_USER when blank.",
+            "Table API username for the write-back. Falls back to PILOT_SERVICENOW_USER when blank.",
             group="Ticket write-back", max=100),
     Setting("servicenow_password", "secret", "",
             "ServiceNow password",
             "Table API password for the write-back. Stored encrypted at rest. Falls back to "
-            "DCSIM_SERVICENOW_PASSWORD when empty.",
+            "PILOT_SERVICENOW_PASSWORD when empty.",
             group="Ticket write-back"),
     Setting("servicenow_table", "str", "",
             "ServiceNow table",
             "Table the decision is written to. Leave blank for 'incident'. Falls back to "
-            "DCSIM_SERVICENOW_TABLE when blank.",
+            "PILOT_SERVICENOW_TABLE when blank.",
             group="Ticket write-back", max=60),
 
     # --- Portal --------------------------------------------------------------------------------------
     Setting("base_url", "str", "",
             "Public base URL",
-            "The public URL this portal is reached at (e.g. https://dcsim.example.com), stamped into the "
+            "The public URL this portal is reached at (e.g. https://policypilot.example.com), stamped into the "
             "feed / GDC / Keystone / gaia_api URLs shown to the SE and the MCP/webhook endpoints on the "
             "guide pages. Set it here to change the displayed URLs with no redeploy. Leave blank to use "
-            "DCSIM_BASE_URL (or http://localhost:8000 in dev). NOTE: the session-cookie 'Secure' flag is "
-            "still decided at startup from DCSIM_BASE_URL's scheme, so for HTTPS cookie hardening set the "
+            "PILOT_BASE_URL (or http://localhost:8000 in dev). NOTE: the session-cookie 'Secure' flag is "
+            "still decided at startup from PILOT_BASE_URL's scheme, so for HTTPS cookie hardening set the "
             "env var too.",
             group="Portal", max=200),
 ]
@@ -402,7 +402,7 @@ def secret_settings() -> list[Setting]:
 
 def secret_available() -> bool:
     """True when secrets can actually be stored (AES-256 key material is configured). When False the UI
-    must tell the admin to set DCSIM_ENCRYPTION_KEY / DCSIM_SESSION_SECRET and fall back to env vars."""
+    must tell the admin to set PILOT_ENCRYPTION_KEY / PILOT_SESSION_SECRET and fall back to env vars."""
     return crypto.available()
 
 
@@ -478,7 +478,7 @@ def clear_secret(key: str) -> None:
 
 
 # --- Runtime resolution with env fallback ------------------------------------------------------------
-# A portal Setting takes precedence; a matching DCSIM_ env var is the fallback (so existing env-based
+# A portal Setting takes precedence; a matching PILOT_ env var is the fallback (so existing env-based
 # deployments keep working and a value can be set/rotated from the UI without a redeploy).
 
 def get_or_env(key: str, env_value) -> str:
@@ -493,7 +493,7 @@ def get_secret_or_env(key: str, env_value) -> str:
 
 
 def base_url() -> str:
-    """The portal's public base URL: the 'base_url' Setting if set, else DCSIM_BASE_URL (default
+    """The portal's public base URL: the 'base_url' Setting if set, else PILOT_BASE_URL (default
     http://localhost:8000). Single resolution point for every emitted feed/endpoint URL."""
     from ..config import get_settings
     return get_or_env("base_url", get_settings().base_url) or "http://localhost:8000"

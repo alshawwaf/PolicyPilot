@@ -127,9 +127,9 @@
 <div class="card">
   <details>
     <summary>Ticketing webhook (any ITSM — end-to-end automation)</summary>
-    <p class="muted" style="margin-top:10px;">Point any system that can POST JSON at the endpoint below — ServiceNow, Jira, Remedy, Freshservice, or a custom portal. Set <code>DCSIM_WEBHOOK_TOKEN</code> and send it as <code>X-DCSim-Token</code>; the webhook is disabled until that token is set. Field names are flexible (common <code>u_*</code> / <code>number</code> / Jira <code>key</code> aliases are accepted). With <code>"apply": true</code> it applies + publishes. The result is returned synchronously; to push it back, add an optional <code>"callback_url"</code> (we POST the result there) or configure the built-in ServiceNow write-back (<code>DCSIM_SERVICENOW_*</code>).</p>
+    <p class="muted" style="margin-top:10px;">Point any system that can POST JSON at the endpoint below — ServiceNow, Jira, Remedy, Freshservice, or a custom portal. Set <code>PILOT_WEBHOOK_TOKEN</code> and send it as <code>X-PolicyPilot-Token</code>; the webhook is disabled until that token is set. Field names are flexible (common <code>u_*</code> / <code>number</code> / Jira <code>key</code> aliases are accepted). With <code>"apply": true</code> it applies + publishes. The result is returned synchronously; to push it back, add an optional <code>"callback_url"</code> (we POST the result there) or configure the built-in ServiceNow write-back (<code>PILOT_SERVICENOW_*</code>).</p>
     <pre id="aa-curl">POST {{ request.base_url }}access-automation/webhook
-X-DCSim-Token: &lt;your token&gt;
+X-PolicyPilot-Token: &lt;your token&gt;
 Content-Type: application/json
 
 {

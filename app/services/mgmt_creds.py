@@ -15,9 +15,9 @@ from sqlalchemy.orm import Session
 from ..models import ManagementSecret, ManagementServer
 from . import crypto
 
-_log = logging.getLogger("dcsim.creds")
+_log = logging.getLogger("policypilot.creds")
 
-_INFO = b"dcsim-mgmt-secret-v1"   # HKDF context label — distinct from gateway/datacenter secrets
+_INFO = b"policypilot-mgmt-secret-v1"   # HKDF context label — distinct from gateway/datacenter secrets
 
 
 def available() -> bool:

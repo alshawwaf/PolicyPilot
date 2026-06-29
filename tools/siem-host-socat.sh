@@ -15,11 +15,11 @@
 # is dropped while every local test passes. See docs/integrations/siem.md -> Troubleshooting.
 #
 # Usage:  sudo tools/siem-host-socat.sh [name-filter] [port]
-#   name-filter  docker ps --filter name=...  (default: dcsim)
+#   name-filter  docker ps --filter name=...  (default: policypilot)
 #   port         syslog port                  (default: 5514)
 set -euo pipefail
 
-NAME_FILTER="${1:-dcsim}"
+NAME_FILTER="${1:-policypilot}"
 PORT="${2:-5514}"
 
 APP="$(docker ps --filter "name=${NAME_FILTER}" --format '{{.Names}}' | head -1)"

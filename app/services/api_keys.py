@@ -26,7 +26,7 @@ def as_utc(d):
     return d if d.tzinfo else d.replace(tzinfo=timezone.utc)
 
 SCOPES = ("mcp", "webhook", "api")     # api = the general REST API (/api/v1) for any HTTP client
-_PREFIX = "dcsim"                      # token looks like dcsim_<scope>_<random> — scope is visible, not secret
+_PREFIX = "policypilot"                      # token looks like policypilot_<scope>_<random> — scope is visible, not secret
 
 # Cache of active keys per scope: scope -> (monotonic_at, [(id, key_hash)]). Short TTL so a create/revoke
 # lands fast (we also bust explicitly). Keeps verify() off the DB on the request path. The cache is

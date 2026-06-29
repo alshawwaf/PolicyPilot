@@ -288,7 +288,7 @@
           var proxy = document.getElementById('ax-proxy');
           if (proxy && proxy.checked && /^https?:\/\//i.test(req.url) &&
               req.url.indexOf('/api-explorer/proxy') === -1) {
-            req.headers['X-Dcsim-Target'] = req.url;
+            req.headers['X-PolicyPilot-Target'] = req.url;
             req.url = location.origin + '/api-explorer/proxy';
           }
         } catch (e) { /* fall back to a direct browser call */ }

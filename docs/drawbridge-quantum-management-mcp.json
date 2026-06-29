@@ -96,7 +96,7 @@
     },
     {
       "parameters": {
-        "endpointUrl": "https://dcsim.example.com/mcp/",
+        "endpointUrl": "https://policypilot.example.com/mcp/",
         "authentication": "bearerAuth",
         "options": {}
       },

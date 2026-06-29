@@ -37,7 +37,7 @@ no-hardware demo with a realistic async task + change summary.
   - **Manual pin.** Untick auto-trust and fetch (`fetch-cert`) or paste a specific certificate to pin,
     so you can review the SHA-256 fingerprint before saving.
 - **No credentials are persisted** by default. A gateway's password may optionally be **stored
-  encrypted** (AES-256-GCM, `app/services/gateway_creds.py`); set `DCSIM_ENCRYPTION_KEY` in prod.
+  encrypted** (AES-256-GCM, `app/services/gateway_creds.py`); set `PILOT_ENCRYPTION_KEY` in prod.
 
 ## Mock Gaia API (for no-hardware demos)
 

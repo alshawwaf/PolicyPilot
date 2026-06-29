@@ -1,9 +1,11 @@
 # Dynamic Layers (Gaia API push)
 
-Unlike the feeds and datacenter mocks (which CloudGuard **polls**), this is a **push** model: the
-portal authors an Access Control rulebase and applies it to a gateway's **Gaia API**
+This is the second of PolicyPilot's two access-automation rails. Where the Management rail commits
+rules to the SMS over the `web_api`, a Dynamic Layer is **pushed straight to a gateway** out-of-band of
+SmartConsole: the portal authors an Access Control rulebase and applies it to the gateway's **Gaia API**
 (`set-dynamic-content`, R82.10) — either a **real gateway**, or the built-in **mock Gaia API** for a
-no-hardware demo with a realistic async task + change summary.
+no-hardware demo with a realistic async task + change summary. Both the manual UI flow below and an
+MCP/agent path (see [MCP / agent path](#mcp--agent-path)) drive the same apply.
 
 - Builder/apply router: [`app/routers/dynamic_layers.py`](../../app/routers/dynamic_layers.py)
 - Real-gateway apply flow (the Gaia API session): [`app/services/apply_runner.py`](../../app/services/apply_runner.py)
@@ -21,6 +23,31 @@ no-hardware demo with a realistic async task + change summary.
    - **Mock gateway** (checkbox): the portal calls its own mock Gaia API — same flow, no hardware.
 3. Watch **live progress** (async task) and the full **HTTP trace** of each Gaia call. Results are
    merged into the layer's Rulebase view; the **History** page keeps prior applies (with delete).
+
+## MCP / agent path
+
+The same build-and-push flow is fully agent-drivable over the shared `/mcp` endpoint (an MCP-scope API
+key as `Authorization: Bearer`), so an LLM agent can manage dynamic layers from one sentence. Six tools
+cover this rail (the other 13 cover the Management rail):
+
+- **`list_gateways`** — the saved gateways an agent can push to.
+- **`list_dynamic_layers`** — the dynamic layers defined in the portal.
+- **`get_dynamic_layer`** — read one layer's rulebase and referenced objects.
+- **`add_dynamic_rule`** / **`remove_dynamic_rule`** — edit a layer's rulebase (these only edit the
+  layer; call `push_dynamic_layer` afterwards to apply the change to a gateway).
+- **`push_dynamic_layer`** — apply a layer to a gateway via `set-dynamic-content`. `gateway` blank (or
+  `'mock'`) pushes to the built-in demo target; `dry_run=true` validates without applying.
+
+A ready-made n8n agent ships in
+[`docs/policypilot-dynamic-layer-agent.json`](../policypilot-dynamic-layer-agent.json); it connects to
+the same `/mcp` with an MCP-scope key.
+
+**Gated by `mcp_allow_layer_push`.** A real-gateway push (`dry_run=false` against a saved gateway) is an
+admin-gated commit — it requires the **Let the MCP agent push dynamic layers to gateways**
+(`mcp_allow_layer_push`) setting to be enabled. This is a **separate toggle from `mcp_allow_publish`**
+(which gates SMS publish on the Management rail): a dynamic-layer push lands on the gateway out-of-band of
+SmartConsole, so it has its own gate. With it OFF, agents can still validate (`dry_run=true`) and push to
+the built-in `'mock'` target — those are always allowed — but a real-gateway push is refused.
 
 ## Real-gateway push
 
@@ -61,5 +88,6 @@ Long object lists are paginated in the builder (designed for e.g. a customer wit
 
 - The real R82.10 commands are `set-dynamic-content` (push the layer's content) and
   `set/show-dynamic-layer(s)` (manage the layers). See the memory note `gaia-dynamic-layer-api`.
-- This is the one integration where the portal is the **client** (pushing) rather than the server
-  (being polled) — useful when a PoV can't expose a pollable URL to the gateway.
+- A dynamic layer is applied **out-of-band of SmartConsole** — it lands on the gateway directly via the
+  Gaia API, not through the SMS — which is why its agent push is gated separately
+  (`mcp_allow_layer_push`) from the Management rail's SMS publish (`mcp_allow_publish`).

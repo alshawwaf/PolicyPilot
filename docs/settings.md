@@ -32,8 +32,16 @@ is the fallback), so you rotate from the UI with no redeploy. If at-rest encrypt
 save **refuses** to store cleartext and tells you to set the key or keep using the env vars.
 
 - **`mcp_token`** (MCP / agent) — bearer the `/mcp` client sends; setting it *enables* the endpoint.
-  Fallback: `PILOT_MCP_TOKEN`. The companion **`mcp_allow_publish`** (default OFF) gates whether an
-  agent may publish to a live SMS.
+  Fallback: `PILOT_MCP_TOKEN`. Two **separate** companion toggles (both default OFF) gate the two
+  agent-drivable rails:
+  - **`mcp_allow_publish`** — *Let the MCP agent publish to live policy.* Gates whether an agent may
+    commit + publish rules to a live **SMS** (the Management rail). With it off, agents can still decide,
+    preview, and dry-run (validate-and-discard), but `apply_access(publish=true)` is refused.
+  - **`mcp_allow_layer_push`** — *Let the MCP agent push dynamic layers to gateways.* Gates whether an
+    agent may push a **dynamic layer** to a live gateway via the Gaia API (`set-dynamic-content`). This
+    is a **distinct gate** from `mcp_allow_publish` because a dynamic-layer push lands on the gateway
+    out-of-band of SmartConsole. With it off, agents can still validate (`dry_run`) and push to the
+    built-in demo (`mock`) target, but a real-gateway push is refused.
 - **`webhook_token`** (Ticketing webhook) — the `X-PolicyPilot-Token` shared secret that enables
   `POST /access-automation/webhook`. Fallback: `PILOT_WEBHOOK_TOKEN`. Scope it with
   **`webhook_server_ids`** (fails closed on a malformed value).
@@ -75,5 +83,5 @@ workers):
   short.
 
 > Storage & retention, Access-automation object-naming, and the Portal **`base_url`** also live on
-> this page; `base_url` restamps every emitted feed/GDC/Keystone/gaia_api and MCP/webhook URL with no
+> this page; `base_url` restamps every emitted endpoint URL (the `/mcp` and webhook URLs) with no
 > redeploy (the cookie `Secure` flag is still decided at startup from `PILOT_BASE_URL`).

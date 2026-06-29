@@ -1,10 +1,23 @@
-# MCP agent QA battery — one-sentence, “…and publish”
+# MCP agent QA battery — one-sentence, “…and publish/push”
 
 A standing set of natural-language prompts to fire at an LLM agent wired to PolicyPilot over **MCP**, to
 confirm the whole access-automation surface still works end-to-end. **Almost every prompt is a single
-sentence ending in “…and publish the changes.”** That's the point of this product: an SE (or a ticket, or
-an agent) says *one sentence* and the change is decided, placed first-match-safe, applied **and published**
-to the live policy — in one turn.
+sentence ending in “…and publish the changes” (management rail) or “…and push the changes” (dynamic-layer
+rail).** That's the point of this product: an SE (or a ticket, or an agent) says *one sentence* and the
+change is decided, placed first-match-safe, and either **published** to the live SMS policy or **pushed** to
+a gateway — in one turn.
+
+Both rails live on the **same** `/mcp` endpoint (one mcp-scope key, sent as `Authorization: Bearer`):
+
+- **Management access policy** (the SMS, via the Management web_api) — §1–§8 below. Publishing to live
+  policy is gated by **`mcp_allow_publish`**.
+- **Dynamic Layers** (an access rulebase pushed straight to a gateway via the Gaia API `set-dynamic-content`,
+  out-of-band of SmartConsole) — §9 below. A real-gateway push is gated by **`mcp_allow_layer_push`**, a
+  *separate* toggle from `mcp_allow_publish`; dry-run and the built-in `mock` target are always allowed.
+
+Two ready-made n8n agents drive these rails over that same endpoint:
+**`docs/policypilot-management-agent.json`** (the management battery) and
+**`docs/policypilot-dynamic-layer-agent.json`** (the dynamic-layer battery).
 
 > 🎯 Run these after any change to the engine, the MCP tools, or the column support. They're the agent-level
 > companion to the unit battery (`python -m app.services.aa_qa`) and the pytest suite.
@@ -175,14 +188,50 @@ Security zones: `InternalZone` / `DMZZone` / `ExternalZone` / `WirelessZone`. Pr
 
 ---
 
+## 9. Dynamic Layers — author a rulebase and **push** it to a gateway (the other rail)
+
+These exercise the dynamic-layer tools (the `docs/policypilot-dynamic-layer-agent.json` agent). A dynamic
+layer is an access rulebase pushed straight to a gateway via the Gaia API `set-dynamic-content`, out-of-band
+of SmartConsole — so the verb here is **push**, not publish, and the gate is **`mcp_allow_layer_push`** (a
+separate toggle from the SMS publish gate). `add_dynamic_rule` / `remove_dynamic_rule` only **edit** the
+layer in the portal; the change takes effect only when you `push_dynamic_layer`. **Almost every actionable
+prompt ends “…and push the changes”** — that's the one-sentence demo for this rail.
+
+These are written generically for a layer named **DMZ** and a gateway named **GW1** — substitute your own
+saved dynamic-layer name and gateway. Leave the gateway blank or say **`mock`** for the always-allowed
+built-in demo target.
+
+| # | Prompt | Exercises | Expect |
+|---|--------|-----------|--------|
+| 38 | "List the gateways I can push a dynamic layer to." | `list_gateways` | GW1 (+ any others), id/name/host/port |
+| 39 | "List my dynamic layers." | `list_dynamic_layers` | DMZ (+ any others), id/name/layer_name/rule count |
+| 40 | "Show me the rules in the DMZ layer." | `get_dynamic_layer` | each rule's name/action/source/destination/service + object types |
+| 41 | "Add a rule allowing 10.1.2.50 to reach 10.1.2.60 over SSH in the DMZ layer and push the changes." | `add_dynamic_rule` → `push_dynamic_layer` | rule added (inline host objects), then pushed to a gateway; change summary + task id |
+| 42 | "Block 10.1.9.9 from reaching anything in the DMZ layer, dry run." | `add_dynamic_rule` (action Drop) → `push_dynamic_layer` (`dry_run=true`) | Drop rule added; dry-run **validates without applying** (always allowed) — `pushed:false`, status succeeded |
+| 43 | "Remove the web-ssh rule from the DMZ layer and push the changes to GW1." | `remove_dynamic_rule` → `push_dynamic_layer` (named gateway) | rule removed (layer keeps ≥1 rule), then pushed to **GW1**; change summary + task id |
+| 44 | "Add a rule allowing 10.1.2.0/24 to reach win_server over HTTPS at the top of the DMZ layer and push the changes." | `add_dynamic_rule` (`position=top`, CIDR + named object) → `push_dynamic_layer` | rule placed at the top (inline network object); pushed; change summary |
+| 45 | "Remove the last remaining rule from the DMZ layer and push the changes." | `remove_dynamic_rule` guardrail | **refused** — a dynamic layer must keep at least one rule; nothing pushed; agent explains |
+| 46 | *(With the layer-push gate OFF)* "Add a rule allowing 10.1.2.50 to reach 10.1.2.60 over SSH in the DMZ layer and push the changes to GW1." | layer-push gate (`mcp_allow_layer_push`) | the real-gateway push is **refused**; agent falls back to a **dry-run** (or `gateway='mock'`) and reports the push is admin-gated — a separate gate from SMS publish |
+
+> 🔁 **Substitute freely:** these prompts assume a saved dynamic layer called **DMZ** with at least one rule
+> (so #43/#45 have something to act on) and a saved gateway called **GW1**. Swap in your own — or run #39 /
+> #38 first to see what you have, then adapt.
+
+---
+
 ## Coverage checklist (what a full pass proves)
 
-- **Tools:** list_management_servers · list_access_layers · summarize_layer · analyze_policy ·
+- **Management tools:** list_management_servers · list_access_layers · summarize_layer · analyze_policy ·
   correlate_service · correlate_application · coverage_lookup · decide_access · apply_access ·
   remove_access · amend_access_rule · list_changes · revert_change.
+- **Dynamic-layer tools:** list_gateways · list_dynamic_layers · get_dynamic_layer · add_dynamic_rule ·
+  remove_dynamic_rule · push_dynamic_layer.
 - **Outcomes:** no_op · widen · create (clean-floor / above-deny / app-Internet / typed-source / named-proto)
   · review.
 - **Action column:** Accept · Drop · Reject · Ask · Inform · Apply Layer · action-settings (captive/limit).
 - **Match-gating columns:** content (+direction/negate) · time · install-on · vpn.
 - **Lifecycle:** create → amend → revert; remove → disable; idempotency; publish-gate refusal.
-- **The promise:** for everything in §2–§6, one sentence ending “…and publish the changes” gets it **done**.
+- **Dynamic-layer rail:** read (list/get) → edit (add/remove) → push (dry-run · `mock` · named gateway);
+  keep-≥1-rule guardrail; **layer-push-gate refusal** (`mcp_allow_layer_push`, separate from `mcp_allow_publish`).
+- **The promise:** for everything in §2–§6, one sentence ending “…and publish the changes” gets it **done**
+  on the SMS; for §9, one sentence ending “…and push the changes” gets it **done** on the gateway.

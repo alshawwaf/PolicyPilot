@@ -17,12 +17,6 @@ def utcnow() -> dt.datetime:
     return dt.datetime.now(dt.timezone.utc)
 
 
-class FeedType(str, enum.Enum):
-    generic_dc = "generic_dc"
-    ioc = "ioc"
-    network_feed = "network_feed"
-
-
 class User(Base):
     __tablename__ = "users"
 
@@ -35,59 +29,9 @@ class User(Base):
     title: Mapped[str] = mapped_column(String(120), default="")          # role / job title
     created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
-    feeds: Mapped[list["Feed"]] = relationship(back_populates="owner", cascade="all, delete-orphan")
-
     @property
     def display_name(self) -> str:
         return (f"{self.first_name} {self.last_name}".strip()) or self.username
-
-
-class Feed(Base):
-    __tablename__ = "feeds"
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    # Long random token = the unguessable, public feed URL segment.
-    token: Mapped[str] = mapped_column(String(64), unique=True, index=True)
-    type: Mapped[FeedType] = mapped_column(Enum(FeedType))
-    name: Mapped[str] = mapped_column(String(200))
-    description: Mapped[str] = mapped_column(Text, default="")
-
-    # Type-specific payload. For generic_dc: {"objects": [{name, id, description, ranges:[...]}]}.
-    content: Mapped[dict] = mapped_column(JSON, default=dict)
-
-    # Optional per-feed auth that the gateway must satisfy when polling:
-    #  - Generic DC uses a Custom Header (key/value).
-    #  - Network Feed uses HTTP basic auth (stored in auth_header_key/value as user/pass).
-    auth_header_key: Mapped[str | None] = mapped_column(String(120), nullable=True)
-    auth_header_value: Mapped[str | None] = mapped_column(String(255), nullable=True)
-
-    interval_seconds: Mapped[int] = mapped_column(Integer, default=10)
-
-    owner_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
-    created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
-    updated_at: Mapped[dt.datetime] = mapped_column(
-        DateTime(timezone=True), default=utcnow, onupdate=utcnow
-    )
-
-    owner: Mapped["User"] = relationship(back_populates="feeds")
-    polls: Mapped[list["FeedPoll"]] = relationship(
-        back_populates="feed", cascade="all, delete-orphan", order_by="FeedPoll.at.desc()"
-    )
-
-
-class FeedPoll(Base):
-    """One recorded fetch of a feed — the evidence that the gateway is live-syncing."""
-
-    __tablename__ = "feed_polls"
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    feed_id: Mapped[int] = mapped_column(ForeignKey("feeds.id"), index=True)
-    at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
-    source_ip: Mapped[str] = mapped_column(String(64), default="")
-    user_agent: Mapped[str] = mapped_column(String(255), default="")
-    status: Mapped[int] = mapped_column(Integer, default=200)
-
-    feed: Mapped["Feed"] = relationship(back_populates="polls")
 
 
 class DynamicLayer(Base):
@@ -143,8 +87,8 @@ class LayerTask(Base):
 
 
 class ActivityLog(Base):
-    """App-wide log of integration traffic — feed polls, mock Gaia API calls, and layer
-    applies — each with the actual (redacted) request/response for troubleshooting + demos."""
+    """App-wide log of traffic — REST / MCP / webhook calls, gateway reads, and layer applies — each
+    with the actual (redacted) request/response for troubleshooting + demos."""
 
     __tablename__ = "activity_log"
 
@@ -362,40 +306,3 @@ class ManagementSecret(Base):
     server: Mapped["ManagementServer"] = relationship(back_populates="secret")
 
 
-class Datacenter(Base):
-    """A mock cloud/datacenter that Check Point connects to (e.g. OpenStack). `content` holds
-    the simulated inventory the provider API serves (instances, subnets, security groups)."""
-
-    __tablename__ = "datacenters"
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    token: Mapped[str] = mapped_column(String(64), unique=True, index=True)
-    provider: Mapped[str] = mapped_column(String(32), default="openstack", index=True)
-    name: Mapped[str] = mapped_column(String(200))
-    description: Mapped[str] = mapped_column(Text, default="")
-    # openstack: {"instances":[{name,ip,tags,metadata}], "subnets":[{name,cidr}], "security_groups":[{name}]}
-    content: Mapped[dict] = mapped_column(JSON, default=dict)
-    owner_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
-    created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
-    updated_at: Mapped[dt.datetime] = mapped_column(
-        DateTime(timezone=True), default=utcnow, onupdate=utcnow
-    )
-
-    baseline: Mapped["DatacenterBaseline"] = relationship(
-        back_populates="datacenter", cascade="all, delete-orphan", uselist=False)
-
-
-class DatacenterBaseline(Base):
-    """The inventory snapshot a datacenter resets to after a demo. Captured automatically before the
-    first live mutation (and re-settable), so 'Reset to baseline' restores the pre-demo state."""
-
-    __tablename__ = "datacenter_baselines"
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    datacenter_id: Mapped[int] = mapped_column(ForeignKey("datacenters.id"), unique=True, index=True)
-    content: Mapped[dict] = mapped_column(JSON, default=dict)
-    created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
-    updated_at: Mapped[dt.datetime] = mapped_column(
-        DateTime(timezone=True), default=utcnow, onupdate=utcnow)
-
-    datacenter: Mapped["Datacenter"] = relationship(back_populates="baseline")

@@ -297,7 +297,7 @@ Content-Type: application/json
     <span class="pill ok">No-op · already allowed</span>
     <span class="pill" style="background:var(--info-bg);color:var(--info);">Widen · extend a rule</span>
     <span class="pill" style="background:var(--warn-bg);color:var(--warn);">Create · new rule (above a deny if one blocks it)</span>
-    <span class="pill" style="background:rgba(59,130,246,.16);color:#5b9bf3;">Note · flag &amp; keep going</span>
+    <span class="pill" style="background:var(--info-bg);color:var(--info);">Note · flag &amp; keep going</span>
   </div>
 </div>
 
@@ -805,7 +805,7 @@ Content-Type: application/json
       var t = document.createElement('div'); t.textContent = msg;
       t.style.cssText = 'position:absolute;left:50%;bottom:14px;transform:translateX(-50%);z-index:5;' +
         'padding:7px 14px;border-radius:9px;font-size:12.5px;font-weight:600;color:#fff;box-shadow:0 6px 18px rgba(0,0,0,.4);' +
-        'background:' + (bad ? '#b4232a' : 'var(--accent,#2563eb)') + ';';
+        'background:' + (bad ? 'var(--danger)' : 'var(--accent)') + ';';
       wrap.appendChild(t); setTimeout(function () { t.remove(); }, 2200);
     }
     // click a node's knob pill -> toggle that decision behavior (persists; switches profile to Custom)

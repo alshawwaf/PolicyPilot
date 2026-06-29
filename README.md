@@ -10,7 +10,8 @@ LLM agent over MCP.*
 
 ![Version](https://img.shields.io/badge/version-1.0.0-3b82f6)
 ![Validated](https://img.shields.io/badge/validated-R82.10-7b3ff2)
-![Tests](https://img.shields.io/badge/tests-619%20passing-34d399)
+![Tests](https://img.shields.io/badge/tests-626%20passing-34d399)
+![MCP tools](https://img.shields.io/badge/MCP%20tools-19-7b3ff2)
 ![Python](https://img.shields.io/badge/python-3.12%2B-3b82f6)
 ![TLS](https://img.shields.io/badge/TLS-always%20verified-15935a)
 ![License](https://img.shields.io/badge/license-proprietary-5b6678)
@@ -32,15 +33,18 @@ one-click rollback. No more hand-editing rulebases or guessing where a rule belo
 
 ## 🛤 Two automation rails, one engine
 
-The same decision brain drives two ways to apply a change:
+The same decision brain drives two ways to apply a change — **both fully agent-drivable over the same `/mcp`
+endpoint** (19 tools total, mcp-scope key as `Authorization: Bearer`):
 
-| Rail | What it does | How |
-|---|---|---|
-| **Managed — SMS** | Create / widen an access rule in the policy rulebase, then **publish**. | Management Web API (`web_api`) |
-| **Direct — Gateway** | Author an access rulebase and push it **straight to the gateway** as a dynamic layer. | Gaia API (`set-dynamic-content`, sk182252) |
+| Rail | What it does | How | Publish gate |
+|---|---|---|---|
+| **Management access policy — SMS** | Create / widen an access rule in the policy rulebase, then **publish**. | Management Web API (`web_api`) | `mcp_allow_publish` |
+| **Dynamic Layers — Gateway** | Author an access rulebase and push it **straight to the gateway** as a dynamic layer, out-of-band of SmartConsole. | Gaia API (`set-dynamic-content`, sk182252) | `mcp_allow_layer_push` |
 
-The SMS engine deliberately treats the dynamic layer as **out-of-band** (skips it from matching) — so the
-two rails are complementary halves of "automate access," never overlapping.
+The two rails carry **separate publish gates** — enabling agent writes to the SMS does not enable a live
+gateway push, and vice versa. dry-run and the built-in `mock` target are always allowed. The SMS engine
+deliberately treats the dynamic layer as **out-of-band** (skips it from matching), so the two rails are
+complementary halves of "automate access," never overlapping.
 
 ---
 
@@ -65,12 +69,17 @@ rulebase.
 
 ## 🎛 Drive it four ways
 
-- 🤖 **[MCP server](docs/mcp-n8n.md)** — expose the engine as tools an LLM agent (n8n, Claude Desktop, Cursor,
-  VS Code, any MCP client) calls over `/mcp`. With the **Autopilot** preset, one sentence ending *"…and publish
-  the changes"* resolves, applies **and** publishes in a single turn. In-app onboarding at **`/mcp-guide`**.
-- 🌐 **REST API** — the same brain at **`/dbapi/v1`** for any HTTP client (api-scope key auth), auto-documented
-  in the portal OpenAPI (`/docs`).
+- 🤖 **[MCP server](docs/mcp-n8n.md)** — both rails as **19 tools** an LLM agent (n8n, Claude Desktop, Cursor,
+  VS Code, any MCP client) calls over `/mcp`. Two ready-made n8n workflows ship in `docs/`:
+  **[management access agent](docs/policypilot-management-agent.json)** and
+  **[dynamic-layer agent](docs/policypilot-dynamic-layer-agent.json)**, both connecting to the same `/mcp` with
+  an mcp-scope key. With the **Autopilot** preset, one sentence ending *"…and publish the changes"* resolves,
+  applies **and** publishes in a single turn (management rail). In-app onboarding at **`/mcp-guide`**.
+- 🌐 **REST API** — the same brain at **`/dbapi/v1`** for any HTTP client (api-scope key auth), mirroring the
+  tools across both rails (incl. `/gateways`, `/dynamic-layers`, `/dynamic-layers/push`), auto-documented in
+  the portal OpenAPI (`/docs`).
 - 🎫 **Ticket webhook** — a ServiceNow / Jira / any webhook becomes a Check Point rule, with optional write-back.
+  Authenticated with the `X-PolicyPilot-Token` header.
 - 🖥 **The portal UI** — review a decision, see the placement, apply on approval — plus a live **API explorer**
   (Swagger) at `/api-explorer` for testing Management / Gaia API calls directly.
 
@@ -125,7 +134,7 @@ Build from the **`Dockerfile`**, expose port **8000**, add a domain (Traefik han
 ## ✅ Tests
 
 ```bash
-pip install pytest && pytest -q          # 619 tests, all green
+pip install pytest && pytest -q          # 626 tests, all green
 ```
 
 ---
@@ -133,6 +142,8 @@ pip install pytest && pytest -q          # 619 tests, all green
 ## 📚 More
 
 - **[docs/mcp-n8n.md](docs/mcp-n8n.md)** — connect n8n / an LLM agent over MCP + the REST API.
+- **[docs/policypilot-management-agent.json](docs/policypilot-management-agent.json)** — ready-made n8n agent for the management access rail.
+- **[docs/policypilot-dynamic-layer-agent.json](docs/policypilot-dynamic-layer-agent.json)** — ready-made n8n agent for the dynamic-layer rail.
 - **[docs/mcp-agent-qa.md](docs/mcp-agent-qa.md)** — the one-sentence "…and publish" QA battery (demo + regression).
 - **[docs/access-automation-whitepaper.md](docs/access-automation-whitepaper.md)** — how the engine reasons.
 - **[docs/integrations/access-automation.md](docs/integrations/access-automation.md)** — the ticket→rule flow.

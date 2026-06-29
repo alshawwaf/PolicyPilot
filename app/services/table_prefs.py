@@ -23,22 +23,6 @@ class Col:
 # Per-table column specs. A table opts into customization by appearing here; templates iterate the
 # spec for the chooser and gate each optional column on the resolved visible set.
 TABLE_SPECS: dict[str, list[Col]] = {
-    "datacenters": [
-        Col("name", "Name", locked=True),
-        Col("provider", "Provider"),
-        Col("inventory", "Inventory"),
-        Col("created", "Created", default=False),
-    ],
-    # All currently-shown columns stay default-on (the view doesn't change); "created" is a new opt-in.
-    "feeds": [
-        Col("name", "Name", locked=True),
-        Col("type", "Type"),
-        Col("items", "Items"),
-        Col("interval", "Interval"),
-        Col("auth", "Auth"),
-        Col("url", "Feed URL"),
-        Col("created", "Created", default=False),
-    ],
     "gateways": [
         Col("name", "Name", locked=True),
         Col("address", "Address"),

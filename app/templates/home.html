@@ -210,6 +210,10 @@
       function up() { document.removeEventListener('mousemove', mv); document.removeEventListener('mouseup', up); if (ov) ov.style.pointerEvents = ''; }
       document.addEventListener('mousemove', mv); document.addEventListener('mouseup', up); e.preventDefault();
     });
+    handle.addEventListener('dblclick', function (e) {           // double-click title bar = zoom (macOS)
+      if (e.target.closest('.os-lt')) return;
+      var zb = w.querySelector('[data-act="zoom"]'); if (zb) zb.click();
+    });
   }
   function attachResize(w) {
     w.querySelectorAll('.os-rz').forEach(function (h) {

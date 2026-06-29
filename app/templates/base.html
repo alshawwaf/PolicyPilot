@@ -578,6 +578,88 @@
     .linkbtn { background:none; border:none; box-shadow:none; color:var(--accent); font-size:12px; font-weight:650;
       padding:4px 6px; cursor:pointer; }
     .linkbtn:hover { background:none; filter:none; transform:none; box-shadow:none; text-decoration:underline; }
+
+    /* ===================== macOS System Settings + gradient polish (Appendix) =====================
+       Appended LAST inside base.html's <style> so the cascade lets these win over the base rules
+       above without rewriting them. Purely additive, theme-aware (vars only, dark + light), and
+       form-semantics-safe. Deliberately restrained: it refines radii / shadows / micro-interactions
+       to match the approved Settings page, and KEEPS the existing signature gradient (icon chips,
+       primary buttons, active chips, row-hover accent). It does NOT touch the #settings-app scope —
+       the approved Settings page styles itself locally and must not be double-styled from here. */
+
+    /* — Cards: softer hairline border + layered soft shadow (replaces the flat shadow-sm) — */
+    .card { border-color:var(--line-soft); box-shadow:0 2px 6px rgba(0,0,0,.10); }
+    .card:hover { box-shadow:0 4px 12px rgba(0,0,0,.14); }
+    html[data-theme="light"] .card { box-shadow:0 1px 3px rgba(16,24,40,.05); }
+    html[data-theme="light"] .card:hover { box-shadow:0 3px 10px rgba(16,24,40,.08); }
+    /* Keep the explicit lift only for cards that opt in (.lift / a.card.choose); a plain .card:hover
+       shadow above is gentle and does not move the card. */
+
+    /* — Modal: deeper, softer elevation + slightly larger radius for the System-Settings feel — */
+    .modal { border-radius:18px; box-shadow:0 18px 52px rgba(0,0,0,.30), inset 0 0 0 1px rgba(255,255,255,.05); }
+    html[data-theme="light"] .modal { box-shadow:0 12px 34px rgba(16,24,40,.14); }
+    .modal-overlay { -webkit-backdrop-filter:blur(5px); backdrop-filter:blur(5px); }
+
+    /* — Buttons: refined radius + a tactile press; hover/disabled stays consistent with the base
+         (note: base sets filter:none on .secondary/.danger/:disabled — we DO NOT re-add brightness
+         there, only the primary gradient button brightens). — */
+    a.btn, button { border-radius:10px; }
+    a.btn:active, button:active { transform:scale(.98); }
+    a.btn.secondary, button.secondary { box-shadow:0 1px 2px rgba(0,0,0,.05); }
+    a.btn.secondary:hover, button.secondary:hover { box-shadow:0 2px 8px rgba(0,0,0,.08); }
+    button:disabled:active, button:disabled:hover { transform:none; }
+    /* Lift on hover is reduced-motion aware (matches the existing translateY but guarded). */
+    @media (prefers-reduced-motion: reduce) {
+      a.btn:hover, button:hover { transform:none; }
+    }
+
+    /* — Inputs / selects / textareas: consistent 10px radius to match buttons & cards — */
+    input, textarea, select { border-radius:10px; }
+    input:hover, textarea:hover, select:hover { border-color:var(--line-strong); }
+    input[type="checkbox"] { border-radius:6px; }
+    /* (radio stays 50% from base; focus rings, checked states & check-glyph are inherited unchanged) */
+
+    /* — Table: keep the signature accent row-hover indicator from base; only soften the header rule.
+         We intentionally DO NOT override tbody tr:hover td:first-child so the inset accent survives. — */
+    thead th { background:var(--surface-2); }
+    html[data-theme="light"] thead th { background:var(--surface-3); }
+
+    /* — Pills: marginally rounder to read as macOS capsules (colors/vars unchanged) — */
+    .pill { border-radius:var(--r-pill); }
+
+    /* — Filter chips: keep base sizing; just add the soft active glow for tactile feedback — */
+    .chip.active, .chip.active:hover { box-shadow:0 2px 8px rgba(123,63,242,.20); }
+    html[data-theme="light"] .chip.active, html[data-theme="light"] .chip.active:hover {
+      box-shadow:0 2px 8px rgba(230,0,126,.15); }
+
+    /* — Icon chip: rounder corners to match cards/buttons (gradient + shadow kept from base) — */
+    .icon-chip { border-radius:14px; }
+    .icon-chip.lg { border-radius:16px; }
+
+    /* — Dropdown menu: rounder panel + a softer big shadow — */
+    .menu-items { border-radius:14px; box-shadow:0 12px 40px rgba(0,0,0,.22); }
+    html[data-theme="light"] .menu-items { box-shadow:0 12px 32px rgba(16,24,40,.16); }
+
+    /* — Toast: rounder card + softer shadow (gradient bars kept from base) — */
+    .toast { border-radius:14px; box-shadow:0 12px 36px rgba(0,0,0,.28); }
+    html[data-theme="light"] .toast { box-shadow:0 12px 30px rgba(16,24,40,.18); }
+
+    /* — Code panels / copy chips: consistent radii with the rest of the system — */
+    pre { border-radius:11px; }
+    .copybtn { border-radius:9px; }
+    .copy, .fp { border-radius:9px; }
+
+    /* — Empty state icon chip: rounder to match (gradient is applied inline per page via the macro) — */
+    .empty-state .empty-ic { border-radius:16px; }
+
+    /* — Multi-select / pager controls (Activity): rounder panel to match the dropdown menu — */
+    .msel-panel { border-radius:14px; }
+
+    /* — Form-in-modal sticky footer: align its bottom radius with the modal's larger corner — */
+    #form-modal .modal { border-radius:18px; }
+    #form-modal .fm-head { border-radius:18px 18px 0 0; }
+    #form-modal .fm-body form > .row:last-child,
+    #form-modal .fm-body .fm-view-foot { border-radius:0 0 18px 18px; }
   </style>
 </head>
 <body>

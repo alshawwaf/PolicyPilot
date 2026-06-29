@@ -294,6 +294,16 @@ class UserDesktopPref(Base):
     layout: Mapped[dict] = mapped_column(JSON, default=dict)
 
 
+class GlobalPref(Base):
+    """Portal-wide JSON defaults set by an admin (no length cap, unlike AppState's String value) — e.g.
+    the default desktop layout that new / un-customised users inherit. ``key`` is the pref name."""
+
+    __tablename__ = "global_prefs"
+
+    key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    value: Mapped[dict] = mapped_column(JSON, default=dict)
+
+
 class ManagementServer(Base):
     """A saved Check Point Management Server (or MDS domain/CMA) connection the portal drives over the
     `web_api`: pull layers/objects, view/edit them, export to IaC. Login password / API key is stored

@@ -28,6 +28,12 @@ Post-1.0.0 hardening of the agent surface, ahead of broader live validation.
   *Dock* / *Desktop* toggles; desktop icons are **draggable** and remember their position. Saved to a new
   `UserDesktopPref` (JSON, validated against an app-key allowlist) via `POST /desktop/layout` and restored
   server-side on next load — so each user arranges their own dock + desktop, macOS-style.
+- **Right-click context menu** on dock + desktop icons: Open · Keep in / Remove from Dock · Add to /
+  Remove from Desktop · Open in new tab — the macOS-style menu.
+- **Admin sets the default, everyone personalises.** The portal admin (the seeded account) can right-click
+  the desktop → *Set this layout as everyone's default* (`POST /desktop/default`, admin-only — others get
+  403), stored in a new `GlobalPref`. A user with no layout of their own inherits that default; the moment
+  they customise, their own layout takes over.
 
 ### Application typo tolerance + Autonomous auto-correct
 - The application resolver now does a **typo-tolerant prefix fallback**: the SMS `filter` is substring-based,

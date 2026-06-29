@@ -8,8 +8,9 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from ..config import get_settings
 from ..db import get_db
-from ..models import DynamicLayer, Gateway, ManagementServer, User, UserDesktopPref
+from ..models import DynamicLayer, GlobalPref, Gateway, ManagementServer, User, UserDesktopPref
 from ..security import get_user_or_none, hash_password, password_strength_error, verify_password
 from ..services import coverage, login_guard
 
@@ -330,10 +331,23 @@ def _sanitize_layout(raw) -> dict:
     return {"dock": dock or list(DEFAULT_DESKTOP_LAYOUT["dock"]), "desktop": desk}
 
 
+def _is_admin(user: User) -> bool:
+    """The portal admin is the single seeded account (config ``admin_username``). Admin sets the default
+    desktop; every other user freely customises their own on top of it."""
+    return bool(user) and user.username == get_settings().admin_username
+
+
+def _global_default_layout(db: Session) -> dict | None:
+    row = db.get(GlobalPref, "desktop_default")
+    return _sanitize_layout(row.value) if (row and isinstance(row.value, dict) and row.value) else None
+
+
 def _load_desktop_layout(db: Session, user: User) -> dict:
+    """A user's own arrangement wins; else the admin-set default for everyone; else the built-in default."""
     row = db.scalar(select(UserDesktopPref).where(UserDesktopPref.owner_id == user.id))
-    return _sanitize_layout(row.layout) if (row and isinstance(row.layout, dict) and row.layout) else \
-        {k: list(v) for k, v in DEFAULT_DESKTOP_LAYOUT.items()}
+    if row and isinstance(row.layout, dict) and row.layout:
+        return _sanitize_layout(row.layout)
+    return _global_default_layout(db) or {k: list(v) for k, v in DEFAULT_DESKTOP_LAYOUT.items()}
 
 
 @router.get("/", response_class=HTMLResponse)
@@ -350,7 +364,30 @@ def home(request: Request, db: Session = Depends(get_db)):
               "layers": _count(DynamicLayer)}
     return templates.TemplateResponse(request, "home.html",
                                       {"user": user, "counts": counts, "layout": _load_desktop_layout(db, user),
-                                       "flash": _pop_flash(request)})
+                                       "is_admin": _is_admin(user), "flash": _pop_flash(request)})
+
+
+@router.post("/desktop/default")
+async def save_desktop_default(request: Request, db: Session = Depends(get_db)):
+    """Admin-only: set the portal-wide DEFAULT desktop layout that users who haven't customised inherit.
+    Non-admins get 403 — they can only change their own (POST /desktop/layout)."""
+    user = get_user_or_none(request, db)
+    if user is None:
+        return Response(status_code=401)
+    if not _is_admin(user):
+        return Response(status_code=403)
+    try:
+        body = await request.json()
+    except Exception:  # noqa: BLE001
+        return Response(status_code=400)
+    layout = _sanitize_layout(body)
+    row = db.get(GlobalPref, "desktop_default")
+    if row:
+        row.value = layout
+    else:
+        db.add(GlobalPref(key="desktop_default", value=layout))
+    db.commit()
+    return Response(status_code=204)
 
 
 @router.post("/desktop/layout")

@@ -81,6 +81,18 @@
   .os-ltile .os-tg.on { background:var(--accent-grad); border-color:transparent; color:#fff; }
   .os-launch-x { position:absolute; top:16px; right:20px; }
 
+  /* ---- Right-click context menu ---- */
+  .os-ctx { position:absolute; z-index:80; min-width:212px; padding:6px; display:none;
+    background:rgba(20,26,44,.97); backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px);
+    border:1px solid rgba(255,255,255,.12); border-radius:12px; box-shadow:0 18px 50px rgba(0,0,0,.5); }
+  html[data-theme="light"] .os-ctx { background:rgba(255,255,255,.98); border-color:var(--line); box-shadow:0 18px 44px rgba(16,24,40,.2); }
+  .os-ctx.open { display:block; }
+  .os-ctx button { display:flex; align-items:center; gap:11px; width:100%; text-align:left; background:transparent;
+    border:0; color:var(--text); font-size:13.5px; padding:9px 11px; border-radius:8px; cursor:pointer; font-family:inherit; box-shadow:none; }
+  .os-ctx button:hover { background:var(--accent-grad); color:#fff; transform:none; filter:none; }
+  .os-ctx button svg { width:16px; height:16px; opacity:.9; flex:none; }
+  .os-ctx .os-ctx-sep { height:1px; background:rgba(255,255,255,.10); margin:5px 7px; }
+
   /* ---- Windows ---- */
   .os-win { position:absolute; display:flex; flex-direction:column; background:var(--surface); border:1px solid var(--line-strong);
     border-radius:13px; overflow:hidden; box-shadow:0 28px 70px rgba(0,0,0,.55), 0 0 0 1px rgba(255,255,255,.04) inset;
@@ -124,7 +136,7 @@
   <div class="os-dock" id="os-dock"></div>
 </div>
 
-<script>window.PP_LAYOUT = {{ layout | tojson }};</script>
+<script>window.PP_LAYOUT = {{ layout | tojson }}; window.PP_ADMIN = {{ is_admin | tojson }};</script>
 <script>
 (function () {
   var desktop = document.getElementById('os-desktop'), dock = document.getElementById('os-dock'),
@@ -145,7 +157,12 @@
     clock: '<circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/>',
     code: '<polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>',
     user: '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
-    grid: '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>'
+    grid: '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
+    play: '<polygon points="6 4 20 12 6 20 6 4"/>',
+    pin: '<path d="M9 4h6l-1 6 3 3v2H7v-2l3-3-1-6z"/><path d="M12 15v5"/>',
+    eyeoff: '<path d="M9.9 4.24A9 9 0 0 1 12 4c7 0 10 8 10 8a18 18 0 0 1-2.4 3.5M6.6 6.6A18 18 0 0 0 2 12s3 8 10 8a9 9 0 0 0 3.5-.7"/><line x1="2" y1="2" x2="22" y2="22"/>',
+    external: '<path d="M14 3h7v7"/><path d="M21 3l-9 9"/><path d="M21 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5"/>',
+    star: '<polygon points="12 2 15 9 22 9.3 16.5 14 18.5 21 12 17 5.5 21 7.5 14 2 9.3 9 9"/>'
   };
   function svg(p) { return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">' + p + '</svg>'; }
   var COUNTS = { layers: {{ counts.layers|default(0) }}, management: {{ counts.management|default(0) }}, gateways: {{ counts.gateways|default(0) }} };
@@ -340,6 +357,61 @@
     if (path === '/logout' || path === '/login') return;      // auth flow legitimately leaves the OS
     var key = appByHref(path);
     if (key) { e.preventDefault(); openApp(key); }            // a known tool → open it as a window
+  });
+
+  /* ---- right-click context menu (macOS-style) ---- */
+  var ctx = document.createElement('div'); ctx.className = 'os-ctx'; desktop.appendChild(ctx);
+  function hideCtx() { ctx.classList.remove('open'); }
+  function showCtx(x, y, items) {
+    ctx.innerHTML = '';
+    items.forEach(function (it) {
+      if (it.sep) { var s = document.createElement('div'); s.className = 'os-ctx-sep'; ctx.appendChild(s); return; }
+      var b = document.createElement('button'); b.type = 'button';
+      b.innerHTML = svg(it.ic || I.play) + '<span>' + it.label + '</span>';
+      b.addEventListener('click', function (e) { e.stopPropagation(); hideCtx(); it.fn(); });
+      ctx.appendChild(b);
+    });
+    ctx.style.left = Math.min(x, desktop.clientWidth - 224) + 'px';
+    ctx.style.top = Math.min(y, Math.max(8, desktop.clientHeight - (items.length * 40 + 16))) + 'px';
+    ctx.classList.add('open');
+  }
+  document.addEventListener('click', hideCtx);
+  document.addEventListener('scroll', hideCtx, true);
+  window.addEventListener('blur', hideCtx);
+
+  function openTab(key) { var a = CATALOG[key]; if (a) window.open(a.href, '_blank'); }
+  function ctxItems(key, where) {
+    var items = [{ label: 'Open', ic: I.play, fn: function () { openApp(key); } }];
+    if (where === 'desktop') {
+      items.push({ label: inDock(key) ? 'Remove from Dock' : 'Keep in Dock', ic: I.pin, fn: function () { toggleDock(key); } });
+      items.push({ label: 'Remove from Desktop', ic: I.eyeoff, fn: function () { toggleDesktop(key); } });
+    } else {
+      items.push({ label: onDesktop(key) ? 'Remove from Desktop' : 'Add to Desktop', ic: I.grid, fn: function () { toggleDesktop(key); } });
+      items.push({ label: 'Remove from Dock', ic: I.eyeoff, fn: function () { toggleDock(key); } });
+    }
+    items.push({ sep: true }, { label: 'Open in new tab', ic: I.external, fn: function () { openTab(key); } });
+    return items;
+  }
+  function saveDefault() {
+    try {
+      fetch('/desktop/default', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(LAYOUT) });
+      if (window.appToast) window.appToast('Saved as the default desktop for everyone.');
+    } catch (e) {}
+  }
+  dock.addEventListener('contextmenu', function (e) {
+    var d = e.target.closest('.os-dik[data-key]'); if (!d) return;
+    var r = desktop.getBoundingClientRect(); e.preventDefault();
+    showCtx(e.clientX - r.left, e.clientY - r.top, ctxItems(d.dataset.key, 'dock'));
+  });
+  desktop.addEventListener('contextmenu', function (e) {
+    var r = desktop.getBoundingClientRect();
+    var di = e.target.closest('.os-deskicon[data-key]');
+    if (di) { e.preventDefault(); showCtx(e.clientX - r.left, e.clientY - r.top, ctxItems(di.dataset.key, 'desktop')); return; }
+    var onBg = e.target === desktop || (hello && (e.target === hello || hello.contains(e.target)));
+    if (onBg && window.PP_ADMIN) {
+      e.preventDefault();
+      showCtx(e.clientX - r.left, e.clientY - r.top, [{ label: 'Set this layout as everyone’s default', ic: I.star, fn: saveDefault }]);
+    }
   });
 
   renderDock(); renderDesktopIcons();

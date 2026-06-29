@@ -133,7 +133,7 @@ flags a rule as shadowed when it can prove an earlier rule fully covers it under
 on application-layer / opaque cells rather than guessing), and only flags Accepts that are `Any` on a
 whole dimension. Good for an agent to *understand* a policy before proposing a change.
 
-### Dynamic Layers (6 tools — push a rulebase to a gateway via the Gaia API)
+### Dynamic Layers (8 tools — push a rulebase to a gateway via the Gaia API)
 
 | Tool | Does | Writes? |
 |------|------|---------|
@@ -174,6 +174,11 @@ a `dry_run=true` push and a push to the built-in `mock` target are **always** al
 
   The two toggles are **independent** — enabling one does not enable the other, so an LLM cannot reach
   either live target unless you deliberately allow that rail.
+- **Idempotent commits:** pass an optional `idempotency_key` (any stable string per logical change) to
+  `apply_access` or `push_dynamic_layer`. A retry with the same key **replays** the first committed result
+  (`idempotent_replay: true`) instead of publishing/pushing again — so an agent retry, an n8n retry-on-fail,
+  or a redelivered ticket webhook can never create a duplicate change. Keys are kept 24h. (Use a deterministic
+  key, e.g. the ServiceNow ticket number, so the retry actually matches.)
 - **Autopilot** (the `aa_autopilot` toggle, set by the *Autopilot (lab demo)* preset) only affects the
   **management** rail — it lets one sentence resolve, apply **and** publish. It rides on
   `mcp_allow_publish`; it does **not** touch `mcp_allow_layer_push`.

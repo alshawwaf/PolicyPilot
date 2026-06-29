@@ -69,6 +69,56 @@ def test_apply_publish_allowed_when_setting_on(monkeypatch):
     assert out["published"] is True and seen["publish"] is True
 
 
+@pytest.fixture()
+def idemdb(monkeypatch):
+    """An in-memory DB wired into BOTH the change-log path and the idempotency store, so an apply test that
+    publishes stays fully isolated from any real database."""
+    from app.services import idempotency
+    eng = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(eng)
+    S = sessionmaker(bind=eng)
+    monkeypatch.setattr(mcp_tools, "SessionLocal", S)
+    monkeypatch.setattr(idempotency, "SessionLocal", S)
+    return S
+
+
+def test_apply_idempotency_key_replays_committed_result(monkeypatch, idemdb):
+    # A retry with the same idempotency_key must REPLAY the first committed result, never publish twice.
+    monkeypatch.setattr(app_settings, "get", lambda k: True if k == "mcp_allow_publish" else None)
+    _fake_server(monkeypatch)
+    calls = {"n": 0}
+
+    def _execute(srv, sec, req, layer, package=None, ticket_id="", publish=False):
+        calls["n"] += 1
+        return {"ok": True, "published": True, "rule_name": "r1", "call": calls["n"]}
+
+    monkeypatch.setattr(aa, "execute", _execute)
+    first = mcp_tools.apply_access(1, "10.1.1.5", "Any", "Network", port="443",
+                                  publish=True, idempotency_key="ticket-42")
+    assert first["published"] is True and calls["n"] == 1 and "idempotent_replay" not in first
+    second = mcp_tools.apply_access(1, "10.1.1.5", "Any", "Network", port="443",
+                                   publish=True, idempotency_key="ticket-42")
+    assert second["idempotent_replay"] is True and second["call"] == 1   # the FIRST result, replayed
+    assert calls["n"] == 1                                                # the SMS was NOT hit again
+
+
+def test_apply_idempotency_dry_run_is_not_cached(monkeypatch, idemdb):
+    # publish=false never commits, so an idempotency_key on a dry-run must not short-circuit later calls.
+    _fake_server(monkeypatch)
+    calls = {"n": 0}
+
+    def _execute(srv, sec, req, layer, package=None, ticket_id="", publish=False):
+        calls["n"] += 1
+        return {"ok": True, "published": False, "call": calls["n"]}
+
+    monkeypatch.setattr(aa, "execute", _execute)
+    a = mcp_tools.apply_access(1, "10.1.1.5", "Any", "Network", port="443",
+                              publish=False, idempotency_key="dry-1")
+    b = mcp_tools.apply_access(1, "10.1.1.5", "Any", "Network", port="443",
+                              publish=False, idempotency_key="dry-1")
+    assert calls["n"] == 2 and "idempotent_replay" not in a and "idempotent_replay" not in b
+
+
 def test_remove_access_publish_gate_and_delegates(monkeypatch):
     # publish gated by mcp_allow_publish (same as apply); dry-run delegates to aa.remove_execute
     monkeypatch.setattr(app_settings, "get", lambda k: False if k == "mcp_allow_publish" else None)
@@ -539,6 +589,25 @@ def test_push_mock_runs_and_returns_summary(dldb, monkeypatch):
     out = mcp_tools.push_dynamic_layer("DMZ-Layer", gateway="mock", dry_run=False)
     assert out["ok"] and out["target"] == "mock" and out["task_id"] == "T1"
     assert out["pushed"] is False           # the built-in demo target is never a real push
+
+
+def test_push_idempotency_key_replays_real_push(dldb, monkeypatch):
+    # A real-gateway push retried with the same key must replay the first result, not push to the GW twice.
+    from app.services import apply_runner, gateway_creds, gaia_client, idempotency
+    monkeypatch.setattr(idempotency, "SessionLocal", dldb)
+    monkeypatch.setattr(app_settings, "get", lambda k: True if k == "mcp_allow_layer_push" else None)
+    monkeypatch.setattr(gateway_creds, "get_password", lambda db, gw: "pw")
+    monkeypatch.setattr(gaia_client, "ensure_pinned", lambda db, gw: None)
+    calls = {"n": 0}
+    monkeypatch.setattr(apply_runner, "start_apply",
+                        lambda **kw: calls.update(n=calls["n"] + 1) or f"pid-{calls['n']}")
+    monkeypatch.setattr(apply_runner, "get_progress",
+                        lambda pid: {"status": "succeeded", "summary": {"rules": 1}, "task_id": "T1"})
+    first = mcp_tools.push_dynamic_layer("DMZ-Layer", gateway="GW1", dry_run=False, idempotency_key="push-7")
+    assert first["pushed"] is True and calls["n"] == 1 and "idempotent_replay" not in first
+    second = mcp_tools.push_dynamic_layer("DMZ-Layer", gateway="GW1", dry_run=False, idempotency_key="push-7")
+    assert second["idempotent_replay"] is True and second["task_id"] == "T1"
+    assert calls["n"] == 1                   # the gateway was NOT pushed to a second time
 
 
 def test_fetch_dynamic_layer_reads_live(dldb, monkeypatch):

@@ -73,6 +73,7 @@ class DecideBody(BaseModel):
 class ApplyBody(DecideBody):
     publish: bool = False
     ticket_id: str = ""
+    idempotency_key: str = ""   # pass a stable key per change so a retry replays instead of double-publishing
 
 
 class CorrelateBody(BaseModel):
@@ -147,6 +148,7 @@ class DynPushBody(BaseModel):
     layer: str
     gateway: str = ""          # blank or "mock" = the built-in demo target; else a gateway name/id/host
     dry_run: bool = False
+    idempotency_key: str = ""  # pass a stable key per push so a retry replays instead of pushing twice
 
 
 @router.get("/gateways", summary="List saved gateways (dynamic-layer push targets)")
@@ -192,4 +194,5 @@ def api_dynamic_rule_remove(body: DynRuleRemoveBody, _=_API):
 
 @router.post("/dynamic-layers/push", summary="Push a dynamic layer to a gateway (real-gateway push is admin-gated)")
 def api_dynamic_push(body: DynPushBody, _=_API):
-    return _respond(mcp_tools.push_dynamic_layer(body.layer, body.gateway, body.dry_run))
+    return _respond(mcp_tools.push_dynamic_layer(body.layer, body.gateway, body.dry_run,
+                                                 body.idempotency_key))

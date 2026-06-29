@@ -3,6 +3,30 @@
 All notable changes to **PolicyPilot** are documented here. This project follows
 [Semantic Versioning](https://semver.org/).
 
+## Unreleased
+
+Post-1.0.0 hardening of the agent surface, ahead of broader live validation.
+
+### Both rails — see the live policy before you change it
+- **`fetch_dynamic_layer`** (MCP + `GET /dbapi/v1/dynamic-layers/fetch`) — pull a gateway's LIVE dynamic-layer
+  rulebase via the Gaia API, including policy pushed over the API outside the portal. A push is a REPLACE, so
+  the agent now reads reality first instead of blindly overwriting.
+- **`import_dynamic_layer`** (MCP + `POST /dbapi/v1/dynamic-layers/import`) — bring a gateway's live layer INTO
+  a portal layer, so the safe fetch → import → edit → push flow replaces with *live + your edits* and never
+  wipes out-of-band policy. The gateway-detail page gains an **Import to portal** button for the same flow.
+- Dynamic-layer rail is now **8 tools** (21 MCP tools total).
+
+### Idempotent writes — a retry can't double-commit
+- `apply_access` and `push_dynamic_layer` (MCP + REST) accept an optional **`idempotency_key`**. A repeat with
+  the same key REPLAYS the first committed result (`idempotent_replay: true`) instead of publishing/pushing
+  again — so an agent retry, an n8n retry-on-fail, or a redelivered webhook can't create a duplicate change.
+  Records live in a new `idempotency_records` table with a 24h TTL and are pruned by the retention sweep.
+
+### Operations
+- **`GET /version`** (name, build, MCP tool count, `mcp_ready`) and **`GET /readyz`** (DB readiness, 503 when
+  not ready) for deploy health checks, alongside `GET /healthz`.
+- `docs/live-validation.md` — a 15-minute post-deploy smoke test covering both rails and the publish gates.
+
 ## 1.0.0 — 2026-06-28
 
 First general release of **PolicyPilot** as a standalone, focused product: agentic Check Point access

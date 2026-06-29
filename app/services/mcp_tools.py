@@ -206,7 +206,8 @@ def apply_access(server_id: str, source: str, destination: str, layer: str, serv
                  action_limit: str | None = None, captive_portal: bool = False,
                  content: list[str] | None = None, content_direction: str = "any",
                  content_negate: bool = False, time_objects: list[str] | None = None,
-                 install_on: list[str] | None = None, vpn: list[str] | None = None) -> dict:
+                 install_on: list[str] | None = None, vpn: list[str] | None = None,
+                 idempotency_key: str = "") -> dict:
     """APPLY an access request. ``action`` = the rule verdict: Accept (default) / Drop / Reject / Ask /
     Inform / Apply Layer (Apply Layer needs ``inline_layer``). Optional match-gating columns (all REUSE-ONLY
     object names): ``content`` (data-types) + ``content_direction`` (any/up/down) + ``content_negate``;
@@ -215,7 +216,16 @@ def apply_access(server_id: str, source: str, destination: str, layer: str, serv
     nothing is committed) — always allowed. With publish=true it COMMITS to the live server — allowed ONLY
     when an admin has enabled the 'mcp_allow_publish' setting; otherwise it's refused (dry-run instead).
 
+    Pass a stable ``idempotency_key`` (one per logical change) when publishing: a retry with the same key
+    REPLAYS the first committed result (adds ``idempotent_replay: true``) instead of publishing twice — so an
+    agent retry or webhook redelivery can't double-commit. Safe to omit for dry-runs.
+
     ``server_id`` is the numeric id OR the server name/host from list_management_servers."""
+    if idempotency_key and publish:
+        from . import idempotency
+        cached = idempotency.replay(idempotency_key)
+        if cached is not None:
+            return cached
     if publish:
         from . import app_settings
         try:
@@ -251,6 +261,9 @@ def apply_access(server_id: str, source: str, destination: str, layer: str, serv
     if isinstance(result, dict):
         result.setdefault("autopilot", _autopilot(ms, layer))
     _record_applied(ms, result, req, layer, package, ticket_id)
+    if idempotency_key and publish and isinstance(result, dict) and result.get("published"):
+        from . import idempotency
+        idempotency.remember(idempotency_key, result)
     return result
 
 
@@ -778,21 +791,30 @@ def remove_dynamic_rule(layer: str, rule: str) -> dict:
         db.close()
 
 
-def push_dynamic_layer(layer: str, gateway: str = "", dry_run: bool = False) -> dict:
+def push_dynamic_layer(layer: str, gateway: str = "", dry_run: bool = False,
+                       idempotency_key: str = "") -> dict:
     """Push a dynamic layer to a gateway via the Gaia API (set-dynamic-content), out-of-band of SmartConsole.
     ``gateway``: the saved gateway's name / id / host; leave blank (or 'mock') to push to the built-in demo
     target. ``dry_run=True`` validates without applying (always allowed). A real-gateway push (dry_run=False)
     is an admin-gated COMMIT — it requires the 'Let the MCP agent push dynamic layers to gateways' setting
     (mcp_allow_layer_push). NOTE: a push REPLACES the layer's entire rulebase on the gateway — if the layer may
-    already hold policy pushed outside this portal, call fetch_dynamic_layer first so you don't wipe it. Returns
+    already hold policy pushed outside this portal, call fetch_dynamic_layer first so you don't wipe it.
+
+    Pass a stable ``idempotency_key`` (one per logical push) for a real-gateway push: a retry with the same key
+    REPLAYS the first successful result (adds ``idempotent_replay: true``) instead of pushing again. Returns
     the change summary + task id."""
+    use_mock = (not (gateway or "").strip()) or gateway.strip().lower() == "mock"
+    if idempotency_key and not dry_run and not use_mock:
+        from . import idempotency
+        cached = idempotency.replay(idempotency_key)
+        if cached is not None:
+            return cached
     db = SessionLocal()
     try:
         try:
             L = _resolve_layer(db, layer)
         except ValueError as exc:
             return {"ok": False, "error": str(exc), "autopilot": _autopilot()}
-        use_mock = (not (gateway or "").strip()) or gateway.strip().lower() == "mock"
         if not use_mock and not dry_run:
             from . import app_settings
             try:
@@ -849,10 +871,14 @@ def push_dynamic_layer(layer: str, gateway: str = "", dry_run: bool = False) -> 
         return {"ok": False, "error": "push status was unavailable", "autopilot": _autopilot()}
     status = prog.get("status")
     ok = status == "succeeded"
-    return {"ok": ok, "pushed": ok and not dry_run and not use_mock, "dry_run": dry_run,
-            "target": target_name, "layer": layer_name, "status": status,
-            "summary": prog.get("summary"), "task_id": prog.get("task_id"),
-            "error": None if ok else (prog.get("error") or "push failed"), "autopilot": _autopilot()}
+    result = {"ok": ok, "pushed": ok and not dry_run and not use_mock, "dry_run": dry_run,
+              "target": target_name, "layer": layer_name, "status": status,
+              "summary": prog.get("summary"), "task_id": prog.get("task_id"),
+              "error": None if ok else (prog.get("error") or "push failed"), "autopilot": _autopilot()}
+    if idempotency_key and result["pushed"]:
+        from . import idempotency
+        idempotency.remember(idempotency_key, result)
+    return result
 
 
 def fetch_dynamic_layer(gateway: str, layer_name: str = "") -> dict:

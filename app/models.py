@@ -177,6 +177,19 @@ class AppState(Base):
     value: Mapped[str] = mapped_column(String(255), default="")
 
 
+class IdempotencyRecord(Base):
+    """The stored result of a committed write (apply / push), keyed by a caller-supplied idempotency key, so a
+    retry replays the first result instead of committing twice. ``result`` is the full JSON payload (Text, not
+    capped). Records are kept for a TTL (see app.services.idempotency) and survive a worker restart because
+    they live in the DB."""
+
+    __tablename__ = "idempotency_records"
+
+    key: Mapped[str] = mapped_column(String(200), primary_key=True)
+    result: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
 class ApiKey(Base):
     """A named, revocable API key for the machine endpoints (MCP /mcp, the ticketing webhook). Only the
     SHA-256 HASH of the secret is stored — the plaintext is shown once at creation and never again — so a

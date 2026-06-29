@@ -20,7 +20,7 @@ from sqlalchemy.orm import Session
 
 from ..db import SessionLocal
 from ..models import ActivityLog, AppState, User, utcnow
-from . import app_settings, notifications
+from . import app_settings, idempotency, notifications
 
 log = logging.getLogger("policypilot.retention")
 
@@ -58,6 +58,9 @@ def sweep(db: Session) -> dict:
     deleted = {"activity": 0}
     deleted["activity"] += _trim_by_count(db, ActivityLog, int(vals.get("activity_max_records", 0)))
     deleted["activity"] += _trim_by_age(db, ActivityLog, int(vals.get("activity_max_age_days", 0)))
+    pruned = idempotency.prune(db)            # drop expired idempotency records (fixed 24h TTL)
+    if pruned:
+        db.commit()
     return deleted
 
 

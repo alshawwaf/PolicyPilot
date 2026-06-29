@@ -41,7 +41,14 @@ save **refuses** to store cleartext and tells you to set the key or keep using t
     agent may push a **dynamic layer** to a live gateway via the Gaia API (`set-dynamic-content`). This
     is a **distinct gate** from `mcp_allow_publish` because a dynamic-layer push lands on the gateway
     out-of-band of SmartConsole. With it off, agents can still validate (`dry_run`) and push to the
-    built-in demo (`mock`) target, but a real-gateway push is refused.
+      built-in demo (`mock`) target, but a real-gateway push is refused.
+  - **`agent_rate_limit_per_min`** — cap on requests **per key per minute** across /mcp, REST, and the
+    webhook (backstop against a runaway agent). `0` = unlimited (default); over the cap → **429**.
+- **Governance & audit** — every COMMITTED change (an agent/REST/webhook SMS publish, or a real
+  dynamic-layer push) raises a governance event. **`audit_notify`** (on by default) posts an in-app
+  notification to every user; **`audit_webhook_url`** (secret, optional) POSTs `{"text","actor","source",
+  "event"}` to a Slack/Teams/ITSM webhook (TLS always verified). Metadata only — never rule payloads or
+  customer data; fire-and-forget so it never blocks the change.
 - **`webhook_token`** (Ticketing webhook) — the `X-PolicyPilot-Token` shared secret that enables
   `POST /access-automation/webhook`. Fallback: `PILOT_WEBHOOK_TOKEN`. Scope it with
   **`webhook_server_ids`** (fails closed on a malformed value).

@@ -262,6 +262,26 @@ SETTINGS: list[Setting] = [
             "(default). When exceeded, the request is refused with HTTP 429 (retry shortly).",
             group="MCP / agent", min=0, max=100000),
 
+    # --- Governance & audit --------------------------------------------------------------------------
+    # Every COMMITTED change (an agent/REST/webhook publish to the SMS, or a real dynamic-layer push to a
+    # gateway) raises a governance event: an in-app notification (the audit trail in the bell) and, if a URL
+    # is set, an outbound POST to a chat/ITSM webhook. Metadata only (actor, action, target, ticket) — never
+    # rule payloads or customer data. Both opt-in-safe: notifications default on; the webhook fires only when
+    # a URL is configured.
+    Setting("audit_notify", "bool", True,
+            "Audit committed changes (in-app)",
+            "Post an in-app notification to every portal user whenever a change is COMMITTED — an agent/REST/"
+            "webhook publish to a live SMS, or a real dynamic-layer push to a gateway — so there's an audit "
+            "trail of who/what changed policy. Metadata only (actor, action, target, ticket).",
+            group="Governance & audit"),
+    Setting("audit_webhook_url", "secret", "",
+            "Governance webhook URL (Slack / Teams / ITSM)",
+            "When set, every committed change is also POSTed as JSON ({\"text\": …, \"actor\": …}) to this URL "
+            "— a Slack/Teams incoming webhook or an ITSM endpoint — for an external audit trail. TLS is always "
+            "verified. Metadata only; never rule payloads or customer data. Leave blank to disable. Stored "
+            "encrypted at rest.",
+            group="Governance & audit"),
+
     # --- Ticketing webhook ---------------------------------------------------------------------------
     # The inbound POST /access-automation/webhook (ServiceNow / Jira / custom portal). Setting the token
     # here ENABLES it with no redeploy; clearing it disables it. The token grants policy publish on every

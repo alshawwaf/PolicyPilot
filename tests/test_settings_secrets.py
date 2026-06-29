@@ -72,7 +72,7 @@ def test_secret_never_in_all_values_or_defaults(sdb):
 def test_secret_status_reflects_presence(sdb):
     _crypto_or_skip()
     status = sdb.secret_status()
-    assert status == {"webhook_token": False, "servicenow_password": False}
+    assert status == {"webhook_token": False, "servicenow_password": False, "audit_webhook_url": False}
     sdb.set_secret("servicenow_password", "pw")
     assert sdb.secret_status()["servicenow_password"] is True
 

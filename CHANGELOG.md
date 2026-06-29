@@ -7,6 +7,15 @@ All notable changes to **PolicyPilot** are documented here. This project follows
 
 Post-1.0.0 hardening of the agent surface, ahead of broader live validation.
 
+### Governance & audit — a work-note after every committed change
+- Every COMMITTED change — an agent/REST/webhook publish to a live SMS (Rail A) or a real dynamic-layer push
+  to a gateway (Rail B) — now raises a **governance event**: an in-app notification to every portal user (the
+  audit trail in the header bell, **`audit_notify`**, on by default) and a best-effort **outbound webhook**
+  POST to an admin-configured URL (**`audit_webhook_url`** — Slack / Teams / ITSM incoming webhook, JSON
+  `{"text", "actor", "source", "event"}`, TLS always verified, fires only when set). **Metadata only** (actor,
+  action, outcome, server/gateway, ticket) — never rule payloads or customer data. Fire-and-forget: an audit
+  failure never blocks or breaks the change. New **Governance & audit** settings group.
+
 ### Both rails — see the live policy before you change it
 - **`fetch_dynamic_layer`** (MCP + `GET /dbapi/v1/dynamic-layers/fetch`) — pull a gateway's LIVE dynamic-layer
   rulebase via the Gaia API, including policy pushed over the API outside the portal. A push is a REPLACE, so

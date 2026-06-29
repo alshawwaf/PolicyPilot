@@ -85,6 +85,15 @@ def record(db: Session, *, server, result: dict, request: dict, layer: str,
     db.add(row)
     db.commit()
     db.refresh(row)
+    try:                                              # governance audit — metadata only, never breaks recording
+        from . import audit
+        tkt = f" · ticket {row.ticket_id}" if row.ticket_id else ""
+        audit.emit(f"{row.created_by or 'portal'} · {row.action} ({row.outcome}) on "
+                   f"{row.server_name or 'server'} / {row.layer or 'layer'}{tkt}",
+                   actor=row.created_by or "portal")
+    except Exception:  # noqa: BLE001
+        import logging
+        logging.getLogger("policypilot.change_log").exception("audit emit failed")
     return row
 
 

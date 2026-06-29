@@ -902,6 +902,12 @@ def push_dynamic_layer(layer: str, gateway: str = "", dry_run: bool = False,
     if idempotency_key and result["pushed"]:
         from . import idempotency
         idempotency.remember(idempotency_key, result)
+    if result["pushed"]:
+        try:                                          # governance audit — metadata only, never breaks the push
+            from . import audit
+            audit.emit(f"agent · pushed dynamic layer “{layer_name}” to gateway {target_name}", actor="agent")
+        except Exception:  # noqa: BLE001
+            logger.exception("audit emit failed for push_dynamic_layer")
     return result
 
 

@@ -1,10 +1,11 @@
 {% extends "base.html" %}
 {% from "_settings_macros.html" import icon, msrow %}
 {% block title %}Settings{% endblock %}
+{% block main_class %}settings-page{% endblock %}
 {% block content %}
 <style>
   #settings-app { --ss-card:var(--surface); --ss-ctrl:var(--surface-2); }
-  #settings-app .ss-wrap { display:grid; grid-template-columns:212px 1fr; gap:22px; align-items:start; }
+  #settings-app .ss-wrap { display:grid; grid-template-columns:230px 1fr; gap:26px; align-items:start; }
   @media (max-width:760px) { #settings-app .ss-wrap { grid-template-columns:1fr; } }
   #settings-app .ss-side { position:sticky; top:14px; background:var(--ss-card); border:1px solid var(--line);
     border-radius:14px; padding:11px 9px; }
@@ -36,6 +37,8 @@
   #settings-app .gr .gl { flex:1; font-size:13.5px; font-weight:550; }
   #settings-app .gr .gl small { display:block; color:var(--faint); font-size:11.5px; font-weight:400; margin-top:2px; line-height:1.45; max-width:560px; }
   #settings-app .gr .gc { display:flex; align-items:center; gap:8px; flex-wrap:wrap; justify-content:flex-end; }
+  #settings-app .gr.col .gc.gc-wide { justify-content:flex-start; }
+  #settings-app .gr.col .gc.gc-wide select, #settings-app .gr.col .gc.gc-wide .tin { min-width:320px; }
   #settings-app .gr.jump { cursor:pointer; }
   #settings-app .gr.jump:hover { background:var(--ss-ctrl); }
   #settings-app .gv { font-size:12.5px; color:var(--muted); }
@@ -85,19 +88,27 @@
   #settings-app .matrix th { font-size:10.5px; text-transform:uppercase; letter-spacing:.4px; color:var(--faint); }
   #settings-app .matrix tr:last-child td { border-bottom:0; }
   #settings-app .matrix td:first-child { font-weight:600; white-space:nowrap; }
-  #settings-app table.keys { width:100%; border-collapse:collapse; }
-  #settings-app table.keys th, #settings-app table.keys td { text-align:left; padding:8px 10px; border-bottom:1px solid var(--line); font-size:12.5px; }
-  #settings-app table.keys th { font-size:10.5px; text-transform:uppercase; letter-spacing:.4px; color:var(--faint); }
-  #settings-app .kform { display:flex; gap:9px; align-items:flex-end; flex-wrap:wrap; margin-top:14px; }
-  #settings-app .kform label { font-size:12.5px; font-weight:600; }
-  #settings-app .kform label input, #settings-app .kform label select { display:block; margin-top:4px; }
+  #settings-app .keylist { display:flex; flex-direction:column; gap:11px; }
+  #settings-app .keycard { background:var(--ss-card); border:1px solid var(--line); border-radius:13px; padding:15px 17px;
+    display:grid; grid-template-columns:1fr auto; gap:10px 18px; align-items:center; }
+  #settings-app .keycard.expired { opacity:.6; }
+  #settings-app .keycard .kname { font-size:15px; font-weight:650; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  #settings-app .keycard .kmeta { display:flex; gap:16px; flex-wrap:wrap; margin-top:7px; font-size:12px; color:var(--muted); }
+  #settings-app .keycard .kmeta b { color:var(--text); font-weight:600; }
+  #settings-app .keycard .kmeta .mono { font-family:ui-monospace,monospace; }
+  #settings-app .keycard .kact { display:flex; flex-direction:column; gap:7px; align-items:flex-end; }
+  #settings-app .kexp { display:flex; gap:5px; align-items:center; flex-wrap:wrap; }
+  #settings-app .kpill-rw { background:var(--accent-soft); color:var(--accent); }
+  #settings-app .kpill-ro { background:rgba(125,135,148,.18); }
+  #settings-app .keynew { background:var(--ss-card); border:1px solid var(--line); border-radius:14px; padding:17px 19px; margin-top:16px; }
+  #settings-app .keynew h3 { margin:0 0 3px; font-size:15px; }
+  #settings-app .keynew .kn-sub { font-size:12px; color:var(--muted); margin:0 0 14px; }
+  #settings-app .kform { display:flex; gap:12px; align-items:flex-end; flex-wrap:wrap; }
+  #settings-app .kform label { font-size:12px; font-weight:600; color:var(--muted); }
+  #settings-app .kform label input, #settings-app .kform label select { display:block; margin-top:5px; }
+  #settings-app .reveal { background:linear-gradient(135deg, var(--accent-soft), transparent); border:1px solid var(--accent);
+    border-radius:13px; padding:15px 17px; margin-bottom:15px; }
 </style>
-
-<div class="page-head">
-  <span class="icon-chip lg">{{ icon('sliders', 24) }}</span>
-  <div class="ph-main"><h1>Settings</h1>
-    <p class="ph-sub">Pick a category on the left — it opens here, in place. Start on Overview to set the operating mode and see your whole posture at a glance.</p></div>
-</div>
 
 <div id="settings-app">
   <div class="ss-wrap">
@@ -151,62 +162,63 @@
 
         {% if p.key == 'keys' %}
           {% if new_key %}
-          <div class="grp" style="border-color:var(--ok,#5dcaa5);margin-bottom:14px;padding:13px 16px;">
-            <div style="font-weight:700;margin-bottom:7px;">New {{ new_key.scope }} key “{{ new_key.name }}” ({{ 'read-write' if new_key.can_write else 'read-only' }}) — copy it now (shown once) · expires {{ new_key.expires }}</div>
+          <div class="reveal">
+            <div style="font-weight:650;margin-bottom:9px;">New {{ new_key.scope }} key “{{ new_key.name }}” ({{ 'read-write' if new_key.can_write else 'read-only' }}) — copy it now, it's shown once · expires {{ new_key.expires }}</div>
             <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-              <input id="new-key-val" type="text" readonly value="{{ new_key.key }}" class="tin mono" style="flex:1;min-width:280px;" onclick="this.select();">
-              <button type="button" class="ms-mini" onclick="var i=document.getElementById('new-key-val');i.select();navigator.clipboard&&navigator.clipboard.writeText(i.value);this.textContent='Copied';">Copy</button>
+              <input id="new-key-val" type="text" readonly value="{{ new_key.key }}" class="tin mono" style="flex:1;min-width:300px;" onclick="this.select();">
+              <button type="button" class="btn" style="padding:8px 16px;" onclick="var i=document.getElementById('new-key-val');i.select();navigator.clipboard&&navigator.clipboard.writeText(i.value);this.textContent='Copied';">Copy</button>
             </div>
           </div>
           {% endif %}
           {% if api_keys %}
-          <div class="grp" style="padding:4px 8px;">
-            <table class="keys">
-              <thead><tr><th>Name</th><th>Scope</th><th>Access</th><th>Key</th><th>Last used</th><th>Expires</th><th></th></tr></thead>
-              <tbody>
-                {% for k in api_keys %}
-                <tr {% if k.status == 'expired' %}style="opacity:.55"{% endif %}>
-                  <td style="font-weight:600;">{{ k.name }}
-                    {% if k.status == 'expired' %}<span class="pill" style="color:var(--danger,#ef6b6b)">expired</span>
-                    {% elif k.status == 'soon' %}<span class="pill" style="color:var(--warn,#e0b252)">expires soon</span>
-                    {% elif k.status == 'unused' %}<span class="pill">unused 30d+</span>{% endif %}</td>
-                  <td><span class="pill">{{ k.scope }}</span></td>
-                  <td>{% if k.can_write %}<span class="pill">read-write</span>{% else %}<span class="pill ok" title="Preview/read tools only">read-only</span>{% endif %}</td>
-                  <td class="gv mono" style="font-family:ui-monospace,monospace">…{{ k.hint }}</td>
-                  <td class="gv">{{ k.last_used.strftime('%Y-%m-%d %H:%M') if k.last_used else 'never' }}</td>
-                  <td class="gv">
-                    <div style="font-weight:600;color:var(--text)">{{ k.expires.strftime('%Y-%m-%d') if k.expires else 'never' }}</div>
-                    <form method="post" action="/settings/api-keys/{{ k.id }}/expiry" style="display:flex;gap:4px;align-items:center;margin-top:4px;flex-wrap:wrap;">
-                      <input type="date" name="expires_date" class="tin" style="padding:3px 5px;font-size:11px;">
-                      <select name="expires" class="tin" style="padding:3px 5px;font-size:11px;"><option value="">— change —</option><option value="30">30 days</option><option value="90">90 days</option><option value="365">1 year</option><option value="never">never</option></select>
-                      <button class="ms-mini" type="submit" style="padding:3px 9px;font-size:11px;">Update</button></form></td>
-                  <td style="text-align:right;">
-                    <form method="post" action="/settings/api-keys/{{ k.id }}/revoke" style="margin:0;">
-                      <button class="ms-mini" type="submit" data-confirm="Revoke “{{ k.name }}”? Clients using it will get 401 immediately." data-confirm-title="Revoke API key" data-confirm-ok="Revoke">Revoke</button></form></td>
-                </tr>{% endfor %}
-              </tbody></table>
+          <div class="keylist">
+            {% for k in api_keys %}
+            <div class="keycard {{ 'expired' if k.status == 'expired' }}">
+              <div>
+                <div class="kname">{{ k.name }}
+                  <span class="pill">{{ k.scope }}</span>
+                  {% if k.can_write %}<span class="pill kpill-rw">read-write</span>{% else %}<span class="pill kpill-ro" title="Preview/read tools only">read-only</span>{% endif %}
+                  {% if k.status == 'expired' %}<span class="pill" style="color:var(--danger,#ef6b6b)">expired</span>
+                  {% elif k.status == 'soon' %}<span class="pill" style="color:var(--warn,#e0b252)">expires soon</span>
+                  {% elif k.status == 'unused' %}<span class="pill">unused 30d+</span>{% endif %}
+                </div>
+                <div class="kmeta">
+                  <span>key <b class="mono">…{{ k.hint }}</b></span>
+                  <span>last used <b>{{ k.last_used.strftime('%Y-%m-%d %H:%M') if k.last_used else 'never' }}</b></span>
+                  <span>expires <b>{{ k.expires.strftime('%Y-%m-%d') if k.expires else 'never' }}</b></span>
+                </div>
+              </div>
+              <div class="kact">
+                <form method="post" action="/settings/api-keys/{{ k.id }}/expiry" class="kexp">
+                  <input type="date" name="expires_date" class="tin" style="padding:5px 7px;font-size:11.5px;">
+                  <select name="expires" class="tin" style="padding:5px 7px;font-size:11.5px;"><option value="">change expiry…</option><option value="30">30 days</option><option value="90">90 days</option><option value="365">1 year</option><option value="never">never</option></select>
+                  <button class="ms-mini" type="submit" style="padding:5px 11px;">Set</button>
+                </form>
+                <form method="post" action="/settings/api-keys/{{ k.id }}/revoke" style="margin:0;">
+                  <button class="ms-mini" type="submit" style="color:var(--danger,#ef6b6b);border-color:var(--danger-line,#5a2a35);" data-confirm="Revoke “{{ k.name }}”? Clients using it will get 401 immediately." data-confirm-title="Revoke API key" data-confirm-ok="Revoke">Revoke key</button>
+                </form>
+              </div>
+            </div>
+            {% endfor %}
           </div>
-          {% else %}<p class="gv">No API keys yet.</p>{% endif %}
-          <form method="post" action="/settings/api-keys" class="kform">
-            <label>Name<input type="text" name="name" placeholder="n8n-prod" maxlength="120" required class="tin"></label>
-            <label>Scope<select name="scope" class="tin">{% for sc in api_scopes %}<option value="{{ sc }}">{{ sc }}</option>{% endfor %}</select></label>
-            <label>Expires<select name="expires" class="tin">{% for val, lbl in expiry_presets %}<option value="{{ val }}" {% if val == '90' %}selected{% endif %}>{{ lbl }}</option>{% endfor %}</select></label>
-            <label>or on date<input type="date" name="expires_date" class="tin"></label>
-            <label style="display:flex;align-items:center;gap:6px;padding-bottom:8px;font-weight:500;" title="A read-only key can preview/read but every write tool refuses."><input type="checkbox" name="readonly"> Read-only</label>
-            <button class="btn" type="submit">+ New key</button>
-          </form>
-          <p class="gv" style="margin-top:10px;">Keys are least-privilege by <b>scope</b> (mcp / webhook / api) and <b>access</b> (read-write vs read-only). Shown once at creation; revoking is immediate.</p>
+          {% else %}<p class="gv" style="padding:20px 0;">No API keys yet — create one below for n8n, the REST API, or the ticketing webhook.</p>{% endif %}
+
+          <div class="keynew">
+            <h3>Create a key</h3>
+            <p class="kn-sub">Least-privilege by scope (mcp / webhook / api) and access. Shown once at creation; revoking is immediate.</p>
+            <form method="post" action="/settings/api-keys" class="kform">
+              <label>Name<input type="text" name="name" placeholder="n8n-prod" maxlength="120" required class="tin" style="min-width:200px;"></label>
+              <label>Scope<select name="scope" class="tin">{% for sc in api_scopes %}<option value="{{ sc }}">{{ sc }}</option>{% endfor %}</select></label>
+              <label>Expires<select name="expires" class="tin">{% for val, lbl in expiry_presets %}<option value="{{ val }}" {% if val == '90' %}selected{% endif %}>{{ lbl }}</option>{% endfor %}</select></label>
+              <label>or on date<input type="date" name="expires_date" class="tin"></label>
+              <label style="display:flex;align-items:center;gap:7px;padding-bottom:9px;font-weight:500;color:var(--text);" title="A read-only key can preview/read but every write tool refuses."><input type="checkbox" name="readonly" style="width:auto;"> Read-only</label>
+              <button class="btn" type="submit">+ Create key</button>
+            </form>
+          </div>
 
         {% else %}
           {% if p.key == 'agent' %}
-          <table class="matrix">
-            <thead><tr><th>Posture</th><th>Publish</th><th>Autopilot</th><th>What the agent does</th></tr></thead>
-            <tbody>
-              <tr><td>Read-only</td><td>off</td><td>—</td><td>Previews / dry-runs; a publish is refused.</td></tr>
-              <tr><td>Supervised</td><td>on</td><td>off</td><td>Commits only when your message says “publish”.</td></tr>
-              <tr><td>Autonomous</td><td>on</td><td>on</td><td>Resolves, applies and publishes in one turn.</td></tr>
-            </tbody></table>
-          <p class="gv" style="margin:-2px 0 14px;">A <b>read-only</b> API key can never publish, whatever these say. Set the broad posture from <a href="#overview" class="ss-jump" data-t="overview">Overview</a>.</p>
+          <p class="gv" style="margin:-6px 0 14px;">Set the broad posture in one move from <a href="#overview" class="ss-jump" data-t="overview">Overview</a> — these are the individual gates behind it. A <b>read-only</b> API key can never publish, whatever they say.</p>
           {% endif %}
           <form method="post" action="/settings">
             <input type="hidden" name="section" value="{{ p.key }}">

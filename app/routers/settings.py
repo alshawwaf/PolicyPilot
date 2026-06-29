@@ -88,7 +88,6 @@ SECTIONS = [
     ("governance", "Governance & audit",  "Governance & audit",      "shield-check", "#639922", "A work-note after every committed change."),
     ("webhook",    "Ticketing webhook",   "Ticketing webhook",       "webhook",      "#ba7517", "Turn a ServiceNow / Jira / custom ticket into a policy change."),
     ("writeback",  "Ticket write-back",   "Ticket write-back",       "reply",        "#d4537e", "Optional ServiceNow write-back adapter."),
-    ("portal",     "Portal",              "Portal",                  "layout",       "#7c8794", "Portal-wide options."),
     ("keys",       "API keys",            None,                      "key",          "#ef9f27", "Named, scoped, revocable keys for /mcp, the REST API, and the webhook."),
 ]
 _SECTION_GROUP = {key: group for key, _l, group, _i, _c, _b in SECTIONS if group}

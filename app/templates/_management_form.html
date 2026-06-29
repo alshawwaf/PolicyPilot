@@ -1,43 +1,60 @@
 {# Management Server create/edit form — shared by the full page (management_form.html) and the modal
    fragment (returned when the X-Fragment header is set). No page chrome here. #}
-{% if error %}<div class="err" style="margin:0 0 12px; max-width:640px;">{{ error }}</div>{% endif %}
+<style>
+  /* macOS System-Settings harmonisation, scoped to this form. Purely additive: base.html already styles
+     inputs / selects / buttons / the modal — here we only group each section's rows into an inset card
+     with hairline dividers (the Settings "grp/gr" feel) and calm the spacing. Tokens only, theme-aware. */
+  .ms-form .form-sec { margin:0 0 11px; }
+  .ms-form .ms-grp { background:var(--surface-3); border:1px solid var(--line); border-radius:13px;
+    padding:4px 16px 16px; }
+  .ms-form .ms-grp label:first-of-type { margin-top:13px; }
+  .ms-form .ms-grp .row + label { margin-top:15px; }
+  .ms-form .subpanel { background:var(--surface-2); border-radius:13px; }
+  .ms-form .check { margin:2px 0 6px; }
+  .ms-form .fp { background:var(--surface); }
+</style>
+{% if error %}<div class="err" style="margin:0 0 14px; max-width:640px;">{{ error }}</div>{% endif %}
 
-<form method="post" action="{{ action }}" class="card" style="max-width:640px;">
+<form method="post" action="{{ action }}" class="card ms-form" style="max-width:640px;">
   <div class="form-sec">Connection</div>
-  <label>Name</label>
-  <input name="name" value="{{ ms.name if ms else '' }}" placeholder="Prod-SMS / Domain1-CMA" required>
-  <div class="row">
-    <div class="grow"><label>Server address</label><input name="host" id="ms_host" value="{{ ms.host if ms else '' }}" placeholder="mgmt.corp.local or 10.1.1.5" required></div>
-    <div style="width:120px;"><label>Port</label><input name="port" id="ms_port" value="{{ ms.port if ms else 443 }}"></div>
+  <div class="ms-grp">
+    <label>Name</label>
+    <input name="name" value="{{ ms.name if ms else '' }}" placeholder="Prod-SMS / Domain1-CMA" required>
+    <div class="row">
+      <div class="grow"><label>Server address</label><input name="host" id="ms_host" value="{{ ms.host if ms else '' }}" placeholder="mgmt.corp.local or 10.1.1.5" required></div>
+      <div style="width:120px;"><label>Port</label><input name="port" id="ms_port" value="{{ ms.port if ms else 443 }}"></div>
+    </div>
+    <label>Domain <span class="muted" style="font-weight:400;">— MDS / Multi-Domain only; leave blank for a single SMS</span></label>
+    <input name="domain" value="{{ ms.domain if ms else '' }}" placeholder="Domain1">
   </div>
-  <label>Domain <span class="muted" style="font-weight:400;">— MDS / Multi-Domain only; leave blank for a single SMS</span></label>
-  <input name="domain" value="{{ ms.domain if ms else '' }}" placeholder="Domain1">
 
   <hr>
   <div class="form-sec">Credentials</div>
-  <label>Username</label>
-  <input name="username" value="{{ ms.username if ms else '' }}" placeholder="api-admin">
-  <p class="muted">A management admin/API user. For delegated access, give it permission to only the layers it manages — the portal does exactly what this account can.</p>
+  <div class="ms-grp">
+    <label>Username</label>
+    <input name="username" value="{{ ms.username if ms else '' }}" placeholder="api-admin">
+    <p class="muted">A management admin/API user. For delegated access, give it permission to only the layers it manages — the portal does exactly what this account can.</p>
 
-  <label>Password <span class="muted" style="font-weight:400;">— optional, stored AES-256-encrypted</span></label>
-  {% if crypto_ok %}
-  <input name="password" type="password" autocomplete="new-password"
-         placeholder="{{ 'Leave blank to keep the saved secret' if has_secret else 'Stored encrypted; reused for pull / export' }}">
-  {% if has_secret %}
-  <div class="check" style="margin-top:8px;"><input type="checkbox" id="clear_password" name="clear_password" value="1"><label for="clear_password">Clear the saved secret</label></div>
-  <p class="muted">A secret is currently <b>saved (encrypted)</b>. Type a new one to replace it, tick “Clear” to remove it, or leave blank to keep it.</p>
-  {% else %}
-  <p class="muted">If set, it's encrypted with <b>AES-256-GCM</b> and reused so you don't retype it. Leave blank to enter it each time instead.</p>
-  {% endif %}
-  {% else %}
-  <input type="password" disabled placeholder="Encryption unavailable — secret can't be stored in this environment">
-  <p class="muted">Storing a secret needs the encryption library, which isn't available here. It's entered per action for now.</p>
-  {% endif %}
+    <label>Password <span class="muted" style="font-weight:400;">— optional, stored AES-256-encrypted</span></label>
+    {% if crypto_ok %}
+    <input name="password" type="password" autocomplete="new-password"
+           placeholder="{{ 'Leave blank to keep the saved secret' if has_secret else 'Stored encrypted; reused for pull / export' }}">
+    {% if has_secret %}
+    <div class="check" style="margin-top:8px;"><input type="checkbox" id="clear_password" name="clear_password" value="1"><label for="clear_password">Clear the saved secret</label></div>
+    <p class="muted">A secret is currently <b>saved (encrypted)</b>. Type a new one to replace it, tick “Clear” to remove it, or leave blank to keep it.</p>
+    {% else %}
+    <p class="muted">If set, it's encrypted with <b>AES-256-GCM</b> and reused so you don't retype it. Leave blank to enter it each time instead.</p>
+    {% endif %}
+    {% else %}
+    <input type="password" disabled placeholder="Encryption unavailable — secret can't be stored in this environment">
+    <p class="muted">Storing a secret needs the encryption library, which isn't available here. It's entered per action for now.</p>
+    {% endif %}
+  </div>
 
   <hr>
   {% set auto_on = ms.auto_trust if ms else True %}
   <div class="form-sec">TLS certificate <span class="muted" style="font-weight:600; text-transform:none; letter-spacing:0;">· optional</span></div>
-  <div class="check" style="margin:2px 0 6px;">
+  <div class="check">
     <input type="checkbox" id="auto_trust" name="auto_trust" value="1" {{ 'checked' if auto_on else '' }}>
     <label for="auto_trust">Trust this server's certificate automatically <span class="muted" style="font-weight:400;">— pin it for you on save</span></label>
   </div>

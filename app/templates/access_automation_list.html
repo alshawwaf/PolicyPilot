@@ -25,7 +25,7 @@
 <div class="card" style="padding:6px 6px 2px;">
 <div class="tablewrap">
 <table data-paginate="10">
-  <thead><tr><th>Name</th>{% if 'address' in vis %}<th class="nowrap">Address</th>{% endif %}{% if 'domain' in vis %}<th class="nowrap">Domain</th>{% endif %}{% if 'secret' in vis %}<th class="nowrap">Secret</th>{% endif %}<th style="text-align:right; padding-top:6px; padding-bottom:6px;"><span class="thead-tools">{{ export_menu('access-servers') }}{{ columns_menu('access-servers', cols, vis, '/access-automation', compact=true) }}</span></th></tr></thead>
+  <thead><tr><th>Name</th>{% if 'address' in vis %}<th class="nowrap">Address</th>{% endif %}{% if 'domain' in vis %}<th class="nowrap">Domain</th>{% endif %}{% if 'secret' in vis %}<th class="nowrap">Secret</th>{% endif %}<th style="text-align:right;"><span class="thead-tools">{{ export_menu('access-servers') }}{{ columns_menu('access-servers', cols, vis, '/access-automation', compact=true) }}</span></th></tr></thead>
   <tbody>
   {% for r in rows %}
     <tr>

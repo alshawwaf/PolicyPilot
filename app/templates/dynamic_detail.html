@@ -4,6 +4,25 @@
 {% block main_class %}wide{% endblock %}
 
 {% block content %}
+<style>
+  /* dynamic-detail: harmonise the page's bespoke inline bits with the macOS-System-Settings
+     language. Token-only, theme-aware; additive over base.html's shared classes. */
+  .dd-apply .form-sec { margin-top:0; }
+  .dd-grp { background:var(--surface-3); border:1px solid var(--line); border-radius:12px;
+    overflow:hidden; margin:6px 0 0; }
+  .dd-gr { display:flex; align-items:center; gap:14px; padding:13px 16px; border-top:1px solid var(--line-soft); flex-wrap:wrap; }
+  .dd-gr:first-child { border-top:0; }
+  .dd-gr .check label { font-weight:550; }
+  .dd-fields { margin-top:4px; }
+  .dd-actions { display:flex; align-items:center; gap:10px; margin-top:18px; flex-wrap:wrap; }
+  .dd-rb-head { display:flex; align-items:center; gap:12px; margin:0 0 4px; flex-wrap:wrap; }
+  .dd-lastapply { border-top:1px solid var(--line); margin-top:18px; padding-top:14px; }
+  .dd-flow-lbl { margin:18px 0 8px; }
+  .dd-flow-lbl:first-of-type { margin-top:6px; }
+  .dd-payload-bar { display:flex; gap:10px; align-items:center; flex-wrap:nowrap; margin:6px 0 10px; }
+  .dd-payload-bar .grow { min-width:0; }
+  .dd-payload-pre { max-height:360px; }
+</style>
 <div id="inline-edit-meta" data-quick-edit-url="/layers/{{ layer.id }}/quick-edit" hidden></div>
 <div class="page-head">
   <span class="icon-chip lg"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg></span>
@@ -21,25 +40,29 @@
 
 <div class="card">
   <h2 style="margin-top:0;">Push to gateway</h2>
-  <p class="muted" style="margin:-2px 0 12px;">Push this rulebase to the selected gateway with <code>set-dynamic-content</code>. This is a manual action you drive from here — the change lands on the gateway out-of-band, with no SmartConsole publish.</p>
-  <form id="apply-form">
-    <div class="row">
-      <div class="check"><input type="checkbox" id="use-mock" name="use_mock" value="1"><label for="use-mock">Use the built-in target (no real gateway)</label></div>
-      <div class="check"><input type="checkbox" id="dry_run" name="dry_run" value="1"><label for="dry_run">Dry-run (validate only)</label></div>
+  <p class="muted" style="margin:-2px 0 14px;">Push this rulebase to the selected gateway with <code>set-dynamic-content</code>. This is a manual action you drive from here — the change lands on the gateway out-of-band, with no SmartConsole publish.</p>
+  <form id="apply-form" class="dd-apply">
+    <div class="dd-grp">
+      <div class="dd-gr">
+        <div class="check"><input type="checkbox" id="use-mock" name="use_mock" value="1"><label for="use-mock">Use the built-in target (no real gateway)</label></div>
+      </div>
+      <div class="dd-gr">
+        <div class="check"><input type="checkbox" id="dry_run" name="dry_run" value="1"><label for="dry_run">Dry-run (validate only)</label></div>
+      </div>
     </div>
-    <fieldset id="gw-fields">
+    <fieldset id="gw-fields" class="dd-fields">
       {% if gateways %}
       <label>Gateway</label>
       <select name="gateway_id" id="gw-select">
         {% for g in gateways %}<option value="{{ g.id }}">{{ g.name }} ({{ g.host }}:{{ g.port }})</option>{% endfor %}
       </select>
-      <div id="gw-summary" class="muted" style="margin:6px 0 0; font-size:12.5px;"></div>
+      <div id="gw-summary" class="muted" style="margin:7px 0 0; font-size:12.5px;"></div>
       <p class="muted">Address, port, username, certificate <b>and password</b> all come from the selected <a href="/gateways">gateway profile</a>. Save a password on the gateway to apply — nothing is entered here.</p>
       {% else %}
       <p class="muted">No saved gateways yet. <a href="/gateways/new">Add a gateway</a> first (address, port, username, certificate), then select it here.</p>
       {% endif %}
     </fieldset>
-    <div style="margin-top:14px;"><button type="button" id="apply-btn">Push to gateway</button>
+    <div class="dd-actions"><button type="button" id="apply-btn">Push to gateway</button>
       <button type="button" class="secondary" id="fetch-btn" title="Read the dynamic layers and content this gateway currently has">⤓ Fetch from gateway</button>
       <span class="err-inline" id="apply-err" style="display:none;"></span></div>
   </form>
@@ -47,7 +70,7 @@
 
 {% if layer.content.rulebase %}
 <div class="card">
-  <div class="row" style="align-items:center;"><h2 style="margin:0;" class="grow">Rulebase <span class="muted" style="font-weight:400;">— {{ layer.content.rulebase|length }} rule(s) in “{{ layer.layer_name }}”</span></h2>
+  <div class="dd-rb-head"><h2 style="margin:0;" class="grow">Rulebase <span class="muted" style="font-weight:400;">— {{ layer.content.rulebase|length }} rule(s) in “{{ layer.layer_name }}”</span></h2>
     {% if latest %}<span class="pill {{ 'ok' if latest.t.status == 'succeeded' else 'bad' }}">last apply: {{ latest.t.status }}</span>{% endif %}</div>
   {{ lv.render_rulebase(layer.content.rulebase) }}
   {% if layer.content.objects and (layer.content.objects.values() | map('length') | sum) %}
@@ -56,7 +79,7 @@
   {% if referenced %}{{ lv.render_referenced(referenced) }}{% endif %}
 
   {% if latest %}
-  <div style="border-top:1px solid var(--line); margin-top:16px; padding-top:12px;">
+  <div class="dd-lastapply">
     <div class="trace-lbl">Last apply</div>
     <p class="muted" style="margin:4px 0;">{{ latest.t.target }}{% if latest.t.dry_run %} · dry-run{% endif %} · {{ latest.t.at.strftime('%Y-%m-%d %H:%M:%S') }}{% if latest.t.gateway_host %} · {{ latest.t.gateway_host }}{% endif %} · task <code>{{ latest.t.task_id[:18] }}</code>{% if task_total %} · <a href="/layers/{{ layer.id }}/history">apply history ({{ task_total }}) →</a>{% endif %}</p>
     {% if latest.errors %}{% for e in latest.errors %}<div class="err" style="margin:6px 0;">{{ e.message }}</div>{% endfor %}{% endif %}
@@ -72,14 +95,14 @@
 <details class="card">
   <summary style="font-weight:650;">Behind the scenes — Gaia API calls &amp; payload</summary>
   <div style="margin-top:14px;">
-    <p class="muted" style="margin:0 0 6px;">Apply (push) → layer <code>{{ layer.layer_name }}</code></p>
+    <p class="muted dd-flow-lbl" style="margin:0 0 8px;">Apply (push) → layer <code>{{ layer.layer_name }}</code></p>
     <div class="apiflow">
       <span class="apicall"><span class="pill">POST</span>login</span><span class="apiarrow">→</span>
       <span class="apicall"><span class="pill">POST</span>set-dynamic-content</span><span class="apiarrow">→</span>
       <span class="apicall"><span class="pill">POST</span>show-task</span><span class="apiarrow">→</span>
       <span class="apicall"><span class="pill">POST</span>logout</span>
     </div>
-    <p class="muted" style="margin:16px 0 6px;">Fetch (read)</p>
+    <p class="muted dd-flow-lbl">Fetch (read)</p>
     <div class="apiflow">
       <span class="apicall"><span class="pill">POST</span>login</span><span class="apiarrow">→</span>
       <span class="apicall"><span class="pill">POST</span>show-dynamic-layers</span><span class="apiarrow">→</span>
@@ -87,12 +110,12 @@
       <span class="apicall"><span class="pill">POST</span>logout</span>
     </div>
     <p class="muted" style="font-size:12px; margin-top:14px;">Base <code>https://&lt;gateway&gt;:{{ '{}'.format(gateways[0].port) if gateways else '443' }}/gaia_api/v1.9/</code> · session header <code>X-chkp-sid</code> · a returned <code>task-id</code> means accepted, <code>show-task</code> confirms the outcome · TLS verified (pinned cert for self-signed).</p>
-    <h3 style="margin-top:20px;">set-dynamic-content payload</h3>
-    <div class="row" style="gap:8px; align-items:center; flex-wrap:nowrap; margin-bottom:10px;">
+    <h3 style="margin-top:22px;">set-dynamic-content payload</h3>
+    <div class="dd-payload-bar">
       <span class="muted grow">POST to the built-in target at <code>{{ mock_url }}/set-dynamic-content</code> — or your gateway's Gaia API.</span>
       <button class="copybtn" type="button" data-copy="{{ payload_json }}">Copy JSON</button>
     </div>
-    <pre style="max-height:360px;">{{ payload_json }}</pre>
+    <pre class="dd-payload-pre">{{ payload_json }}</pre>
   </div>
 </details>
 

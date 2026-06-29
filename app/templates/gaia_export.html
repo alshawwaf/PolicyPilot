@@ -2,6 +2,25 @@
 {% block title %}{{ title }} — Gaia config export{% endblock %}
 {% block main_class %}wide{% endblock %}
 {% block content %}
+<style>
+  /* Gaia export — page-scoped polish on top of the shared design system (tokens only). */
+  #gaia-root .gaia-run { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  #gaia-root #gaia-pw { min-width:240px; flex:0 1 320px; margin:0; }
+  #gaia-root #gen-status { font-size:13px; }
+  #gaia-root #results { margin-top:18px; }
+  /* Inset card grouping the export toolbar + generated code (the Settings "grp" feel). */
+  #gaia-root .gaia-out { background:var(--surface-3); border:1px solid var(--line); border-radius:var(--r-lg);
+    overflow:hidden; }
+  #gaia-root .gaia-out-bar { display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+    padding:11px 14px; border-bottom:1px solid var(--line); background:var(--surface-2); }
+  #gaia-root #file-name { font-size:12px; color:var(--muted); align-self:center; margin-left:auto;
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace; }
+  #gaia-root #stats { font-size:13px; color:var(--muted); margin:0 0 12px; }
+  #gaia-root .filterbar { margin:0 0 12px; }
+  /* Generated code panel — inherits the shared <pre> look; just the viewport sizing lives here. */
+  #gaia-root #code { max-height:60vh; overflow:auto; margin:0; border:none; border-radius:0;
+    background:transparent; white-space:pre; }
+</style>
 <div class="page-head">
   <span class="icon-chip lg"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></span>
   <div class="ph-main">
@@ -13,27 +32,29 @@
   </div>
 </div>
 
-<div class="card" id="gaia-root" data-run="{{ run_url }}" style="padding:14px 18px;">
-  <div class="row" style="align-items:center; gap:10px; flex-wrap:wrap;">
-    <input type="password" id="gaia-pw" placeholder="{{ 'Password (blank = use saved)' if has_secret else 'Gaia/OS password' }}" autocomplete="off" style="min-width:240px;">
+<div class="card" id="gaia-root" data-run="{{ run_url }}">
+  <div class="gaia-run">
+    <input type="password" id="gaia-pw" placeholder="{{ 'Password (blank = use saved)' if has_secret else 'Gaia/OS password' }}" autocomplete="off">
     <button class="btn" id="gen-btn" type="button">Generate IaC</button>
-    <span id="gen-status" class="muted" style="font-size:13px;"></span>
+    <span id="gen-status" class="muted"></span>
   </div>
 
-  <div id="results" hidden style="margin-top:16px;">
-    <div id="stats" class="muted" style="font-size:13px; margin-bottom:10px;"></div>
-    <div class="filterbar" style="margin:0 0 10px;">
+  <div id="results" hidden>
+    <div id="stats" class="muted"></div>
+    <div class="filterbar">
       <button class="chip active" type="button" data-tab="terraform">Terraform</button>
       <button class="chip" type="button" data-tab="ansible">Ansible</button>
       <button class="chip" type="button" data-tab="clish">clish</button>
       <button class="chip" type="button" data-tab="web_api">web_api JSON</button>
     </div>
-    <div class="row" style="gap:8px; margin-bottom:8px;">
-      <button class="copybtn" type="button" id="copy-btn">Copy</button>
-      <button class="copybtn" type="button" id="download-btn">Download</button>
-      <span class="muted" id="file-name" style="font-size:12px; align-self:center;"></span>
+    <div class="gaia-out">
+      <div class="gaia-out-bar">
+        <button class="copybtn" type="button" id="copy-btn">Copy</button>
+        <button class="copybtn" type="button" id="download-btn">Download</button>
+        <span class="muted" id="file-name"></span>
+      </div>
+      <pre id="code"></pre>
     </div>
-    <pre id="code" style="max-height:60vh; overflow:auto; background:var(--subtle-bg); border:1px solid var(--line); border-radius:9px; padding:14px; font-size:12.5px; line-height:1.5; white-space:pre; margin:0;"></pre>
   </div>
 </div>
 

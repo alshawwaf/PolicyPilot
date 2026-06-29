@@ -3,10 +3,22 @@
 {% block main_class %}wide{% endblock %}
 {% block content %}
 <style>
-  .viewer-eyebrow { font-size:11px; font-weight:800; letter-spacing:.5px; text-transform:uppercase;
+  /* macOS System-Settings language: small uppercase caption for the layer toolbar, tokenized surfaces. */
+  .viewer-eyebrow { font-size:11px; font-weight:800; letter-spacing:.6px; text-transform:uppercase;
     color:var(--faint); }
-  #mgmt-viewer .toolbar { align-items:center; gap:10px; flex-wrap:wrap; }
-  #rulebase pre, .modal pre { background:var(--subtle-bg); border:1px solid var(--line); border-radius:9px; }
+  #mgmt-viewer .toolbar { align-items:center; gap:12px; flex-wrap:wrap; }
+  #rulebase pre, .modal pre { background:var(--surface-3); border:1px solid var(--line); border-radius:11px; }
+  /* Edit modal: group the rule fields into an inset card with hairline dividers (the Settings "grp/gr" feel). */
+  #edit-modal .ed-grp { background:var(--surface-3); border:1px solid var(--line); border-radius:13px;
+    overflow:hidden; }
+  #edit-modal .ed-grp label { display:block; margin:0; padding:13px 16px; border-top:1px solid var(--line);
+    font-size:13.5px; font-weight:550; }
+  #edit-modal .ed-grp label.row { display:flex; }
+  #edit-modal .ed-grp label:first-child { border-top:none; }
+  #edit-modal .ed-grp label > select,
+  #edit-modal .ed-grp label > input[type="text"],
+  #edit-modal .ed-grp label > input:not([type]) { margin-top:8px; }
+  #edit-modal .ed-meta { margin-top:14px; font-size:12.5px; color:var(--muted); }
 </style>
 <div class="page-head">
   <span class="icon-chip lg"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 5v14c0 1.66-4 3-9 3s-9-1.34-9-3V5"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/></svg></span>
@@ -36,20 +48,20 @@
   <div class="modal wide">
     <div class="row" style="align-items:center;"><h3 class="grow" style="margin:0;" id="edit-title">Edit rule</h3>
       <button type="button" class="copybtn" id="edit-close">Close</button></div>
-    <div style="margin-top:14px; display:grid; gap:12px;">
-      <label class="row" style="gap:8px; align-items:center; margin:0;"><input type="checkbox" id="ed-enabled"> <span>Rule enabled</span></label>
+    <div class="ed-grp" style="margin-top:14px;">
+      <label class="row" style="gap:8px; align-items:center;"><input type="checkbox" id="ed-enabled"> <span>Rule enabled</span></label>
       <label>Action
-        <select id="ed-action" style="width:100%; margin-top:4px;">
+        <select id="ed-action">
           <option>Accept</option><option>Drop</option><option>Reject</option><option>Ask</option><option>Inform</option>
         </select></label>
       <label>Track
-        <select id="ed-track" style="width:100%; margin-top:4px;">
+        <select id="ed-track">
           <option>None</option><option>Log</option><option>Detailed Log</option><option>Extended Log</option><option>Alert</option>
         </select></label>
-      <label>Name<input id="ed-name" style="width:100%; margin-top:4px;"></label>
-      <label>Comments<input id="ed-comments" style="width:100%; margin-top:4px;"></label>
+      <label>Name<input id="ed-name"></label>
+      <label>Comments<input id="ed-comments"></label>
     </div>
-    <div id="ed-changes" class="muted" style="margin-top:12px; font-size:13px;">No changes yet.</div>
+    <div id="ed-changes" class="ed-meta">No changes yet.</div>
     <div id="ed-result" style="margin-top:8px;"></div>
     <div class="row" style="margin-top:14px; gap:8px;">
       <button type="button" class="btn secondary" id="ed-dryrun">Dry-run (no commit)</button>

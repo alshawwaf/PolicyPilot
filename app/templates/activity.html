@@ -6,8 +6,9 @@
 <style>
   .acttable th.act-del-col, .acttable td.act-del-col { width:34px; text-align:center; padding-left:0; padding-right:8px; }
   .acttable .rowdel { opacity:0; border:0; background:transparent; color:var(--muted); cursor:pointer;
-    padding:4px; border-radius:7px; display:inline-flex; align-items:center; justify-content:center;
-    transition:opacity .12s, background .12s, color .12s; }
+    padding:4px; border-radius:8px; display:inline-flex; align-items:center; justify-content:center;
+    box-shadow:none; transition:opacity .12s, background .12s, color .12s; }
+  .acttable .rowdel:hover { box-shadow:none; transform:none; filter:none; }
   .acttable .rowdel svg { display:block; }
   .act-row:hover .rowdel, .rowdel:focus-visible { opacity:1; }
   .acttable .rowdel:hover { background:var(--danger-bg); color:var(--danger); }

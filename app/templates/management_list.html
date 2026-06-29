@@ -3,6 +3,20 @@
 {% block title %}Management Servers{% endblock %}
 {% block content %}
 {% from "_macros.html" import row_actions, columns_menu, empty_state %}
+<style>
+  /* Test-connection modal — macOS System-Settings feel, built from theme tokens. */
+  #test-modal .test-head { align-items:center; gap:12px; }
+  #test-modal .test-head h3 { margin:0; font-size:18px; font-weight:740; }
+  #test-modal .test-body { margin-top:16px; }
+  /* Result table reads as an inset grouped card with hairline rows. */
+  #test-modal .test-body table.acttable { background:var(--surface-3); border:1px solid var(--line);
+    border-radius:var(--r-lg); overflow:hidden; }
+  #test-modal .test-body table.acttable td { border-bottom:1px solid var(--line-soft); }
+  #test-modal .test-body table.acttable tr:last-child td { border-bottom:none; }
+  /* Success banner — capsule-soft success surface (mirrors .err's token treatment). */
+  #test-modal .test-body .ok { background:var(--ok-bg); color:var(--ok); border:1px solid var(--ok-line);
+    padding:12px 15px; border-radius:var(--r); font-size:13.5px; font-weight:600; }
+</style>
 <div class="page-head">
   <span class="icon-chip lg"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 5v14c0 1.66-4 3-9 3s-9-1.34-9-3V5"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/></svg></span>
   <div class="ph-main">
@@ -47,10 +61,10 @@
 {% endif %}
 
 <div class="modal-overlay" id="test-modal" hidden>
-  <div class="modal">
-    <div class="row" style="align-items:center;"><h3 class="grow" style="margin:0;" id="test-title">Test connection</h3>
-      <button type="button" class="copybtn" id="test-close">Close</button></div>
-    <div id="test-body" style="margin-top:14px;">Testing…</div>
+  <div class="modal test-modal">
+    <div class="row test-head"><h3 class="grow" id="test-title">Test connection</h3>
+      <button type="button" class="btn secondary" id="test-close">Close</button></div>
+    <div id="test-body" class="test-body">Testing…</div>
   </div>
 </div>
 

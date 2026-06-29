@@ -42,7 +42,7 @@
   <p class="muted">Recommended for gateways with self-signed certificates. When you save, the portal fetches and pins whatever certificate the gateway presents (you'll see its fingerprint), then verifies against that pinned certificate on every connect after — TLS verification is never turned off. If the gateway isn't reachable yet, it pins automatically on the first connect instead. Untick only to paste a specific certificate yourself below.</p>
   <div class="subpanel" id="tls-subpanel">
     <div class="row" style="align-items:center; gap:10px;">
-      <button type="button" class="secondary" id="fetch-cert">
+      <button type="button" class="btn secondary" id="fetch-cert">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>
         <span id="fetch-label">Fetch &amp; review certificate now</span>
       </button>
@@ -54,7 +54,7 @@
 
   <hr>
   <div class="row">
-    <button type="submit">{{ 'Save changes' if gw else 'Add gateway' }}</button>
+    <button type="submit" class="btn">{{ 'Save changes' if gw else 'Add gateway' }}</button>
     <a class="btn secondary" href="/gateways" data-fm-cancel>Cancel</a>
   </div>
 </form>

@@ -3,10 +3,15 @@
 {% block title %}{{ gw.name }}{% endblock %}
 {% block content %}
 <style>
-  .conn-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:14px 22px; margin:6px 0 2px; }
-  .conn-item .conn-l { display:block; font-size:10.5px; font-weight:700; letter-spacing:.4px;
-    text-transform:uppercase; color:var(--faint); margin-bottom:5px; }
-  .conn-item .conn-v { font-size:13.5px; color:var(--text); }
+  /* macOS System-Settings grouped rows: an inset card with hairline-divided rows,
+     label on the left, value on the right (matches the Settings .grp/.gr feel). */
+  .conn-grp { background:var(--surface-2); border:1px solid var(--line-soft); border-radius:var(--r-lg);
+    overflow:hidden; margin:6px 0 2px; }
+  .conn-item { display:flex; align-items:center; gap:14px; padding:13px 16px; border-top:1px solid var(--line-soft); }
+  .conn-item:first-child { border-top:none; }
+  .conn-item .conn-l { flex:none; min-width:118px; font-size:11px; font-weight:700; letter-spacing:.4px;
+    text-transform:uppercase; color:var(--faint); }
+  .conn-item .conn-v { flex:1; min-width:0; text-align:right; font-size:13.5px; color:var(--text); }
 </style>
 <div class="page-head">
   <span class="icon-chip lg"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></span>
@@ -25,7 +30,7 @@
 
 <div class="card">
   <h2 style="margin-top:0;">Connection</h2>
-  <div class="conn-grid">
+  <div class="conn-grp">
     <div class="conn-item"><span class="conn-l">Address</span>
       <span class="conn-v"><code>{{ gw.host }}:{{ gw.port }}</code></span></div>
     <div class="conn-item"><span class="conn-l">Username</span>
@@ -35,7 +40,7 @@
     <div class="conn-item"><span class="conn-l">Password</span>
       <span class="conn-v">{% if has_password %}<span class="pill ok">saved (encrypted)</span>{% else %}<span class="pill faint">entered per apply</span>{% endif %}</span></div>
   </div>
-  <p class="muted" style="margin-bottom:0;">Edit these on the <a href="/gateways/{{ gw.id }}/edit">gateway profile</a>.{% if not has_password %} The password is entered per fetch/apply; save one on the profile to skip retyping.{% endif %}</p>
+  <p class="muted" style="margin:13px 0 0;">Edit these on the <a href="/gateways/{{ gw.id }}/edit">gateway profile</a>.{% if not has_password %} The password is entered per fetch/apply; save one on the profile to skip retyping.{% endif %}</p>
 </div>
 
 <div class="card">

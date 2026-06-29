@@ -1,14 +1,16 @@
-<p class="muted" style="margin:0 0 12px;">
-  <span style="font-family:ui-monospace,monospace;">{{ r.at.strftime('%Y-%m-%d %H:%M:%S') }} UTC</span> ·
+<p class="muted ad-meta" style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:0 0 16px;padding:12px 14px;background:var(--surface-2);border:1px solid var(--line);border-radius:var(--r-lg);">
+  <span class="mono">{{ r.at.strftime('%Y-%m-%d %H:%M:%S') }} UTC</span>
+  <span style="color:var(--faint);">·</span>
   <span class="pill">{{ kind_labels.get(r.kind, r.kind) }}</span>
   <code>{{ r.method }} {{ r.path }}</code>
-  {% if r.source_ip %} · from {{ r.source_ip }}{% endif %}
-  {% if r.status %} · <span class="pill {{ 'ok' if r.status == 200 else ('bad' if r.status >= 400 else '') }}">{{ r.status }}</span>{% endif %}
-  · {{ r.duration_ms }} ms
+  {% if r.source_ip %}<span style="color:var(--faint);">·</span> from {{ r.source_ip }}{% endif %}
+  {% if r.status %}<span style="color:var(--faint);">·</span> <span class="pill {{ 'ok' if r.status == 200 else ('bad' if r.status >= 400 else '') }}">{{ r.status }}</span>{% endif %}
+  <span style="color:var(--faint);">·</span> {{ r.duration_ms }} ms
 </p>
 {% set d = r.detail or {} %}
 {% if r.kind in ['layer_apply', 'gateway_read'] %}
   {% if d.get('trace') %}
+    <div class="ad-group" style="background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);padding:4px 16px;box-shadow:var(--shadow-sm);">
     {% for s in d.get('trace', []) %}
     <div class="trace-step">
       <div class="trace-head"><span class="pill">{{ s.step }}</span> <code>{{ s.method }} {{ s.url }}</code>
@@ -18,8 +20,11 @@
       <div class="trace-lbl">Response</div><pre>{{ s.response | tojson(indent=2) }}</pre>
     </div>
     {% endfor %}
+    </div>
   {% else %}<p class="muted">No trace captured.</p>{% endif %}
 {% else %}
-  <div class="trace-lbl">Request</div><pre>{{ d.get('request') | tojson(indent=2) }}</pre>
-  <div class="trace-lbl">Response</div><pre>{{ d.get('response') | tojson(indent=2) }}</pre>
+  <div class="ad-group" style="background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);padding:14px 16px 16px;box-shadow:var(--shadow-sm);">
+    <div class="trace-lbl" style="margin-top:0;">Request</div><pre>{{ d.get('request') | tojson(indent=2) }}</pre>
+    <div class="trace-lbl">Response</div><pre>{{ d.get('response') | tojson(indent=2) }}</pre>
+  </div>
 {% endif %}

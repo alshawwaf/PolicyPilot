@@ -34,7 +34,7 @@
 {% if types %}
 <div class="trace-lbl" style="margin-top:10px;">Objects</div>
 {% for t in types %}{% if objects[t] %}
-<div style="margin:3px 0;"><span class="muted" style="font-size:11px; text-transform:uppercase; letter-spacing:.4px;">{{ t }}</span>
+<div style="margin:6px 0;"><span class="trace-lbl" style="margin:0 0 4px;">{{ t }}</span>
 {% for o in objects[t] %}<span class="pill" style="margin:2px;">{{ o.name or '?' }}{% set d = _objdetail(o) %}{% if d %} · {{ d }}{% endif %}</span>{% endfor %}
 </div>{% endif %}{% endfor %}
 {% endif %}
@@ -49,18 +49,18 @@
 
 {% macro render_layers(layers, import_gid=None) %}
 {% for l in layers %}
-<div class="card" style="margin:10px 0; box-shadow:none;">
+<div class="card" style="margin:14px 0;">
   <div class="row" style="align-items:center;">
     <div class="grow"><b>{{ l.name or '(unnamed)' }}</b>{% if l.display_name %} <span class="muted">— {{ l.display_name }}</span>{% endif %}</div>
     {% if import_gid %}
     <form method="post" action="/gateways/{{ import_gid }}/import-layer" style="margin:0;">
       <input type="hidden" name="layer" value="{{ l.name }}">
-      <button class="btn secondary" type="submit" style="padding:5px 13px; font-size:12px;"
+      <button class="btn secondary" type="submit" style="padding:6px 13px; font-size:12px;"
               title="Create or update a portal dynamic layer from this live rulebase, so you can edit it and push it back">↓ Import to portal</button>
     </form>
     {% endif %}
   </div>
-  <div class="muted" style="margin:6px 0;">{{ (l.rulebase or [])|length }} rule(s) · {{ (l.objects or {}).values() | map('length') | sum }} object(s){% if l.referenced %} · {{ l.referenced|length }} referenced{% endif %}</div>
+  <div class="muted" style="margin:6px 0 12px;">{{ (l.rulebase or [])|length }} rule(s) · {{ (l.objects or {}).values() | map('length') | sum }} object(s){% if l.referenced %} · {{ l.referenced|length }} referenced{% endif %}</div>
   {{ render_rulebase(l.rulebase or []) }}
   {{ render_objects(l.objects or {}) }}
   {{ render_referenced(l.referenced or []) }}

@@ -3,17 +3,43 @@
 {% block nav %}{% endblock %}
 {% block footer %}{% endblock %}
 {% block content %}
-<div class="card" style="max-width:380px; margin:56px auto;">
-  <span class="icon-chip lg" style="margin-bottom:14px;"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span>
+<style>
+  /* Login: a single centred macOS-style sign-in card. Scoped to .login-card so it
+     reuses the shared tokens/classes (.card/.icon-chip/.btn/.err) without touching base. */
+  .login-card { max-width:392px; margin:64px auto; padding:30px 28px 28px; text-align:center; }
+  .login-card .icon-chip { margin:0 auto 16px; }
+  .login-card h1 { margin:0 0 4px; }
+  .login-card .login-sub { margin:0; color:var(--muted); font-size:13.5px; line-height:1.5; }
+  .login-card .err { margin-top:16px; text-align:left; }
+  /* Group the fields into an inset card with a hairline divider (the Settings "grp/gr" feel). */
+  .login-card form { margin-top:22px; text-align:left; }
+  .login-card .login-fields { background:var(--surface-3); border:1px solid var(--line);
+    border-radius:var(--r-lg); overflow:hidden; }
+  .login-card .login-field { padding:13px 15px; }
+  .login-card .login-field + .login-field { border-top:1px solid var(--line-soft); }
+  .login-card .login-field label { margin:0 0 6px; font-size:11px; font-weight:700;
+    letter-spacing:.5px; text-transform:uppercase; color:var(--faint); }
+  .login-card .login-field input { background:var(--input-bg); }
+  .login-card .login-submit { margin-top:20px; }
+  .login-card .login-submit .btn { width:100%; justify-content:center; }
+</style>
+<div class="card login-card">
+  <span class="icon-chip lg"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span>
   <h1>Sign in</h1>
-  <p class="muted">PolicyPilot — the bridge to your Check Point policy</p>
-  {% if error %}<div class="err" style="margin-top:12px;">{{ error }}</div>{% endif %}
+  <p class="login-sub">PolicyPilot — the bridge to your Check Point policy</p>
+  {% if error %}<div class="err">{{ error }}</div>{% endif %}
   <form method="post" action="/login">
-    <label for="login-username">Username</label>
-    <input id="login-username" name="username" autofocus autocomplete="username">
-    <label for="login-password">Password</label>
-    <input id="login-password" name="password" type="password" autocomplete="current-password">
-    <div style="margin-top:18px;"><button type="submit">Sign in</button></div>
+    <div class="login-fields">
+      <div class="login-field">
+        <label for="login-username">Username</label>
+        <input id="login-username" name="username" autofocus autocomplete="username">
+      </div>
+      <div class="login-field">
+        <label for="login-password">Password</label>
+        <input id="login-password" name="password" type="password" autocomplete="current-password">
+      </div>
+    </div>
+    <div class="login-submit"><button type="submit" class="btn">Sign in</button></div>
   </form>
 </div>
 {% endblock %}

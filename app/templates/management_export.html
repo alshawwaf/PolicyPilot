@@ -3,12 +3,16 @@
 {% block main_class %}wide{% endblock %}
 {% block content %}
 <style>
-  .viewer-eyebrow { font-size:11px; font-weight:800; letter-spacing:.5px; text-transform:uppercase;
+  .viewer-eyebrow { font-size:11px; font-weight:800; letter-spacing:.6px; text-transform:uppercase;
     color:var(--faint); }
-  #export-root .toolbar { align-items:center; gap:10px; flex-wrap:wrap; }
-  #code { max-height:60vh; overflow:auto; background:var(--subtle-bg); color:var(--subtle-fg);
-    border:1px solid var(--line); border-radius:9px; padding:14px; font-size:12.5px; line-height:1.5;
-    white-space:pre; margin:0; }
+  /* Inset control card for the layer picker (the Settings "grp/gr" feel). */
+  #export-root .toolbar { align-items:center; gap:10px; flex-wrap:wrap;
+    background:var(--surface-2); border:1px solid var(--line-soft); border-radius:12px; padding:13px 15px; }
+  /* Generated-IaC panel follows the theme (no stark box) with a cool accent bar marking it copy-me code. */
+  #code { max-height:60vh; overflow:auto; background:var(--surface-3); color:var(--text);
+    border:1px solid var(--line); border-left:3px solid #3b82f6; border-radius:11px; padding:16px;
+    font-size:12.5px; line-height:1.65; white-space:pre; margin:0;
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace; }
 </style>
 <div class="page-head">
   <span class="icon-chip lg"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></span>
@@ -24,7 +28,7 @@
 {% if not has_secret %}
 <div class="card"><p class="muted">No saved credential on this server, so policy can't be pulled. <a href="/management/{{ ms.id }}/edit">Add a password on Edit</a> (stored encrypted), then return here.</p></div>
 {% else %}
-<div class="card" id="export-root" data-id="{{ ms.id }}" data-layer="{{ layer }}" style="padding:14px 18px;">
+<div class="card" id="export-root" data-id="{{ ms.id }}" data-layer="{{ layer }}">
   <div class="row toolbar">
     <span class="viewer-eyebrow">Access layer</span>
     <select id="layer-select" style="min-width:220px;"><option>Loading layers…</option></select>

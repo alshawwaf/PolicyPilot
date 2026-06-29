@@ -4,25 +4,27 @@
 {% block content %}
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.17.14/swagger-ui.css">
 <style>
-  .ax-tabs { display:flex; gap:8px; margin:4px 0 12px; }
-  .ax-tabs a { padding:8px 18px; border:1px solid var(--line); border-radius:10px; text-decoration:none;
-    color:var(--text); font-weight:600; font-size:13px; background:var(--surface-2); transition:all .15s; }
-  .ax-tabs a:hover { transform:translateY(-1px); }
+  .ax-tabs { display:flex; gap:8px; margin:4px 0 14px; }
+  .ax-tabs a { padding:8px 18px; border:1px solid var(--line); border-radius:var(--r-pill); text-decoration:none;
+    color:var(--text); font-weight:600; font-size:13px; background:var(--surface); transition:all .15s; }
+  .ax-tabs a:hover { transform:translateY(-1px); border-color:var(--line-strong); }
   .ax-tabs a.active { color:#fff; border-color:transparent;
-    background:var(--accent-grad); box-shadow:0 3px 12px rgba(123,63,242,.30); }
+    background:var(--accent-grad); box-shadow:0 2px 8px rgba(123,63,242,.20); }
   /* Two API tabs, two colour identities (the design system's primary pink + secondary cyan→blue) so they
      never read as the same control: active = full gradient, inactive = a tinted outline. */
   .ax-tabs a[href*="api=management"]:not(.active) { color:var(--accent-2); border-color:var(--accent-soft); }
   .ax-tabs a[href*="api=gaia"]:not(.active) { color:#22d3ee; border-color:rgba(34,211,238,.40); }
   .ax-tabs a[href*="api=gaia"].active { background:var(--accent-grad-2);
-    box-shadow:0 3px 12px rgba(6,182,212,.32); }
-  .ax-controls { padding:14px 16px; margin-bottom:14px; }
-  .ax-bar { display:flex; gap:14px; align-items:flex-end; flex-wrap:wrap; font-size:13px; }
-  .ax-bar label { display:flex; flex-direction:column; gap:4px; font-size:11px; font-weight:700;
-    color:var(--faint); text-transform:uppercase; letter-spacing:.4px; }
-  .ax-bar select, .ax-bar input { padding:6px 9px; min-width:180px; }
+    box-shadow:0 2px 8px rgba(6,182,212,.22); }
+  .ax-controls { padding:18px 20px; margin-bottom:14px; }
+  .ax-bar { display:flex; gap:16px; align-items:flex-end; flex-wrap:wrap; font-size:13px; }
+  .ax-bar label { display:flex; flex-direction:column; gap:6px; font-size:11px; font-weight:700;
+    color:var(--faint); text-transform:uppercase; letter-spacing:.4px; margin:0; }
+  /* Size only the inputs/url field — the <select> inherits the global macOS popup-button (accent caret,
+     surface-3 fill, line-strong border) so the two pickers read as real controls. */
+  .ax-bar input { min-width:180px; }
+  .ax-bar select { min-width:180px; }
   .ax-bar input.url { min-width:340px; font-family:ui-monospace,monospace; }
-  .ax-bar button { padding:7px 16px; font-weight:600; }
   /* The proxy toggle is a checkbox — exclude it from the field sizing above (and the global
      input{width:100%}) so it renders as a small box, not a full-width bar. */
   .ax-bar input[type="checkbox"] { width:auto; min-width:0; padding:0; margin:0; accent-color:var(--accent);
@@ -30,7 +32,7 @@
   /* One collapsed "how it works" disclosure instead of two big always-on explainer blocks. Nested inside
      the control card, so it borrows the card's surface and only adds a top divider when the card has fields
      above it. */
-  .ax-help { margin:12px 0 0; padding-top:12px; border-top:1px solid var(--line-soft); font-size:12.5px; }
+  .ax-help { margin:16px 0 0; padding-top:14px; border-top:1px solid var(--line-soft); font-size:12.5px; }
   .ax-help > summary { cursor:pointer; color:var(--text-2); font-weight:600;
     list-style:none; display:flex; align-items:center; gap:8px; }
   .ax-help > summary::-webkit-details-marker { display:none; }
@@ -44,8 +46,8 @@
   #ax-status.err { color:var(--danger); font-weight:600; }
   #ax-status.ok { color:var(--ok); font-weight:600; }
   /* --- Theme Swagger UI onto the portal's own variables (follows dark/light automatically) --------- */
-  #swagger-ui { background:var(--surface); border:1px solid var(--line); border-radius:12px;
-    padding:6px 16px 16px; }
+  #swagger-ui { background:var(--surface); border:1px solid var(--line-soft); border-radius:var(--r-lg);
+    padding:6px 18px 18px; box-shadow:var(--shadow-sm); }
   #swagger-ui .swagger-ui, #swagger-ui .swagger-ui .info .title { color:var(--text); }
   #swagger-ui .topbar { display:none; }
   /* Hide Swagger's own info block (title + the long raw spec URL + description) — the page-head, the

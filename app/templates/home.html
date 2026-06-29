@@ -3,9 +3,9 @@
 {% block content %}
 <style>
   /* ---- Hero ---- */
-  .hero { position:relative; overflow:hidden; border:1px solid var(--line); border-radius:22px;
-    padding:30px 32px; margin-bottom:26px;
-    background:radial-gradient(120% 140% at 0% 0%, var(--accent-soft) 0%, transparent 55%), var(--surface-2); }
+  .hero { position:relative; overflow:hidden; border:1px solid var(--line); border-radius:18px;
+    padding:30px 32px; margin-bottom:26px; box-shadow:var(--shadow-sm);
+    background:radial-gradient(120% 140% at 0% 0%, var(--accent-soft) 0%, transparent 55%), var(--surface); }
   .hero-blob { position:absolute; right:-50px; top:-60px; width:230px; height:230px; border-radius:48px;
     background:linear-gradient(135deg, var(--accent), #7c3aed); opacity:.15; transform:rotate(18deg);
     filter:blur(2px); pointer-events:none; }
@@ -55,8 +55,8 @@
   /* ---- Two rails ---- */
   .rails { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
   @media (max-width:680px) { .rails { grid-template-columns:1fr; } }
-  .rail { position:relative; background:var(--surface-2); border:1px solid var(--line); border-radius:16px;
-    padding:18px 18px 18px 22px; overflow:hidden; }
+  .rail { position:relative; background:var(--surface); border:1px solid var(--line); border-radius:var(--r-lg);
+    padding:18px 18px 18px 22px; overflow:hidden; box-shadow:var(--shadow-sm); }
   .rail::before { content:""; position:absolute; left:0; top:0; bottom:0; width:4px; background:var(--accent-grad); }
   .rail.b::before { background:var(--accent-grad-2); }
   .rail h3 { margin:0; font-size:15.5px; }
@@ -64,13 +64,16 @@
     color:var(--faint); margin-bottom:5px; }
   .rail p { margin:9px 0 0; font-size:12.5px; color:var(--muted); line-height:1.55; }
   .rail code { background:var(--code-bg); color:var(--code-fg); padding:1px 5px; border-radius:5px; font-size:11.5px; }
+  .rail h3 .pill.soon { font-size:10px; font-weight:800; letter-spacing:.4px; text-transform:uppercase;
+    color:var(--accent); background:var(--accent-soft); vertical-align:middle; }
 
   /* ---- How it works ---- */
   .steps { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; }
   @media (max-width:680px) { .steps { grid-template-columns:1fr; } }
-  .step { background:var(--surface-2); border:1px solid var(--line); border-radius:14px; padding:16px; }
+  .step { background:var(--surface); border:1px solid var(--line); border-radius:var(--r-lg); padding:16px;
+    box-shadow:var(--shadow-sm); }
   .step .num { display:inline-flex; align-items:center; justify-content:center; width:30px; height:30px;
-    border-radius:9px; background:var(--accent-grad); color:var(--on-accent); font-weight:800; font-size:14px;
+    border-radius:10px; background:var(--accent-grad); color:var(--on-accent); font-weight:800; font-size:14px;
     box-shadow:0 3px 10px rgba(123,63,242,.22); }
   .step h4 { margin:11px 0 4px; font-size:14px; }
   .step p { margin:0; font-size:12.5px; color:var(--muted); line-height:1.5; }
@@ -78,20 +81,21 @@
   /* ---- Drive it 4 ways ---- */
   .ways { display:flex; flex-wrap:wrap; gap:10px; }
   a.way { display:inline-flex; align-items:center; gap:8px; text-decoration:none; font-size:13px;
-    font-weight:600; color:var(--text); background:var(--surface-2); border:1px solid var(--line);
-    border-radius:var(--r-pill); padding:8px 14px; transition:border-color .14s, transform .14s, color .14s; }
+    font-weight:600; color:var(--text); background:var(--surface); border:1px solid var(--line);
+    border-radius:var(--r-pill); padding:8px 14px; box-shadow:var(--shadow-sm);
+    transition:border-color .14s, transform .14s, color .14s, box-shadow .14s; }
   a.way:hover { border-color:var(--accent); color:var(--accent); transform:translateY(-2px); }
   a.way .wic { color:var(--accent); display:inline-flex; }
 
   /* ---- Section cards ---- */
   .home-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(290px, 1fr)); gap:16px; }
-  a.hcard { display:block; text-decoration:none; color:inherit; background:var(--surface-2);
-    border:1px solid var(--line); border-radius:16px; padding:18px 18px 17px;
+  a.hcard { display:block; text-decoration:none; color:inherit; background:var(--surface);
+    border:1px solid var(--line); border-radius:var(--r-lg); padding:18px 18px 17px; box-shadow:var(--shadow-sm);
     transition:transform .14s ease, border-color .14s ease, box-shadow .14s ease; animation:hc-in .34s ease both; }
   a.hcard:hover { transform:translateY(-3px); border-color:var(--accent); box-shadow:var(--shadow-lg); }
   .hcard-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:13px; }
   .hcard-ic { display:inline-flex; align-items:center; justify-content:center; width:44px; height:44px;
-    border-radius:13px; background:var(--accent-grad); color:#fff;
+    border-radius:14px; background:var(--accent-grad); color:var(--on-accent);
     box-shadow:0 3px 12px rgba(123,63,242,.22); transition:transform .14s ease, box-shadow .14s ease; }
   a.hcard:hover .hcard-ic { transform:scale(1.06); box-shadow:0 6px 18px rgba(123,63,242,.36); }
   .hcard-count { font-size:22px; font-weight:800; line-height:1;
@@ -178,7 +182,7 @@
   </div>
   <div class="rail b">
     <span class="tag">On the roadmap</span>
-    <h3>Policy Manager <span style="font-size:10px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;color:var(--accent);background:var(--accent-soft);padding:2px 7px;border-radius:999px;vertical-align:middle;">soon</span></h3>
+    <h3>Policy Manager <span class="pill soon">soon</span></h3>
     <p>A full visual policy manager — browse, edit and organize the whole rulebase — built on the same safe
       engine that powers access automation.</p>
   </div>

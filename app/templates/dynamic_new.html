@@ -1,7 +1,38 @@
 {% extends "base.html" %}
 {% block title %}{{ 'Edit dynamic layer' if is_edit else 'New dynamic layer' }}{% endblock %}
 {% block content %}
-<div class="page-head">
+<style>
+  /* dynamic_new — harmonise with the macOS System-Settings + gradient language. Scoped to .dl-form so
+     it never leaks into the shared design system. Tokens only (theme-aware). */
+  .dl-form .card { margin:16px 0; }
+  .dl-form .card > h2:first-child { margin-top:0; }
+  /* Card section header: title + inline action, with a hairline rule under it for the grouped feel. */
+  .dl-cardhead { display:flex; align-items:center; gap:12px; margin:0 0 4px; }
+  .dl-cardhead h2 { margin:0; flex:1; }
+  /* The builder lists (Objects / Referenced / Rules) read as inset grouped cards with hairline dividers,
+     matching the Settings "grp/gr" feel. The JS fills these containers; we only restyle them — the inset
+     card chrome shows only once there's real content (an itemrow or a table), not the empty-state line. */
+  .dl-list:has(.itemrow), .dl-list:has(.tablewrap) {
+    background:var(--surface-3); border:1px solid var(--line); border-radius:var(--r-lg);
+    overflow:hidden; margin-top:12px; }
+  .dl-list .itemrow { padding:11px 15px; border-bottom:1px solid var(--line); margin:0; }
+  .dl-list .itemrow:last-child { border-bottom:none; }
+  /* The count/filter band the JS injects (a bare flex div with a .muted span) becomes the inset
+     card's header strip: padded, on the surface-2 band, divided from the rows below. */
+  .dl-list > div:not(.tablewrap):has(> .muted) { padding:10px 15px; margin:0 !important;
+    background:var(--surface-2); border-bottom:1px solid var(--line); }
+  .dl-list > div:not(.tablewrap):has(> .muted):last-child { border-bottom:none; }
+  .dl-list > div:not(.tablewrap):has(> .muted) input[type="search"] { max-width:280px; }
+  /* Tables built inside a list keep flat edges so the list's rounded container frames them. */
+  .dl-list .tablewrap { border:none; border-radius:0; }
+  /* Empty-state line ("No objects yet.") reads as a calm caption, not chrome. */
+  .dl-list > p.muted { margin:12px 0 0; color:var(--faint); }
+  /* Referenced-objects "add" row: align the control group to a tidy inset subpanel. */
+  .dl-refadd { background:var(--surface-3); border:1px solid var(--line); border-radius:var(--r-lg);
+    padding:15px; margin-top:4px; }
+  .dl-refadd label { margin-top:0; }
+</style>
+<div class="page-head dl-pagehead">
   <span class="icon-chip lg"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg></span>
   <div class="ph-main">
     <h1>{{ 'Edit dynamic layer' if is_edit else 'New dynamic layer' }}</h1>
@@ -10,7 +41,7 @@
 </div>
 {% if error %}<div class="err" style="margin:12px 0;">{{ error }}</div>{% endif %}
 
-<form method="post" action="{{ action }}" id="layer-form">
+<form method="post" action="{{ action }}" id="layer-form" class="dl-form">
   <input type="hidden" name="objects_json" id="objects_json">
   <input type="hidden" name="rules_json" id="rules_json">
   <input type="hidden" name="referenced_json" id="referenced_json">
@@ -37,26 +68,26 @@
   </div>
 
   <div class="card">
-    <div class="row"><h2 style="margin:0;" class="grow">Objects</h2><button type="button" class="secondary" id="open-obj">+ Add object</button></div>
+    <div class="dl-cardhead"><h2>Objects</h2><button type="button" class="secondary" id="open-obj">+ Add object</button></div>
     <p class="muted">Definitions created on the gateway by this apply — temporary and gateway-scoped.</p>
-    <div id="obj-list"></div>
+    <div id="obj-list" class="dl-list"></div>
   </div>
 
   <div class="card">
-    <div class="row"><h2 style="margin:0;" class="grow">Referenced objects</h2></div>
+    <div class="dl-cardhead"><h2>Referenced objects</h2></div>
     <p class="muted">Names defined elsewhere on the gateway (e.g. <code>Facebook</code>, <code>ssh</code>) that your rules use. <code>any</code>, <code>internet</code>, <code>_GW_</code> are always available.</p>
-    <div class="row endalign">
+    <div class="row endalign dl-refadd">
       <div><label>Category</label><select id="ref-type">{% for t in ref_types %}<option>{{ t }}</option>{% endfor %}</select></div>
       <div class="grow"><label>Names (comma-separated)</label><input id="ref-names" placeholder="Facebook, Social Networking"></div>
       <div><button type="button" class="secondary" id="add-ref">Add</button></div>
     </div>
-    <div id="ref-list" style="margin-top:12px;"></div>
+    <div id="ref-list" class="dl-list"></div>
   </div>
 
   <div class="card">
-    <div class="row"><h2 style="margin:0;" class="grow">Rules</h2><button type="button" class="secondary" id="open-rule">+ Add rule</button></div>
+    <div class="dl-cardhead"><h2>Rules</h2><button type="button" class="secondary" id="open-rule">+ Add rule</button></div>
     <p class="muted">Applied top-to-bottom. Source / Destination / Service accept <code>any</code>, defined object names, or referenced names.</p>
-    <div id="rule-list"></div>
+    <div id="rule-list" class="dl-list"></div>
   </div>
 
   <div class="card">

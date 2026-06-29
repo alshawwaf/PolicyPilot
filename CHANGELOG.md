@@ -7,6 +7,17 @@ All notable changes to **PolicyPilot** are documented here. This project follows
 
 Post-1.0.0 hardening of the agent surface, ahead of broader live validation.
 
+### App-wide macOS + gradient restyle
+- The whole portal now matches the Settings page's macOS-System-Settings + pink→purple gradient
+  language — every page, list, detail, form, partial, and the MCP guide was harmonised (style-only:
+  rounded soft-shadow cards, inset grouped rows, refined tables/pills/modals, the gradient kept as the
+  signature). 22 templates touched; no logic, routes, or copy changed.
+- **Dropdowns** are now macOS popup-buttons everywhere: a distinct shade (`--surface-3`), stronger
+  border, and an **accent caret**, so a `<select>` reads as a menu, not a flat text field. The Settings
+  Behavior-profile menu got the most prominent treatment (bold + accent hover/focus ring).
+- Settings page width now matches the standard page width (1200px) after a fix to a nested-`<main>`
+  that had been capping its content at 1200px regardless of the page width.
+
 ### Security hardening (audit)
 A dedicated security audit (adversarially verified) found no blockers; two majors + one minor were fixed:
 - **Login brute-force throttle could be bypassed via a spoofed `X-Forwarded-For`** (major) — `client_ip()` now

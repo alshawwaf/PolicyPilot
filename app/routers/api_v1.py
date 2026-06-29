@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from ..services import api_keys, conformance, mcp_tools
+from ..services import api_keys, conformance, mcp_tools, rate_limit
 
 router = APIRouter(prefix="/dbapi/v1", tags=["api"])
 
@@ -29,6 +29,10 @@ def require_api_key(scope: str = "api", write: bool = False):
             raise HTTPException(status_code=401,
                                 detail="Invalid or missing API key — send 'Authorization: Bearer <key>' "
                                        "with an api-scope key (create one in Settings → API keys).")
+        if not rate_limit.allow(f"{scope}:{caps['id']}"):
+            raise HTTPException(status_code=429,
+                                detail="Rate limit exceeded — too many requests for this key; retry shortly "
+                                       "(raise agent_rate_limit_per_min in Settings to relax).")
         if write and not caps["can_write"]:
             raise HTTPException(status_code=403,
                                 detail="This API key is read-only — it cannot apply, publish, push, or edit "

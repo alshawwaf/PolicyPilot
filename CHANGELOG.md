@@ -25,6 +25,12 @@ Post-1.0.0 hardening of the agent surface, ahead of broader live validation.
   read-write (no behaviour change); mint a read-only key from **Settings → API keys** (the new *Read-only*
   checkbox; the table shows each key's access). Writes still need the publish/push gate on top.
 
+### Per-key rate limiting
+- New **`agent_rate_limit_per_min`** setting caps how many requests a single API key may make per minute
+  across `/mcp`, the REST API, and the ticketing webhook — a backstop against a runaway agent loop hammering
+  the SMS. **0 = unlimited (default)**, so it's opt-in and a change takes effect with no redeploy. Over the
+  cap → **HTTP 429**. Fixed 60-second window per key, in-process, fail-open.
+
 ### Idempotent writes — a retry can't double-commit
 - `apply_access` and `push_dynamic_layer` (MCP + REST) accept an optional **`idempotency_key`**. A repeat with
   the same key REPLAYS the first committed result (`idempotent_replay: true`) instead of publishing/pushing

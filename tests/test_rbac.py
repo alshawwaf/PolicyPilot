@@ -63,34 +63,43 @@ def test_read_tools_are_not_gated():
 
 
 # --- MCP bearer guard sets the capability around the inner call ------------------------------------
-def _drive_guard(caps_fn):
+def _drive_guard(caps_fn, rate_fn=None):
     """Run one HTTP request through _BearerGuard with a fake inner app that records authz.can_write()
-    AT DISPATCH TIME, and return what it saw."""
-    seen = {}
+    AT DISPATCH TIME. Returns (inner_can_write_or_None, response_status)."""
+    seen = {"can_write": None, "status": None}
 
     async def inner(scope, receive, send):
         seen["can_write"] = authz.can_write()
         await send({"type": "http.response.start", "status": 200, "headers": []})
         await send({"type": "http.response.body", "body": b"{}"})
 
-    guard = mcp_server._BearerGuard(inner, verify_fn=lambda p: True, enabled_fn=lambda: True, caps_fn=caps_fn)
+    guard = mcp_server._BearerGuard(inner, verify_fn=lambda p: True, enabled_fn=lambda: True,
+                                    caps_fn=caps_fn, rate_fn=rate_fn)
     scope = {"type": "http", "headers": [(b"authorization", b"Bearer k")]}
 
     async def receive():
         return {"type": "http.request", "body": b"", "more_body": False}
 
-    async def send(_msg):
-        return None
+    async def send(msg):
+        if msg.get("type") == "http.response.start":
+            seen["status"] = msg["status"]
 
     asyncio.run(guard(scope, receive, send))
-    return seen["can_write"]
+    return seen["can_write"], seen["status"]
 
 
 def test_guard_propagates_readonly_capability_to_inner_call():
-    assert _drive_guard(lambda p: False) is False     # read-only key -> inner sees can_write False
-    assert _drive_guard(lambda p: True) is True
-    assert _drive_guard(None) is True                 # no caps_fn -> writes allowed (back-compat)
-    assert authz.can_write() is True                  # and it's reset after the request
+    assert _drive_guard(lambda p: False)[0] is False  # read-only key -> inner sees can_write False
+    assert _drive_guard(lambda p: True)[0] is True
+    assert _drive_guard(None)[0] is True              # no caps_fn -> writes allowed (back-compat)
+    assert authz.can_write() is True                 # and it's reset after the request
+
+
+def test_guard_rate_limit_returns_429_before_dispatch():
+    cw, status = _drive_guard(lambda p: True, rate_fn=lambda p: False)   # over the cap
+    assert status == 429 and cw is None              # inner app was never reached
+    cw2, status2 = _drive_guard(lambda p: True, rate_fn=lambda p: True)  # within the cap
+    assert status2 == 200 and cw2 is True
 
 
 # --- api_keys.authorize carries can_write ---------------------------------------------------------

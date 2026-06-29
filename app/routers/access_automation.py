@@ -503,6 +503,12 @@ async def aa_webhook(request: Request, db: Session = Depends(get_db)):
     ok = via_legacy or key_caps is not None
     if not ok:
         return JSONResponse({"error": "Invalid or missing X-PolicyPilot-Token."}, status_code=401)
+    # Per-key rate limit (backstop against a runaway caller). Legacy token shares one identity.
+    from ..services import rate_limit
+    rl_ident = "webhook:legacy" if via_legacy else f"webhook:{key_caps['id']}"
+    if not rate_limit.allow(rl_ident):
+        return JSONResponse({"error": "Rate limit exceeded — too many requests; retry shortly."},
+                            status_code=429)
     # Write capability: the legacy token is full-access; a webhook API key may be read-only (preview-only).
     can_write = via_legacy or bool(key_caps and key_caps["can_write"])
 

@@ -120,6 +120,14 @@ def test_write_key_allows_apply(monkeypatch):
     assert r.status_code == 200 and r.json()["outcome"] == "create"
 
 
+def test_rate_limit_returns_429(monkeypatch):
+    c = _client(monkeypatch)
+    monkeypatch.setattr(api_v1.mcp_tools, "list_management_servers", lambda: {"servers": []})
+    monkeypatch.setattr(api_v1.rate_limit, "allow", lambda ident: False)   # over the cap
+    r = c.get("/dbapi/v1/servers", headers={"Authorization": "Bearer good"})
+    assert r.status_code == 429 and "Rate limit" in r.json()["detail"]
+
+
 def test_conformance_endpoint(monkeypatch):
     c = _client(monkeypatch)
     monkeypatch.setattr(api_v1.conformance, "run", lambda: {"ok": True, "tools": 21, "checks": []})

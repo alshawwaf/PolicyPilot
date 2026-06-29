@@ -183,6 +183,9 @@ a `dry_run=true` push and a push to the built-in `mock` target are **always** al
   **403**; the webhook refuses an `apply=true`. Mint one in **Settings → API keys** (the *Read-only*
   checkbox) to give an agent look-but-don't-touch access. This is independent of, and on top of, the publish
   /push gates.
+- **Rate limiting:** the `agent_rate_limit_per_min` setting (Settings → MCP / agent) caps requests **per key
+  per minute** across `/mcp`, REST, and the webhook — a backstop against a runaway agent loop. `0` =
+  unlimited (default); over the cap returns **HTTP 429** (retry shortly).
 - **Idempotent commits:** pass an optional `idempotency_key` (any stable string per logical change) to
   `apply_access` or `push_dynamic_layer`. A retry with the same key **replays** the first committed result
   (`idempotent_replay: true`) instead of publishing/pushing again — so an agent retry, an n8n retry-on-fail,

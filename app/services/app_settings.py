@@ -255,6 +255,12 @@ SETTINGS: list[Setting] = [
             "push lands on the gateway out-of-band of SmartConsole. With it OFF, agents can still validate "
             "(dry-run) and push to the built-in demo target, but a real-gateway push is refused.",
             group="MCP / agent"),
+    Setting("agent_rate_limit_per_min", "int", 0,
+            "Agent request rate limit (per key, per minute)",
+            "Cap how many requests a single API key may make per minute across /mcp, the REST API, and the "
+            "ticketing webhook — a backstop against a runaway agent loop hammering the SMS. 0 = unlimited "
+            "(default). When exceeded, the request is refused with HTTP 429 (retry shortly).",
+            group="MCP / agent", min=0, max=100000),
 
     # --- Ticketing webhook ---------------------------------------------------------------------------
     # The inbound POST /access-automation/webhook (ServiceNow / Jira / custom portal). Setting the token

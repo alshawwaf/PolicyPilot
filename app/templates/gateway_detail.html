@@ -48,7 +48,7 @@
     {% if snapshot %}<span class="muted">last fetched {{ snapshot.fetched_at.strftime('%Y-%m-%d %H:%M:%S') }} UTC</span>{% endif %}</div>
   {% if snapshot and not snapshot.ok and snapshot.error %}<div class="err" style="margin:10px 0;">{{ snapshot.error }}</div>{% endif %}
 
-  <form method="post" action="/gateways/{{ gw.id }}/fetch" class="row endalign" style="gap:8px; margin:12px 0;">
+  <form method="post" action="/gateways/{{ gw.id }}/fetch" id="gw-fetch-form" class="row endalign" style="gap:8px; margin:12px 0;">
     <div class="grow" style="max-width:360px;"><label>Gateway password</label>
       {% if has_password %}
       <input name="password" type="password" placeholder="Using the saved password — leave blank, or type to override">
@@ -64,4 +64,61 @@
     <p class="muted">Not fetched yet. Enter the password and click <b>Fetch now</b> to pull this gateway's dynamic layers — the result is saved here so you can review it any time without re-fetching.</p>
   {% endif %}
 </div>
+
+<script>
+  // OS behaviour: the slow live "Fetch now" and the "Import to portal" write run in a floating window on
+  // top with progress, instead of a full POST→page-reload. Falls back to the native form post if PPWin
+  // is unavailable. Both routes return JSON when sent the X-PP-Ajax header.
+  (function () {
+    if (!window.PPWin) return;
+    function esc(s) { var d = document.createElement('div'); d.textContent = (s == null ? '' : s); return d.innerHTML; }
+    var win = window.PPWin.create({ title: 'Gateway', width: 'min(880px, calc(100vw - 28px))' });
+    var statusEl = document.createElement('div');
+    win.body.appendChild(statusEl);
+    function show(html, title) { statusEl.innerHTML = html; win.setTitle(title); win.show(); }
+    var SPIN = '<span class="spin" style="margin-right:7px; vertical-align:-2px;"></span>';
+
+    function run(form, opts) {
+      show('<p class="muted">' + SPIN + opts.working + '</p>', opts.title);
+      fetch(form.action, { method: 'POST', headers: { 'X-PP-Ajax': '1' }, body: new FormData(form) })
+        .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+        .then(function (res) {
+          if (!res.ok || res.j.error) { show('<div class="err">' + esc(res.j.error || 'Request failed.') + '</div>', opts.title); return; }
+          opts.done(res.j);
+        })
+        .catch(function () { show('<div class="err">Request failed.</div>', opts.title); });
+    }
+
+    // Fetch now — slow live pull: progress on top, then refresh the page to show the saved layers (the
+    // rulebase list is the page's primary content, so a refresh to render it server-side is correct).
+    var fform = document.getElementById('gw-fetch-form');
+    if (fform) fform.addEventListener('submit', function (e) {
+      e.preventDefault();
+      run(fform, {
+        title: 'Fetch dynamic layers',
+        working: 'Reading the live gateway over <code>web_api</code> — this can take a few seconds…',
+        done: function (j) {
+          show('<div class="ok">✓ Fetched ' + (j.count || 0) + ' dynamic layer(s). Refreshing…</div>', 'Fetch dynamic layers');
+          setTimeout(function () { location.reload(); }, 600);
+        },
+      });
+    });
+
+    // Import to portal — portal DB write: show the result + a click-through link, don't auto-navigate.
+    document.addEventListener('submit', function (e) {
+      var form = e.target.closest ? e.target.closest('form[action*="/import-layer"]') : null;
+      if (!form) return;
+      e.preventDefault();
+      var name = (new FormData(form)).get('layer') || '';
+      run(form, {
+        title: 'Import to portal',
+        working: 'Importing “' + esc(name) + '” into the portal…',
+        done: function (j) {
+          show('<div class="ok" style="margin-bottom:12px;">✓ ' + esc(j.verb || 'Imported') + ' “' + esc(j.layer || name) +
+               '” into the portal.</div><a class="btn" href="/layers">Open in Dynamic Layers →</a>', 'Import to portal');
+        },
+      });
+    });
+  })();
+</script>
 {% endblock %}

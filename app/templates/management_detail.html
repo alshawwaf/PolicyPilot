@@ -34,7 +34,7 @@
 {% if not has_secret %}
 <div class="card"><p class="muted">No saved credential on this server, so policy can't be pulled. <a href="/management/{{ ms.id }}/edit">Add a password on Edit</a> (stored encrypted), then return here.</p></div>
 {% else %}
-<div class="card" id="mgmt-viewer" data-id="{{ ms.id }}" style="padding:14px 18px;">
+<div class="card" id="mgmt-viewer" data-id="{{ ms.id }}" data-host="{{ ms.host }}" style="padding:14px 18px;">
   <div class="row toolbar">
     <span class="viewer-eyebrow">Access layer</span>
     <span id="layer-picker" class="filterbar" style="margin:0;"><span class="muted">Loading layers…</span></span>
@@ -66,11 +66,6 @@
       <button type="button" class="btn secondary" id="ed-dryrun">Dry-run (no commit)</button>
       <button type="button" class="btn" id="ed-publish">Publish to SMS</button>
     </div>
-    <div id="ed-confirm" hidden class="err" style="margin-top:12px; padding:10px 12px;">
-      This writes to <b>live policy</b> on <code>{{ ms.host }}</code> and publishes — it can't be undone here.
-      <div style="margin-top:8px;"><button type="button" class="btn" id="ed-confirm-yes">Confirm publish</button>
-        <button type="button" class="copybtn" id="ed-confirm-no" style="margin-left:6px;">Cancel</button></div>
-    </div>
   </div>
 </div>
 {% endif %}
@@ -80,6 +75,7 @@
     var root = document.getElementById('mgmt-viewer');
     if (!root) return;
     var id = root.getAttribute('data-id');
+    var host = root.getAttribute('data-host') || 'the SMS';
     var picker = document.getElementById('layer-picker');
     var view = document.getElementById('rulebase');
     var currentRows = [], currentLayer = '';
@@ -165,7 +161,6 @@
     var elComments = document.getElementById('ed-comments');
     var elChanges = document.getElementById('ed-changes');
     var elResult = document.getElementById('ed-result');
-    var elConfirm = document.getElementById('ed-confirm');
 
     function ensureOption(sel, val) {            // keep the rule's current value selectable even if exotic
       if (!val) return;
@@ -183,7 +178,7 @@
       ensureOption(elTrack, rule.track || 'None');
       elName.value = rule.name || '';
       elComments.value = rule.comments || '';
-      elResult.innerHTML = ''; elConfirm.hidden = true;
+      elResult.innerHTML = '';
       renderChanges();
       em.hidden = false;
     }
@@ -228,13 +223,15 @@
         }
       }).catch(function () { elResult.innerHTML = '<div class="err">Request failed.</div>'; });
     }
-    document.getElementById('ed-dryrun').addEventListener('click', function () { elConfirm.hidden = true; apply(false); });
+    document.getElementById('ed-dryrun').addEventListener('click', function () { apply(false); });
+    // Publish is irreversible — confirm on top via the OS dialog (stacks above this edit modal).
     document.getElementById('ed-publish').addEventListener('click', function () {
       if (!Object.keys(computeChanges()).length) { elResult.innerHTML = '<span class="muted">Nothing changed.</span>'; return; }
-      elConfirm.hidden = false;
+      window.appConfirm('This writes to live policy on ' + host + ' and publishes — it can\'t be undone here.',
+        { title: 'Publish to SMS', okText: 'Confirm publish', danger: true }).then(function (ok) {
+        if (ok) apply(true);
+      });
     });
-    document.getElementById('ed-confirm-no').addEventListener('click', function () { elConfirm.hidden = true; });
-    document.getElementById('ed-confirm-yes').addEventListener('click', function () { elConfirm.hidden = true; apply(true); });
   })();
 </script>
 {% endblock %}

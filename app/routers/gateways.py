@@ -155,18 +155,29 @@ def gateways_fetch(gid: int, request: Request, password: str = Form(""),
     gw = _owned(db, gid, user)
     ensure_pinned(db, gw)  # trust-on-first-use: pin the gateway's cert before this fetch if needed
     pw = password or gateway_creds.get_password(db, gw)
+    ajax = request.headers.get("x-pp-ajax") == "1"   # in-window flow: return JSON instead of redirecting
+    err = None
+    count = 0
     if not gw.username:
-        _flash(request, f"Gateway “{gw.name}” has no username — set it on this gateway first.", "error")
+        err = f"Gateway “{gw.name}” has no username — set it on this gateway first."
     elif not pw:
-        _flash(request, "Enter the gateway password to fetch (no saved password on this gateway).", "error")
+        err = "Enter the gateway password to fetch (no saved password on this gateway)."
     else:
         data = fetch_dynamic_content(target="gateway", db=db, owner_id=user.id, host=gw.host,
                                      port=gw.port, user=gw.username, password=pw,
                                      cert_pem=gw.cert_pem or None, gateway_id=gw.id)
         if data.get("ok"):
-            _flash(request, f"Fetched {len(data.get('layers') or [])} dynamic layer(s) from “{gw.name}”.")
+            count = len(data.get("layers") or [])
         else:
-            _flash(request, data.get("error") or "Fetch failed.", "error")
+            err = data.get("error") or "Fetch failed."
+    if ajax:
+        if err:
+            return JSONResponse({"error": err}, status_code=400)
+        return JSONResponse({"ok": True, "count": count})
+    if err:
+        _flash(request, err, "error")
+    else:
+        _flash(request, f"Fetched {count} dynamic layer(s) from “{gw.name}”.")
     return RedirectResponse(f"/gateways/{gid}", status_code=303)
 
 
@@ -179,17 +190,24 @@ def gateways_import_layer(gid: int, request: Request, layer: str = Form(...),
     if user is None:
         return RedirectResponse("/login", status_code=303)
     gw = _owned(db, gid, user)
+    ajax = request.headers.get("x-pp-ajax") == "1"   # in-window flow: return JSON + a link, don't navigate away
     snap = db.scalar(select(GatewayLayerSnapshot).where(GatewayLayerSnapshot.gateway_id == gw.id))
     src = next((L for L in (snap.layers if snap and snap.layers else []) if (L.get("name") or "") == layer), None)
     if src is None:
-        _flash(request, f"Couldn't find layer “{layer}” in the last fetch — click Fetch now, then import.", "error")
+        msg = f"Couldn't find layer “{layer}” in the last fetch — click Fetch now, then import."
+        if ajax:
+            return JSONResponse({"error": msg}, status_code=400)
+        _flash(request, msg, "error")
         return RedirectResponse(f"/gateways/{gid}", status_code=303)
     content = {"operation": "replace", "objects": src.get("objects") or {}, "rulebase": src.get("rulebase") or []}
     from ..schemas.dynamic_layer import validate_layer_content
     try:
         validate_layer_content(content)
     except ValueError as exc:
-        _flash(request, f"Can't import “{layer}”: {exc}", "error")
+        msg = f"Can't import “{layer}”: {exc}"
+        if ajax:
+            return JSONResponse({"error": msg}, status_code=400)
+        _flash(request, msg, "error")
         return RedirectResponse(f"/gateways/{gid}", status_code=303)
     existing = next((L for L in db.scalars(select(DynamicLayer).where(DynamicLayer.owner_id == user.id)).all()
                      if (L.name or "").lower() == layer.lower()), None)
@@ -202,6 +220,8 @@ def gateways_import_layer(gid: int, request: Request, layer: str = Form(...),
                             owner_id=user.id, content=content))
         verb = "Imported"
     db.commit()
+    if ajax:
+        return JSONResponse({"ok": True, "verb": verb, "layer": layer})
     _flash(request, f"{verb} “{layer}” from “{gw.name}” — edit or push it from Dynamic Layers.")
     return RedirectResponse("/layers", status_code=303)
 

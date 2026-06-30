@@ -34,7 +34,7 @@
 {% if not has_secret %}
 <div class="card"><p class="muted">No saved credential on this server, so access automation can't run. <a href="/management/{{ ms.id }}/edit">Add a password on Edit</a> (stored encrypted), then return here.</p></div>
 {% else %}
-<div class="card" id="aa" data-id="{{ ms.id }}">
+<div class="card" id="aa" data-id="{{ ms.id }}" data-host="{{ ms.host }}">
   <div class="aa-cardhead">
     <div>
       <h2><span class="aa-step">1</span> Describe the access</h2>
@@ -126,11 +126,6 @@
     <button type="button" class="btn secondary" id="aa-validate" disabled>Dry-run apply (validate)</button>
     <button type="button" class="btn" id="aa-publish" disabled>Apply &amp; publish</button>
     <span class="aa-actions-hint">Preview first — apply unlocks once there’s a change to make.</span>
-  </div>
-  <div id="aa-confirm" hidden class="err" style="margin-top:12px; padding:10px 12px;">
-    This writes to <b>live policy</b> on <code>{{ ms.host }}</code> and publishes — it can't be undone here.
-    <div style="margin-top:8px;"><button type="button" class="btn" id="aa-confirm-yes">Confirm publish</button>
-      <button type="button" class="copybtn" id="aa-confirm-no" style="margin-left:6px;">Cancel</button></div>
   </div>
   <div id="aa-result" style="margin-top:16px;"></div>
 </div>
@@ -310,7 +305,7 @@ Content-Type: application/json
     var btnPreview = document.getElementById('aa-preview');
     var btnValidate = document.getElementById('aa-validate');
     var btnPublish = document.getElementById('aa-publish');
-    var confirmBox = document.getElementById('aa-confirm');
+    var host = root.getAttribute('data-host') || 'the SMS';
     var lastActionable = false;
 
     // Run output (preview / progress / results) pops in a floating OS window on top, not inline.
@@ -538,7 +533,6 @@ Content-Type: application/json
       lastActionable = on;
       btnValidate.disabled = !on;
       btnPublish.disabled = !on;
-      if (!on) confirmBox.hidden = true;
     }
     function call(path, mode, publish) {
       var b = body();
@@ -551,11 +545,16 @@ Content-Type: application/json
       }).then(function (r) { return r.json(); }).then(function (j) { render(j, mode); })
         .catch(function () { result.innerHTML = '<div class="err">Request failed.</div>'; });
     }
-    btnPreview.addEventListener('click', function () { confirmBox.hidden = true; call('preview', 'preview'); });
-    btnValidate.addEventListener('click', function () { confirmBox.hidden = true; call('apply', 'validate', false); });
-    btnPublish.addEventListener('click', function () { if (lastActionable) confirmBox.hidden = false; });
-    document.getElementById('aa-confirm-no').addEventListener('click', function () { confirmBox.hidden = true; });
-    document.getElementById('aa-confirm-yes').addEventListener('click', function () { confirmBox.hidden = true; call('apply', 'publish', true); });
+    btnPreview.addEventListener('click', function () { call('preview', 'preview'); });
+    btnValidate.addEventListener('click', function () { call('apply', 'validate', false); });
+    // Apply & publish is irreversible — confirm on top via the OS dialog (co-located with the result window).
+    btnPublish.addEventListener('click', function () {
+      if (!lastActionable) return;
+      window.appConfirm('This writes to live policy on ' + host + ' and publishes — it can\'t be undone here.',
+        { title: 'Apply & publish', okText: 'Confirm publish', danger: true }).then(function (ok) {
+        if (ok) call('apply', 'publish', true);
+      });
+    });
 
     // Delegated: "Take over & release" on a lock-conflict result (destructive — confirm, then re-preview).
     result.addEventListener('click', function (e) {

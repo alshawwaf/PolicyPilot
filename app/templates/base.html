@@ -495,6 +495,10 @@
     .modal-overlay { position:fixed; inset:0; background:var(--overlay); -webkit-backdrop-filter:blur(3px); backdrop-filter:blur(3px);
       display:flex; align-items:center; justify-content:center; z-index:1000; }
     .modal-overlay[hidden] { display:none; }
+    /* The shared appConfirm dialog must be the topmost surface in ANY frame: above PPWin floating windows
+       (z-9000) and result modals inside a tool window, and above the desktop dock (z-90000) + launchpad /
+       context menu (z-100000+) in the OS shell frame. So an irreversible-action confirm always blocks. */
+    #modal-overlay { z-index:1000000; }
     /* No flat border — the shadow defines the card and the gradient header keeps crisp edge-to-edge corners;
        a faint inner ring (only visible on the body edges, hidden under the opaque header) defines the dark edge. */
     .modal { background:var(--surface); border:none; border-radius:16px; padding:26px; max-width:440px;

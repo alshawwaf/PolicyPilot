@@ -442,10 +442,20 @@
     return items;
   }
   function saveDefault() {
-    try {
-      fetch('/desktop/default', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(LAYOUT) });
-      if (window.appToast) window.appToast('Saved as the default desktop for everyone.');
-    } catch (e) {}
+    // Consequential, all-users write — confirm first, then report the REAL result of the async write.
+    var ask = window.appConfirm
+      ? window.appConfirm('Make this layout the default desktop for ALL users? It replaces the current global default.',
+          { title: 'Set global default', okText: 'Set default', danger: true })
+      : Promise.resolve(true);
+    ask.then(function (ok) {
+      if (!ok) return;
+      fetch('/desktop/default', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(LAYOUT) })
+        .then(function (r) {
+          if (window.appToast) window.appToast(r.ok ? 'Saved as the default desktop for everyone.'
+            : 'Could not save the default — server error.', r.ok ? 'success' : 'error');
+        })
+        .catch(function () { if (window.appToast) window.appToast('Could not save the default — request failed.', 'error'); });
+    });
   }
   dock.addEventListener('contextmenu', function (e) {
     var d = e.target.closest('.os-dik[data-key]'); if (!d) return;

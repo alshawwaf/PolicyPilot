@@ -313,6 +313,25 @@ Content-Type: application/json
     var confirmBox = document.getElementById('aa-confirm');
     var lastActionable = false;
 
+    // Run output (preview / progress / results) pops in a floating OS window on top, not inline.
+    // The live #aa-result element (with its delegated handlers) is moved into the window body, so all
+    // existing `result.innerHTML = …` render paths keep working untouched; a MutationObserver just
+    // shows/hides the window as content comes and goes.
+    (function () {
+      if (!window.PPWin) return;                       // graceful: stays inline if the helper is unavailable
+      var win = window.PPWin.create({ title: 'Access decision', onClose: function () { result.innerHTML = ''; } });
+      result.style.marginTop = '0';
+      win.body.appendChild(result);
+      function present() {
+        if (result.textContent.trim() || result.children.length) {
+          var only = result.children.length === 1 ? result.children[0] : null;
+          win.setTitle(only && only.tagName === 'P' && only.classList.contains('muted') ? 'Working…' : 'Access decision');
+          win.show();
+        } else { win.hide(); }
+      }
+      new MutationObserver(present).observe(result, { childList: true });
+    })();
+
     function esc(s) { var d = document.createElement('div'); d.textContent = (s == null ? '' : s); return d.innerHTML; }
     // esc() escapes < > & for TEXT; attribute values also need the quotes escaped (a CP app name can
     // contain "), else it breaks out of value="..." / data-app="..." -> XSS.

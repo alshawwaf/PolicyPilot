@@ -30,6 +30,86 @@
       });
     })();
   </script>
+  <script>
+    /* PPWin — a floating, draggable OS-style window for function output (preview/progress/results), so a
+       tool behaves like a real app rather than dumping output inline. Defined here in <head> so it exists
+       before any page's content script runs. create({title,onClose}) builds an empty window (appended to
+       <body> when first shown) and returns {root, body, show, hide, setTitle}: fill/observe `body`, then
+       call show()/hide(). One instance per call-site. */
+    (function () {
+      if (window.PPWin) return;
+      function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+      window.PPWin = {
+        create: function (opts) {
+          opts = opts || {};
+          var root = document.createElement('div');
+          root.className = 'pp-fwin'; root.hidden = true;
+          root.innerHTML =
+            '<div class="pp-fwin-bar"><span class="pp-lights">' +
+            '<i class="l-close" title="Close" role="button" aria-label="Close"></i>' +
+            '<i class="l-min" title="Collapse" role="button" aria-label="Collapse"></i>' +
+            '<i class="l-zoom" title="Zoom" role="button" aria-label="Zoom"></i></span>' +
+            '<span class="pp-fwin-title"></span><span class="pp-fwin-spacer"></span></div>' +
+            '<div class="pp-fwin-body"></div><span class="pp-fwin-grip" aria-hidden="true"></span>';
+          var bar = root.querySelector('.pp-fwin-bar'),
+              body = root.querySelector('.pp-fwin-body'),
+              titleEl = root.querySelector('.pp-fwin-title'),
+              grip = root.querySelector('.pp-fwin-grip'),
+              placed = false, mounted = false;
+          titleEl.textContent = opts.title || '';
+          function center() {
+            var w = root.offsetWidth, h = root.offsetHeight;
+            root.style.left = clamp((window.innerWidth - w) / 2, 8, Math.max(8, window.innerWidth - w - 8)) + 'px';
+            root.style.top = clamp((window.innerHeight - h) / 2, 12, Math.max(12, window.innerHeight - h - 12)) + 'px';
+          }
+          var api = {
+            root: root, body: body,
+            setTitle: function (t) { titleEl.textContent = t || ''; },
+            show: function () {
+              var wasHidden = root.hidden;
+              if (!mounted) { document.body.appendChild(root); mounted = true; }
+              root.hidden = false;
+              if (!placed) { center(); placed = true; }
+              if (wasHidden) { root.classList.remove('pp-anim'); void root.offsetWidth; root.classList.add('pp-anim'); }
+            },
+            hide: function () { root.hidden = true; }
+          };
+          root.querySelector('.l-close').addEventListener('click', function () { api.hide(); if (opts.onClose) opts.onClose(); });
+          root.querySelector('.l-min').addEventListener('click', function () { root.classList.toggle('pp-collapsed'); });
+          root.querySelector('.l-zoom').addEventListener('click', function () { root.classList.toggle('pp-zoom'); });
+          bar.addEventListener('mousedown', function (e) {
+            if (e.button !== 0 || (e.target.closest && e.target.closest('.pp-lights')) || root.classList.contains('pp-zoom')) return;
+            var sx = e.clientX, sy = e.clientY, r = root.getBoundingClientRect(), ox = r.left, oy = r.top;
+            function mv(ev) {
+              var w = root.offsetWidth, h = root.offsetHeight;
+              root.style.left = clamp(ox + ev.clientX - sx, 6, Math.max(6, window.innerWidth - w - 6)) + 'px';
+              root.style.top = clamp(oy + ev.clientY - sy, 6, Math.max(6, window.innerHeight - h - 6)) + 'px';
+            }
+            function up() { document.removeEventListener('mousemove', mv); document.removeEventListener('mouseup', up); }
+            document.addEventListener('mousemove', mv); document.addEventListener('mouseup', up); e.preventDefault();
+          });
+          grip.addEventListener('mousedown', function (e) {
+            if (e.button !== 0) return;
+            var sx = e.clientX, sy = e.clientY, sw = root.offsetWidth, sh = root.offsetHeight;
+            root.style.maxHeight = 'none';
+            function mv(ev) {
+              root.style.width = clamp(sw + ev.clientX - sx, 320, window.innerWidth - 12) + 'px';
+              root.style.height = clamp(sh + ev.clientY - sy, 180, window.innerHeight - 12) + 'px';
+            }
+            function up() { document.removeEventListener('mousemove', mv); document.removeEventListener('mouseup', up); }
+            document.addEventListener('mousemove', mv); document.addEventListener('mouseup', up); e.preventDefault(); e.stopPropagation();
+          });
+          window.addEventListener('resize', function () {
+            if (root.hidden || !placed || root.classList.contains('pp-zoom')) return;
+            var w = root.offsetWidth, h = root.offsetHeight;
+            root.style.left = clamp(parseFloat(root.style.left) || 0, 6, Math.max(6, window.innerWidth - w - 6)) + 'px';
+            root.style.top = clamp(parseFloat(root.style.top) || 0, 6, Math.max(6, window.innerHeight - h - 6)) + 'px';
+          });
+          return api;
+        }
+      };
+    })();
+  </script>
   <script src="https://unpkg.com/htmx.org@2.0.3" crossorigin="anonymous"></script>
   <style>
     /* ============================ Theme tokens ============================ */
@@ -690,6 +770,32 @@
     html.embedded header { display:none !important; }
     html.embedded main { max-width:none; margin:16px auto 30px; }
     html.embedded .page-head { margin-top:2px; }
+
+    /* — Floating OS window (PPWin): function output (preview / progress / results) pops as a draggable
+         window on top rather than rendering inline, so a tool behaves like a real app. — */
+    .pp-fwin { position:fixed; z-index:9000; display:flex; flex-direction:column; overflow:hidden;
+      width:min(680px, calc(100vw - 28px)); max-height:min(80vh, 720px);
+      background:var(--card); border:1px solid var(--line); border-radius:14px;
+      box-shadow:0 28px 70px -18px rgba(0,0,0,.7), 0 0 0 1px var(--accent-soft) inset; }
+    .pp-fwin[hidden] { display:none; }
+    .pp-fwin.pp-anim { animation:pp-fwin-in .16s cubic-bezier(.4,0,.2,1); }
+    @keyframes pp-fwin-in { from { opacity:0; transform:scale(.97); } to { opacity:1; transform:none; } }
+    @media (prefers-reduced-motion: reduce) { .pp-fwin.pp-anim { animation:none; } }
+    .pp-fwin-bar { display:flex; align-items:center; gap:10px; padding:9px 12px; cursor:grab; user-select:none;
+      background:var(--surface-2); border-bottom:1px solid var(--line); }
+    .pp-fwin-bar:active { cursor:grabbing; }
+    .pp-lights { display:flex; gap:7px; flex:0 0 auto; }
+    .pp-lights i { width:12px; height:12px; border-radius:50%; cursor:pointer; }
+    .pp-lights .l-close { background:#ff5f57; } .pp-lights .l-min { background:#febc2e; } .pp-lights .l-zoom { background:#28c840; }
+    .pp-lights i:hover { filter:brightness(.82); }
+    .pp-fwin-title { flex:1; min-width:0; text-align:center; font-size:12.5px; font-weight:700; color:var(--text);
+      white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .pp-fwin-spacer { flex:0 0 47px; }   /* balances the lights so the title stays centred */
+    .pp-fwin-body { flex:1; min-height:0; overflow:auto; padding:14px 16px; }
+    .pp-fwin.pp-collapsed .pp-fwin-body, .pp-fwin.pp-collapsed .pp-fwin-grip { display:none; }
+    .pp-fwin.pp-zoom { left:12px !important; top:12px !important; width:calc(100vw - 24px); max-height:calc(100vh - 24px); }
+    .pp-fwin-grip { position:absolute; right:2px; bottom:2px; width:16px; height:16px; cursor:nwse-resize; opacity:.55;
+      background:linear-gradient(135deg,transparent 0 55%,var(--line) 55% 62%,transparent 62% 70%,var(--line) 70% 78%,transparent 78%); }
   </style>
 </head>
 <body class="{% block body_class %}{% endblock %}">

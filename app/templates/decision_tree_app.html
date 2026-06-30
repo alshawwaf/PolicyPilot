@@ -10,6 +10,7 @@
   /* ---- "Trace a decision" walkthrough: pick an outcome, step the exact path the engine walks ---- */
   .dw-h { font-size:13px; font-weight:800; letter-spacing:.4px; text-transform:uppercase; color:var(--faint); margin:0 0 8px; }
   .dw-chips { display:flex; gap:8px; flex-wrap:wrap; }
+  .dw-group { flex-basis:100%; font-size:10px; font-weight:800; letter-spacing:.07em; text-transform:uppercase; color:var(--faint); margin:8px 0 -2px; }
   .dw-chip { display:inline-flex; align-items:center; gap:8px; padding:8px 14px; border-radius:999px; cursor:pointer;
     border:1px solid var(--line-strong); background:var(--surface-2); color:var(--text); font-size:12.5px; font-weight:600; transition:all .14s; }
   .dw-chip:hover { transform:translateY(-1px); border-color:var(--c); }
@@ -510,7 +511,8 @@
     function setActive(ids, currentId) {
       activeNodes = {}; activePairs = {}; ids = ids || [];
       ids.forEach(function (id) { activeNodes[id] = 1; });
-      for (var i = 1; i < ids.length; i++) activePairs[ids[i - 1] + '>' + ids[i]] = 1;
+      // light the REAL edges among the active nodes (works for a linear path AND a branching subtree "dive")
+      GRAPH.edges.forEach(function (e) { if (activeNodes[e.src] && activeNodes[e.dst]) activePairs[e.src + '>' + e.dst] = 1; });
       ids.forEach(function (id) { visible.add(id); });   // reveal a collapsed branch if the path runs through it
       activeCurrent = (currentId != null) ? currentId : (ids.length ? ids[ids.length - 1] : null);
       render(false);
@@ -582,25 +584,48 @@
     // Explicit traced paths (not BFS shortest) so each scenario walks the INTENDED nodes — together the six
     // cover every core node, so no block is left greyed-out in every mode. A path falls back to BFS if a node
     // is missing in this graph; scenarios whose path can't be realised are dropped.
+    // walk a detail (L1) SUBTREE from a root, in DFS order, tracking each node's real parent — so a single
+    // "dive" scenario lights an entire branching deep-dive (e.g. how a cell is matched) without one chip per leaf.
+    function dfsSubtree(root) {
+      var order = [], parent = {}, seen = {};
+      (function rec(id) {
+        if (seen[id]) return; seen[id] = 1; order.push(id);
+        (adj[id] || []).forEach(function (e) { var c = byId[e.dst]; if (c && c.level !== 0 && !seen[e.dst]) { parent[e.dst] = id; rec(e.dst); } });
+      })(root);
+      return { order: order, parent: parent };
+    }
+
     var SCN = [
       { key: 'noop',   label: 'Already allowed',            path: ['req','resolve','action','perm','noop'],            c: 'var(--ok)',     cs: 'var(--ok-bg)' },
       { key: 'widen',  label: 'Extend a rule',              path: ['req','resolve','action','perm','deny','widen','doWiden'], c: 'var(--info)', cs: 'var(--info-bg)' },
       { key: 'create', label: 'New rule (deny in the way)', path: ['req','resolve','action','perm','deny','create'],   c: 'var(--warn)',   cs: 'var(--warn-bg)' },
       { key: 'block',  label: 'Blocked / diverted',         path: ['req','resolve','action','verdict'],                c: 'var(--warn)',   cs: 'var(--warn-bg)' },
       { key: 'note',   label: 'Can’t fully resolve',        path: ['req','resolve','noteO'],                           c: 'var(--info)',   cs: 'var(--info-bg)' },
-      { key: 'fix',    label: 'Broken request',             path: ['req','resolve','review'],                          c: 'var(--danger)', cs: 'var(--danger-bg)' }
-    ].map(function (s) {                                         // validate each path against this graph; else fall back to BFS
+      { key: 'fix',    label: 'Broken request',             path: ['req','resolve','review'],                          c: 'var(--danger)', cs: 'var(--danger-bg)' },
+      // deep dives — trace the +N branches so EVERY node is exercised by some scenario
+      { key: 'dmatch', label: 'How a cell is matched',      dive: 'kindq',                                             c: 'var(--accent)', cs: 'var(--accent-soft)', group: 1 },
+      { key: 'dinline',label: 'Inline-layer recursion',     path: ['req','resolve','inline','recurse'],                c: '#6cb6ff',       cs: 'rgba(108,182,255,.16)', group: 1 },
+      { key: 'dopts',  label: 'Ignore-conditions mode',     path: ['req','resolve','action','perm','deny','opts'],     c: '#8294f5',       cs: 'rgba(130,148,245,.16)', group: 1 },
+      { key: 'dapply', label: 'On apply: build objects',    dive: 'apply',                                             c: 'var(--warn)',   cs: 'var(--warn-bg)', group: 1 }
+    ].map(function (s) {                                         // validate against this graph; dive needs its root, path falls back to BFS
+      if (s.dive) { if (!byId[s.dive]) s.dive = null; return s; }
       var ok = s.path && s.path.every(function (id) { return byId[id]; })
         && s.path.every(function (id, i) { return i === 0 || (adj[s.path[i - 1]] || []).some(function (e) { return e.dst === id; }); });
       if (!ok) { var bfs = pathTo(s.path ? s.path[s.path.length - 1] : null); s.path = bfs || null; }
       return s;
-    }).filter(function (s) { return s.path && s.path.length; });
+    }).filter(function (s) { return (s.path && s.path.length) || s.dive; });
 
     var stage = document.getElementById('dw-stage'), stepsEl = document.getElementById('dw-steps'),
         prog = document.getElementById('dw-progress'), canvas = document.getElementById('aa-flow-canvas');
-    var curPath = null, step = 0, playT = null;
+    var curPath = null, step = 0, playT = null, parentOf = {};
 
+    var groupShown = false;
     SCN.forEach(function (s) {
+      if (s.group && !groupShown) {   // a full-width label drops the deep-dive chips onto their own row
+        groupShown = true;
+        var g = document.createElement('span'); g.className = 'dw-group'; g.textContent = 'Deep dives';
+        chips.appendChild(g);
+      }
       var b = document.createElement('button'); b.type = 'button'; b.className = 'dw-chip';
       b.setAttribute('data-k', s.key); b.style.cssText = '--c:' + s.c + ';--c-soft:' + s.cs + ';';
       b.innerHTML = '<span class="dot"></span>' + esc(s.label);
@@ -615,7 +640,7 @@
     function renderSteps() {
       stepsEl.innerHTML = '';
       curPath.forEach(function (id, i) {
-        var n = byId[id] || {}, edge = i > 0 ? edgeLabel(curPath[i - 1], id) : '', isLast = (i === curPath.length - 1);
+        var n = byId[id] || {}, pid = parentOf[id], edge = (pid != null) ? edgeLabel(pid, id) : '', isLast = (i === curPath.length - 1);
         var d = document.createElement('div');
         d.className = 'dw-step' + (isLast ? ' dw-outcome' : ''); d.style.cssText = '--sc:' + kc(id) + ';';
         d.innerHTML = '<div class="dw-rail"><span class="dw-dot">' + (i + 1) + '</span><span class="dw-line"></span></div>' +
@@ -637,7 +662,9 @@
     function selectScenario(s) {
       stopPlay();
       var cs = chips.children; for (var i = 0; i < cs.length; i++) cs[i].classList.toggle('active', cs[i].getAttribute('data-k') === s.key);
-      curPath = (s.path ? s.path.slice() : (pathTo(s.target) || [])); step = 0; stage.hidden = false; renderSteps();
+      if (s.dive) { var t = dfsSubtree(s.dive); curPath = t.order; parentOf = t.parent; }   // light a whole deep-dive branch
+      else { curPath = (s.path ? s.path.slice() : (pathTo(s.target) || [])); parentOf = {}; for (var j = 1; j < curPath.length; j++) parentOf[curPath[j]] = curPath[j - 1]; }
+      step = 0; stage.hidden = false; renderSteps();
       // (no whole-route framing here — showUpTo centres + magnifies the current step instead)
     }
     document.getElementById('dw-next').addEventListener('click', function () { if (curPath && step < curPath.length - 1) { step++; showUpTo(); } });

@@ -59,17 +59,11 @@
   #swagger-ui .renderedMarkdown p, #swagger-ui .markdown p { color:var(--text-2); }
   #swagger-ui .info a, #swagger-ui a.nostyle, #swagger-ui .info a:hover { color:var(--accent); }
   /* server / authorize bar */
-  /* Only the Authorize button remains (servers hidden below), so shrink the container to wrap just the
-     button and float it right — otherwise Swagger renders a tall, full-width, mostly-empty bar. */
-  #swagger-ui .scheme-container { background:var(--surface-2); box-shadow:none;
-    border:1px solid var(--line); border-radius:10px; margin:0 0 16px auto; padding:8px 12px;
-    width:fit-content; display:flex; }
-  #swagger-ui .scheme-container .schemes.wrapper { width:auto; padding:0; margin:0; }
-  #swagger-ui .scheme-container .auth-wrapper { margin:0; }
-  #swagger-ui .scheme-container .schemes-title, #swagger-ui label { color:var(--text-2); }
-  /* The portal's own TARGET SERVER picker (above) already sets the base URL — hide Swagger's redundant
-     server line so the target isn't shown twice. Authorize stays. */
-  #swagger-ui .scheme-container .servers, #swagger-ui .scheme-container .servers-title { display:none; }
+  /* Authorize now lives in the portal toolbar (#ax-authorize), which clicks Swagger's real button — so
+     hide Swagger's own scheme-container band entirely (it parked the button in a tall, mostly-empty bar).
+     It stays in the DOM (display:none, not removed) so the real React-bound button still fires on click. */
+  #swagger-ui .scheme-container { display:none; }
+  #swagger-ui label { color:var(--text-2); }
   /* command-group headers */
   #swagger-ui .opblock-tag { color:var(--text); border-bottom:1px solid var(--line); }
   #swagger-ui .opblock-tag:hover { background:var(--hover); }
@@ -81,6 +75,12 @@
   #swagger-ui .opblock .opblock-summary { border-color:var(--line); }
   #swagger-ui .opblock .opblock-summary-method { background:var(--accent); color:var(--on-accent);
     text-shadow:none; }
+  /* Authorize lifted into the toolbar — green/ok identity (matches Swagger's authorize), beats the global
+     button gradient via the .ax-bar descendant specificity. */
+  .ax-bar .ax-authorize { display:inline-flex; align-items:center; gap:6px; background:var(--ok-bg);
+    color:var(--ok); border:1px solid var(--ok-line); text-shadow:none; box-shadow:none; }
+  .ax-bar .ax-authorize:hover { filter:brightness(1.06); border-color:var(--ok); }
+  .ax-bar .ax-authorize svg { stroke:var(--ok); }
   #swagger-ui .opblock .opblock-summary-path,
   #swagger-ui .opblock .opblock-summary-path__deprecated { color:var(--text); }
   #swagger-ui .opblock .opblock-summary-description { color:var(--text-2); }
@@ -128,11 +128,28 @@
   #swagger-ui .model, #swagger-ui .model-title, #swagger-ui .model .property,
   #swagger-ui .prop-format { color:var(--text-2); }
   #swagger-ui .model-toggle:after { background:none; }
-  /* the Authorize modal */
-  #swagger-ui .dialog-ng .modal-ux { background:var(--surface); border:1px solid var(--line); }
-  #swagger-ui .dialog-ng .modal-ux-header { border-bottom:1px solid var(--line); }
-  #swagger-ui .dialog-ng .modal-ux-header h3,
-  #swagger-ui .dialog-ng .modal-ux-content h4, #swagger-ui .dialog-ng p { color:var(--text); }
+  /* the Authorize modal — Swagger UI 5.x wraps it in .dialog-ux (NOT .dialog-ng); the old selector never
+     matched, so the modal rendered with Swagger's default white theme. Theme the whole dialog here. */
+  #swagger-ui .dialog-ux .modal-ux { background:var(--surface); border:1px solid var(--line);
+    box-shadow:var(--shadow-lg); border-radius:12px; }
+  #swagger-ui .dialog-ux .modal-ux-header { border-bottom:1px solid var(--line); }
+  #swagger-ui .dialog-ux .modal-ux-header h3 { color:var(--text); }
+  #swagger-ui .dialog-ux .close-modal { background:transparent; }
+  #swagger-ui .dialog-ux .close-modal svg { fill:var(--muted); }
+  #swagger-ui .dialog-ux .modal-ux-content h4,
+  #swagger-ui .dialog-ux .modal-ux-content .scopes h2 { color:var(--text); }
+  #swagger-ui .dialog-ux .modal-ux-content p,
+  #swagger-ui .dialog-ux .modal-ux-content label,
+  #swagger-ui .dialog-ux .modal-ux-content .scope-def,
+  #swagger-ui .dialog-ux .modal-ux-content table td { color:var(--text-2); }
+  #swagger-ui .dialog-ux .modal-ux-content code { background:var(--chip-bg); color:var(--text); }
+  #swagger-ui .dialog-ux .auth-container { border-bottom:1px solid var(--line); }
+  #swagger-ui .dialog-ux .modal-ux-content input[type=text],
+  #swagger-ui .dialog-ux .modal-ux-content input[type=password] { background:var(--input-bg);
+    color:var(--text); border:1px solid var(--line); }
+  #swagger-ui .dialog-ux .auth-btn-wrapper .btn.authorize { color:var(--ok);
+    border-color:var(--ok-line); background:var(--ok-bg); }
+  #swagger-ui .dialog-ux .auth-btn-wrapper .btn.authorize svg { fill:var(--ok); }
   #swagger-ui .backdrop-ux { background:var(--overlay); }
   /* responses: example/schema code blocks, media-type select, sub-tabs */
   #swagger-ui .responses-inner { background:transparent; }
@@ -210,6 +227,10 @@
   <button id="ax-load" class="btn">Load</button>
   <button id="ax-export" class="btn secondary" type="button"
           title="Download an OpenAPI 3.0 file — import it into Postman or Bruno">⤓ Export for Postman / Bruno</button>
+  <button id="ax-authorize" class="btn ax-authorize" type="button"
+          title="Authorize — set the session id (sid) used by Try it out (auto-captured after login)">
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"
+         stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>Authorize</button>
   <label style="flex-direction:row; align-items:center; gap:7px; text-transform:none; letter-spacing:0;
                 font-size:12.5px; color:var(--text-2); cursor:pointer;">
     <input type="checkbox" id="ax-proxy" checked> Run calls through the portal <span class="muted">(avoids CORS)</span>
@@ -332,6 +353,16 @@
     var t = targetUrl();
     if (t) p.set('server_url', t);
     window.location = '/api-explorer/openapi.json?' + p.toString();   // Content-Disposition → file download
+  });
+  // Toolbar Authorize: drive Swagger's own (hidden) button so the real React-bound modal opens. Querying
+  // at click time always hits the current button (load() re-renders #swagger-ui). .click() fires even
+  // though the scheme-container is display:none — it still bubbles to Swagger's delegated React handler.
+  document.getElementById('ax-authorize').addEventListener('click', function () {
+    var real = document.querySelector('#swagger-ui .scheme-container .authorize') ||
+               document.querySelector('#swagger-ui .btn.authorize');
+    if (real) { real.click(); return; }
+    statusEl.className = '';
+    statusEl.textContent = 'Load an API first, then Authorize.';
   });
   load();
 })();

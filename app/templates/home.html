@@ -148,16 +148,6 @@
     opacity:.82; transition:opacity .12s, background .12s, transform .12s; }
   .os-lp-more:hover { background:rgba(0,0,0,.55); opacity:1; transform:scale(1.08); }
   .os-lp-more svg { width:15px; height:15px; }
-  /* Hover ✎ — a discoverable rename affordance on dock + desktop icons (the right-click menu still works). */
-  .os-deskicon .os-tile { position:relative; }
-  .os-edit { position:absolute; top:-5px; right:-5px; width:19px; height:19px; border-radius:50%; padding:0;
-    display:flex; align-items:center; justify-content:center; border:0; cursor:pointer; color:#fff;
-    background:rgba(0,0,0,.5); backdrop-filter:blur(4px); -webkit-backdrop-filter:blur(4px);
-    opacity:0; transform:scale(.8); transition:opacity .12s, transform .12s, background .12s; z-index:4; }
-  .os-edit svg { width:12px; height:12px; }
-  .os-edit:hover { background:rgba(0,0,0,.72); }
-  .os-dik:hover .os-edit, .os-deskicon:hover .os-edit { opacity:1; transform:scale(1); }
-  @media (hover: none) { .os-edit { display:none; } }   /* touch: use the ⋯ menu / long-press instead */
   /* checkable rows in the shared context menu (used by the launchpad ⋯ menu) */
   .os-ctx .os-ck { width:16px; flex:none; display:inline-flex; align-items:center; }
   .os-ctx .os-ck svg { width:16px; height:16px; color:var(--accent); }
@@ -437,11 +427,9 @@
       var app = CATALOG[key]; if (!app) return;
       var d = document.createElement('button'); d.type = 'button'; d.className = 'os-dik'; d.dataset.key = key;
       d.style.background = app.grad;
-      d.innerHTML = svg(app.ic) + '<span class="os-tip">' + esc(labelOf(key)) + '</span><span class="os-run"></span>' +
-        '<span class="os-edit" title="Rename app" aria-hidden="true">' + svg(I.edit) + '</span>';
+      d.innerHTML = svg(app.ic) + '<span class="os-tip">' + esc(labelOf(key)) + '</span><span class="os-run"></span>';
       if (wins[key] && wins[key].style.display !== 'none') d.classList.add('running');
       d.addEventListener('click', function () { openApp(key); });
-      d.querySelector('.os-edit').addEventListener('click', function (e) { e.stopPropagation(); renameApp(key); });
       dock.appendChild(d);
     });
   }
@@ -496,12 +484,7 @@
       var app = CATALOG[it.key]; if (!app) return;
       var el = document.createElement('div'); el.className = 'os-deskicon'; el.dataset.key = it.key;
       el.style.left = (it.x || 0) + 'px'; el.style.top = (it.y || 0) + 'px';
-      el.innerHTML = '<span class="os-tile" style="background:' + app.grad + '">' + svg(app.ic) +
-        '<span class="os-edit" title="Rename app" aria-hidden="true">' + svg(I.edit) + '</span></span>' +
-        '<span class="os-lbl">' + esc(labelOf(it.key)) + '</span>';
-      var ed = el.querySelector('.os-edit');                 // hover ✎ — rename without dragging/opening
-      ed.addEventListener('mousedown', function (e) { e.stopPropagation(); });   // don't start a drag/open
-      ed.addEventListener('click', function (e) { e.stopPropagation(); renameApp(it.key); });
+      el.innerHTML = '<span class="os-tile" style="background:' + app.grad + '">' + svg(app.ic) + '</span><span class="os-lbl">' + esc(labelOf(it.key)) + '</span>';
       var moved = false, sx, sy;
       el.addEventListener('mousedown', function (e) {
         if (e.button !== 0) return;        // right/middle click -> let the context menu handle it (don't open)

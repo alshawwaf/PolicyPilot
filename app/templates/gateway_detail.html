@@ -81,8 +81,12 @@
     function run(form, opts) {
       show('<p class="muted">' + SPIN + opts.working + '</p>', opts.title);
       fetch(form.action, { method: 'POST', headers: { 'X-PP-Ajax': '1' }, body: new FormData(form) })
-        .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+        .then(function (r) {
+          return r.json().then(function (j) { return { ok: r.ok, status: r.status, j: j }; },
+                               function () { return { ok: r.ok, status: r.status, j: {} }; });
+        })
         .then(function (res) {
+          if (res.status === 401) { location.reload(); return; }   // session expired → reload bounces to login
           if (!res.ok || res.j.error) { show('<div class="err">' + esc(res.j.error || 'Request failed.') + '</div>', opts.title); return; }
           opts.done(res.j);
         })

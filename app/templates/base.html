@@ -46,9 +46,9 @@
           root.className = 'pp-fwin'; root.hidden = true;
           root.innerHTML =
             '<div class="pp-fwin-bar"><span class="pp-lights">' +
-            '<i class="l-close" title="Close" role="button" aria-label="Close"></i>' +
-            '<i class="l-min" title="Collapse" role="button" aria-label="Collapse"></i>' +
-            '<i class="l-zoom" title="Zoom" role="button" aria-label="Zoom"></i></span>' +
+            '<button type="button" class="l-close" title="Close" aria-label="Close"></button>' +
+            '<button type="button" class="l-min" title="Collapse" aria-label="Collapse"></button>' +
+            '<button type="button" class="l-zoom" title="Zoom" aria-label="Zoom"></button></span>' +
             '<span class="pp-fwin-title"></span><span class="pp-fwin-spacer"></span></div>' +
             '<div class="pp-fwin-body"></div><span class="pp-fwin-grip" aria-hidden="true"></span>';
           var bar = root.querySelector('.pp-fwin-bar'),
@@ -105,6 +105,13 @@
             var w = root.offsetWidth, h = root.offsetHeight;
             root.style.left = clamp(parseFloat(root.style.left) || 0, 6, Math.max(6, window.innerWidth - w - 6)) + 'px';
             root.style.top = clamp(parseFloat(root.style.top) || 0, 6, Math.max(6, window.innerHeight - h - 6)) + 'px';
+          });
+          // Escape closes the window — but only when it's the topmost surface (skip if a confirm / modal
+          // overlay is open on top, so Escape cancels that first). Mirrors macOS ⌘W-ish dismissal.
+          document.addEventListener('keydown', function (e) {
+            if (e.key !== 'Escape' || root.hidden) return;
+            if (document.querySelector('.modal-overlay:not([hidden])')) return;
+            api.hide(); if (opts.onClose) opts.onClose();
           });
           return api;
         }
@@ -790,9 +797,10 @@
       background:var(--surface-2); border-bottom:1px solid var(--line); }
     .pp-fwin-bar:active { cursor:grabbing; }
     .pp-lights { display:flex; gap:7px; flex:0 0 auto; }
-    .pp-lights i { width:12px; height:12px; border-radius:50%; cursor:pointer; }
+    .pp-lights button { width:12px; height:12px; padding:0; border:0; border-radius:50%; cursor:pointer; -webkit-appearance:none; appearance:none; }
     .pp-lights .l-close { background:#ff5f57; } .pp-lights .l-min { background:#febc2e; } .pp-lights .l-zoom { background:#28c840; }
-    .pp-lights i:hover { filter:brightness(.82); }
+    .pp-lights button:hover { filter:brightness(.82); }
+    .pp-lights button:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
     .pp-fwin-title { flex:1; min-width:0; text-align:center; font-size:12.5px; font-weight:700; color:var(--text);
       white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
     .pp-fwin-spacer { flex:0 0 47px; }   /* balances the lights so the title stays centred */

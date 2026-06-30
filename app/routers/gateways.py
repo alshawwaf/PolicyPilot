@@ -149,13 +149,15 @@ def gateways_detail(gid: int, request: Request, db: Session = Depends(get_db)):
 @router.post("/gateways/{gid}/fetch")
 def gateways_fetch(gid: int, request: Request, password: str = Form(""),
                    db: Session = Depends(get_db)):
+    ajax = request.headers.get("x-pp-ajax") == "1"   # in-window flow: return JSON instead of redirecting
     user = get_user_or_none(request, db)
     if user is None:
+        if ajax:
+            return JSONResponse({"error": "Session expired — reload the page."}, status_code=401)
         return RedirectResponse("/login", status_code=303)
     gw = _owned(db, gid, user)
     ensure_pinned(db, gw)  # trust-on-first-use: pin the gateway's cert before this fetch if needed
     pw = password or gateway_creds.get_password(db, gw)
-    ajax = request.headers.get("x-pp-ajax") == "1"   # in-window flow: return JSON instead of redirecting
     err = None
     count = 0
     if not gw.username:
@@ -186,11 +188,13 @@ def gateways_import_layer(gid: int, request: Request, layer: str = Form(...),
                           db: Session = Depends(get_db)):
     """Import a layer from this gateway's last fetch into a portal Dynamic Layer (create or overwrite by name),
     so it shows up under Dynamic Layers where it can be edited and pushed back. Writes the portal only."""
+    ajax = request.headers.get("x-pp-ajax") == "1"   # in-window flow: return JSON + a link, don't navigate away
     user = get_user_or_none(request, db)
     if user is None:
+        if ajax:
+            return JSONResponse({"error": "Session expired — reload the page."}, status_code=401)
         return RedirectResponse("/login", status_code=303)
     gw = _owned(db, gid, user)
-    ajax = request.headers.get("x-pp-ajax") == "1"   # in-window flow: return JSON + a link, don't navigate away
     snap = db.scalar(select(GatewayLayerSnapshot).where(GatewayLayerSnapshot.gateway_id == gw.id))
     src = next((L for L in (snap.layers if snap and snap.layers else []) if (L.get("name") or "") == layer), None)
     if src is None:

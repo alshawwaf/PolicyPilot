@@ -46,3 +46,40 @@ def test_import_unknown_layer_is_a_noop(monkeypatch):
     r = c.post(f"/gateways/{gw.id}/import-layer", data={"layer": "nope"}, follow_redirects=False)
     assert r.status_code == 303 and r.headers["location"] == f"/gateways/{gw.id}"   # back to the gateway
     assert db.scalars(select(DynamicLayer)).all() == []                              # nothing created
+
+
+# --- the in-window (X-PP-Ajax) JSON branches the gateway page's PPWin flow depends on -----------------
+
+def test_import_layer_ajax_returns_json(monkeypatch):
+    c, db, gw, u = _client(monkeypatch)
+    r = c.post(f"/gateways/{gw.id}/import-layer", data={"layer": "dynamic_layer"}, headers={"X-PP-Ajax": "1"})
+    assert r.status_code == 200
+    assert r.json() == {"ok": True, "verb": "Imported", "layer": "dynamic_layer"}
+    r2 = c.post(f"/gateways/{gw.id}/import-layer", data={"layer": "dynamic_layer"}, headers={"X-PP-Ajax": "1"})
+    assert r2.json()["verb"] == "Updated"                                      # re-import overwrites
+    rows = db.scalars(select(DynamicLayer).where(DynamicLayer.name == "dynamic_layer")).all()
+    assert len(rows) == 1                                                      # not duplicated
+
+
+def test_import_unknown_layer_ajax_is_400_json(monkeypatch):
+    c, db, gw, u = _client(monkeypatch)
+    r = c.post(f"/gateways/{gw.id}/import-layer", data={"layer": "nope"}, headers={"X-PP-Ajax": "1"})
+    assert r.status_code == 400 and "error" in r.json()
+    assert db.scalars(select(DynamicLayer)).all() == []                        # never written
+
+
+def test_fetch_ajax_success_returns_count(monkeypatch):
+    c, db, gw, u = _client(monkeypatch)
+    monkeypatch.setattr(gateways, "ensure_pinned", lambda *a, **k: None)
+    monkeypatch.setattr(gateways, "fetch_dynamic_content",
+                        lambda **k: {"ok": True, "layers": [{"name": "a"}, {"name": "b"}]})
+    r = c.post(f"/gateways/{gw.id}/fetch", data={"password": "pw"}, headers={"X-PP-Ajax": "1"})
+    assert r.status_code == 200 and r.json() == {"ok": True, "count": 2}
+
+
+def test_fetch_ajax_missing_password_is_400_json(monkeypatch):
+    c, db, gw, u = _client(monkeypatch)
+    monkeypatch.setattr(gateways, "ensure_pinned", lambda *a, **k: None)
+    monkeypatch.setattr(gateways.gateway_creds, "get_password", lambda *a, **k: "")
+    r = c.post(f"/gateways/{gw.id}/fetch", data={"password": ""}, headers={"X-PP-Ajax": "1"})
+    assert r.status_code == 400 and "error" in r.json()

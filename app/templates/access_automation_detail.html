@@ -552,7 +552,9 @@ Content-Type: application/json
       if (!lastActionable) return;
       window.appConfirm('This writes to live policy on ' + host + ' and publishes — it can\'t be undone here.',
         { title: 'Apply & publish', okText: 'Confirm publish', danger: true }).then(function (ok) {
-        if (ok) call('apply', 'publish', true);
+        // Re-check at resolve time: the decision may have been invalidated (a field edited) while the
+        // dialog was open. The old inline confirm got this for free via setActionable(false).
+        if (ok && lastActionable) call('apply', 'publish', true);
       });
     });
 

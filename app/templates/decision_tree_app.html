@@ -28,9 +28,16 @@
   .dw-why { font-size:12px; line-height:1.5; color:var(--muted); margin:4px 0 0; max-width:80ch; }
   .dw-controls { display:flex; align-items:center; gap:8px; margin-top:8px; flex-wrap:wrap; }
   .dw-progress { font-size:12px; color:var(--muted); font-variant-numeric:tabular-nums; min-width:74px; text-align:center; }
-  /* While tracing, dim the full graph and spotlight the path nodes (best-effort: core path nodes are visible). */
-  .dtcanvas.tracing .dtnode { opacity:.24; filter:saturate(.5); transition:opacity .2s, filter .2s; }
-  .dtcanvas.tracing .dtnode.dt-trace { opacity:1; filter:none; outline:3px solid var(--accent); outline-offset:3px; }
+  /* Tracing: dim the graph, spotlight the path nodes, and animate energy flowing along the active edges. */
+  .dtcanvas.tracing .dtnode { opacity:.2; filter:saturate(.45); transition:opacity .25s, filter .25s; }
+  .dtcanvas.tracing .dtnode.dt-trace { opacity:1; filter:none; outline:2px solid var(--accent); outline-offset:3px;
+    box-shadow:0 0 0 1px var(--accent), 0 0 30px -2px var(--accent), 0 8px 22px -8px rgba(0,0,0,.6); }
+  .dtedges path.dtedge-active { stroke:var(--accent) !important; stroke-width:2.5px; filter:url(#dtglow); }
+  .dtedges path.dtflow { stroke:#fff; stroke-width:1.8px; fill:none; stroke-dasharray:2 15; opacity:.9; animation:dtflow 1s linear infinite; }
+  @keyframes dtflow { to { stroke-dashoffset:-34; } }
+  /* clamp node subtitles so the auto-layout grid stays tidy; the full text shows in the trace panel */
+  .dtn-sub { display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+  @media (prefers-reduced-motion: reduce){ .dtedges path.dtflow{ animation:none; } }
 </style>
 <div class="page-head">
   <span class="icon-chip lg"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg></span>
@@ -192,6 +199,29 @@
     function childrenOf(id) { return GRAPH.edges.filter(function (e) { return e.src === id; }).map(function (e) { return e.dst; }); }
     function hiddenChildren(id) { return childrenOf(id).filter(function (c) { return !visible.has(c); }); }
 
+    // Auto-layout: a clean two-lane spine computed from the graph (no hand-placed scatter), so the core
+    // flow reads top-to-bottom and outcomes sit in a parallel column aligned to the step that yields them;
+    // the deep (L1) branches fan to the right, one row each, revealed on expand. Mutates x/y/w in place.
+    (function autoLayout() {
+      var SPINE_X = 24, OUT_X = 470, DET_X = 770, COL = 250, ROW = 116, TOP = 20, W = 250;
+      var byId = {}; GRAPH.nodes.forEach(function (n) { byId[n.id] = n; });
+      function parentsOf(id) { return GRAPH.edges.filter(function (e) { return e.dst === id; }).map(function (e) { return e.src; }); }
+      var spine = ['req', 'resolve', 'perm', 'deny', 'widen'];                  // the main first-match path
+      var outRow = { review: 0, noteO: 1, noop: 2, create: 3, doWiden: 4 };     // outcome → aligned spine row
+      spine.forEach(function (id, i) { var n = byId[id]; if (n) { n.x = SPINE_X; n.y = TOP + i * ROW; n.w = W; } });
+      Object.keys(outRow).forEach(function (id) { var n = byId[id]; if (n) { n.x = OUT_X; n.y = TOP + outRow[id] * ROW; n.w = W; } });
+      var placed = {}, row = 5;
+      function dfs(id, depth) {
+        var n = byId[id]; if (!n || isCore(n) || placed[id]) return;
+        placed[id] = true; n.x = DET_X + depth * COL; n.y = TOP + row * ROW; n.w = W; row++;
+        childrenOf(id).forEach(function (c) { dfs(c, depth + 1); });
+      }
+      GRAPH.nodes.forEach(function (n) {
+        if (!isCore(n) && parentsOf(n.id).some(function (p) { return byId[p] && isCore(byId[p]); })) dfs(n.id, 0);
+      });
+    })();
+    var activeNodes = {}, activePairs = {};   // the traced path (set by the walkthrough via window.PPDTree)
+
     // pan / zoom — an absolute transform on the canvas
     var s = 1, tx = 0, ty = 0, fitS = 1, natW = 600, natH = 400, panMoved = false;
     function vpW() { return wrap.clientWidth; }
@@ -237,7 +267,7 @@
 
     // per-node position overrides from user drag — persisted per browser so a custom layout survives reload.
     // Bump the version when the DEFAULT layout changes so a stale saved arrangement doesn't mask the new one.
-    var LSKEY = 'dt-layout-v2', override = {};
+    var LSKEY = 'dt-layout-v3', override = {};   // bumped: the default layout is now the auto-laid spine
     try { override = JSON.parse(localStorage.getItem(LSKEY) || '{}') || {}; } catch (e) { override = {}; }
     function saveOverride() { try { localStorage.setItem(LSKEY, JSON.stringify(override)); } catch (e) {} }
     function nodeX(n) { return (override[n.id] && override[n.id].x != null) ? override[n.id].x : n.x; }
@@ -259,14 +289,20 @@
       var svg = document.createElementNS(SVGNS, 'svg');
       svg.setAttribute('class', 'dtedges'); svg.setAttribute('width', natW); svg.setAttribute('height', natH);
       svg.innerHTML = '<defs><marker id="dtarrow" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" ' +
-        'markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z"/></marker></defs>';
+        'markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z"/></marker>' +
+        '<filter id="dtglow" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="3" result="b"/>' +
+        '<feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>';
       GRAPH.edges.forEach(function (e) {
         if (!visible.has(e.src) || !visible.has(e.dst)) return;
         var a = curPos(e.src), b = curPos(e.dst); if (!a || !b) return;
         var an = anchors(a, b);
         var path = document.createElementNS(SVGNS, 'path');
         path.setAttribute('d', bezier(an[0], an[1])); path.setAttribute('marker-end', 'url(#dtarrow)');
-        svg.appendChild(path);
+        if (activePairs[e.src + '>' + e.dst]) {           // a traced edge — glowing, with energy flowing along it
+          path.setAttribute('class', 'dtedge-active'); svg.appendChild(path);
+          var flow = document.createElementNS(SVGNS, 'path');
+          flow.setAttribute('d', path.getAttribute('d')); flow.setAttribute('class', 'dtflow'); svg.appendChild(flow);
+        } else { svg.appendChild(path); }
         if (e.label) {
           var lab = document.createElement('div'); lab.className = 'dtedge-label'; lab.textContent = e.label;
           lab.style.left = ((an[0][0] + an[1][0]) / 2) + 'px'; lab.style.top = ((an[0][1] + an[1][1]) / 2) + 'px';
@@ -283,6 +319,7 @@
         vmap[n.id] = n;
         var d = document.createElement('div');
         d.className = 'dtnode k-' + n.kind; d.setAttribute('data-node', n.id);
+        if (activeNodes[n.id]) d.classList.add('dt-trace');
         d.style.left = nodeX(n) + 'px'; d.style.top = nodeY(n) + 'px'; d.style.width = n.w + 'px';
         d.innerHTML = '<div class="dtn-title">' + esc(n.label) + '</div>' +
                       (n.sub ? '<div class="dtn-sub">' + esc(n.sub) + '</div>' : '');
@@ -304,6 +341,7 @@
         }
         canvas.appendChild(d); cards[n.id] = d;
       });
+      canvas.classList.toggle('tracing', Object.keys(activeNodes).length > 0);
       // labels wrap, so measure heights next frame, then draw edges + (optionally) fit
       requestAnimationFrame(function () { drawEdges(); if (refit) fit(); else { clampPan(); apply(); } });
     }
@@ -407,6 +445,28 @@
       }, { passive: false });
     })();
 
+    // Trace hook for the walkthrough: light up a path (nodes + flowing edges), dim the rest, frame it.
+    function setActive(ids) {
+      activeNodes = {}; activePairs = {}; ids = ids || [];
+      ids.forEach(function (id) { activeNodes[id] = 1; });
+      for (var i = 1; i < ids.length; i++) activePairs[ids[i - 1] + '>' + ids[i]] = 1;
+      ids.forEach(function (id) { visible.add(id); });   // reveal a collapsed branch if the path runs through it
+      render(false);
+    }
+    function clearActive() { activeNodes = {}; activePairs = {}; render(false); }
+    function focusPath(ids) {
+      if (!ids || !ids.length) return;
+      var x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9, any = false;
+      ids.forEach(function (id) { var p = curPos(id); if (p) { any = true; x0 = Math.min(x0, p.x); y0 = Math.min(y0, p.y); x1 = Math.max(x1, p.x + p.w); y1 = Math.max(y1, p.y + p.h); } });
+      if (!any) return;
+      var pad = 70, ns = Math.min(vpW() / (x1 - x0 + pad * 2), vpH() / (y1 - y0 + pad * 2), 1.3);
+      ns = Math.max(0.4, ns); s = ns;
+      tx = (vpW() - (x0 + x1) * ns) / 2; ty = (vpH() - (y0 + y1) * ns) / 2; clampPan();
+      canvas.style.transition = 'transform .45s ease'; apply();
+      setTimeout(function () { canvas.style.transition = ''; }, 520);
+    }
+    window.PPDTree = { setActive: setActive, clearActive: clearActive, focus: focusPath, fit: fit };
+
     render(true);
     var rt; window.addEventListener('resize', function () { clearTimeout(rt); rt = setTimeout(function () { fit(); }, 140); });
   })();
@@ -460,18 +520,9 @@
       chips.appendChild(b);
     });
 
-    function clearHighlight() {
-      if (!canvas) return;
-      canvas.classList.remove('tracing');
-      var t = canvas.querySelectorAll('.dtnode.dt-trace');
-      for (var i = 0; i < t.length; i++) t[i].classList.remove('dt-trace');
-    }
+    function clearHighlight() { if (window.PPDTree) window.PPDTree.clearActive(); }
     function highlight(upto) {
-      if (!canvas) return;
-      canvas.classList.add('tracing');
-      var lit = {}; for (var i = 0; i <= upto && i < curPath.length; i++) lit[curPath[i]] = 1;
-      var nodes = canvas.querySelectorAll('.dtnode');
-      for (var j = 0; j < nodes.length; j++) nodes[j].classList.toggle('dt-trace', !!lit[nodes[j].getAttribute('data-node')]);
+      if (window.PPDTree && curPath) window.PPDTree.setActive(curPath.slice(0, upto + 1));   // glow path up to this step
     }
     function renderSteps() {
       stepsEl.innerHTML = '';
@@ -499,6 +550,7 @@
       stopPlay();
       var cs = chips.children; for (var i = 0; i < cs.length; i++) cs[i].classList.toggle('active', cs[i].getAttribute('data-k') === s.key);
       curPath = pathTo(s.target) || []; step = 0; stage.hidden = false; renderSteps();
+      if (window.PPDTree) requestAnimationFrame(function () { window.PPDTree.focus(curPath); });   // frame the route
     }
     document.getElementById('dw-next').addEventListener('click', function () { if (curPath && step < curPath.length - 1) { step++; showUpTo(); } });
     document.getElementById('dw-prev').addEventListener('click', function () { if (curPath && step > 0) { step--; showUpTo(); } });

@@ -113,3 +113,25 @@ def test_enabled_widgets_allowlist_and_dedup():
 def test_widgets_absent_is_omitted_empty_is_kept():
     assert "widgets" not in _sanitize_layout({"dock": ["access"]})        # client applies its default
     assert _sanitize_layout({"dock": ["access"], "widgets": []})["widgets"] == []  # explicit "none" preserved
+
+
+def test_app_labels_allowlist_trim_cap_and_stored_raw():
+    s = _sanitize_layout({"dock": ["access"], "labels": {
+        "access": "  My Access  ",      # trimmed
+        "bogus": "Nope",                 # key not in allowlist -> dropped
+        "settings": "<script>x</script>",  # stored RAW; the client escapes at render (single XSS barrier)
+        "layers": "x" * 80,              # length-capped to 40
+        "system": "",                    # empty -> dropped
+        "gateways": "tabs\tand\nnewlines",  # control chars stripped
+    }})
+    assert s["labels"]["access"] == "My Access"
+    assert "bogus" not in s["labels"]
+    assert s["labels"]["settings"] == "<script>x</script>"
+    assert len(s["labels"]["layers"]) == 40
+    assert "system" not in s["labels"]
+    assert s["labels"]["gateways"] == "tabsandnewlines"   # \t and \n stripped
+
+
+def test_app_labels_absent_is_omitted():
+    assert "labels" not in _sanitize_layout({"dock": ["access"]})
+    assert "labels" not in _sanitize_layout({"dock": ["access"], "labels": {"access": ""}})  # all empty -> no key

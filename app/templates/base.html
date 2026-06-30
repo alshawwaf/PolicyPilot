@@ -525,6 +525,8 @@
     .modal.wide { max-width:560px; } .modal.xwide { max-width:880px; }
     .modal h3 { margin:0 0 8px; font-size:18px; font-weight:740; }
     .modal p { color:var(--muted); font-size:14px; margin:0; }
+    #modal-input-label { display:block; font-size:12px; font-weight:600; color:var(--muted); margin:14px 0 5px; }
+    #modal-input { width:100%; box-sizing:border-box; }
     .modal-actions { display:flex; gap:10px; justify-content:flex-end; margin-top:24px; }
     /* Form-in-modal: the modal IS the card. It's a flex column — the gradient header and the scrolling
        body are separate rows, so the SCROLLBAR lives only in the body (never crossing the header or the
@@ -897,6 +899,8 @@
     <div class="modal" role="dialog" aria-modal="true">
       <h3 id="modal-title">Please confirm</h3>
       <p id="modal-msg"></p>
+      <label id="modal-input-label" for="modal-input" hidden></label>
+      <input id="modal-input" type="text" hidden>
       <div class="modal-actions">
         <button type="button" class="secondary" id="modal-cancel">Cancel</button>
         <button type="button" class="danger" id="modal-ok">Confirm</button>
@@ -1077,21 +1081,38 @@
       var msg = document.getElementById('modal-msg');
       var okBtn = document.getElementById('modal-ok');
       var cancelBtn = document.getElementById('modal-cancel');
-      var pForm = null, pSub = null, pResolve = null;
-      function reset() { pForm = null; pSub = null; pResolve = null; }
+      var inputEl = document.getElementById('modal-input');
+      var inputLbl = document.getElementById('modal-input-label');
+      var pForm = null, pSub = null, pResolve = null, pPrompt = false;
+      function reset() { pForm = null; pSub = null; pResolve = null; pPrompt = false; }
       function open(o) {
         titleEl.textContent = o.title || 'Please confirm';
         msg.textContent = o.message || '';
+        pPrompt = !!o.prompt;                                   // prompt mode shows a text input + returns its value
+        if (inputEl) {
+          inputEl.hidden = !pPrompt;
+          if (inputLbl) { inputLbl.hidden = !(pPrompt && o.inputLabel); inputLbl.textContent = o.inputLabel || ''; }
+          if (pPrompt) {
+            inputEl.value = o.value || ''; inputEl.placeholder = o.placeholder || '';
+            if (o.maxlength) inputEl.maxLength = o.maxlength; else inputEl.removeAttribute('maxlength');
+          }
+        }
         okBtn.textContent = o.okText || 'Confirm';
-        okBtn.classList.toggle('danger', o.danger !== false);   // destructive by default; pass danger:false to soften
+        okBtn.classList.toggle('danger', !pPrompt && o.danger !== false);   // destructive by default; a prompt is never destructive
         pForm = o.form || null; pSub = o.submitter || null; pResolve = o.resolve || null;
         overlay.hidden = false;
-        setTimeout(function () { try { (pResolve ? cancelBtn : okBtn).focus(); } catch (e) {} }, 30);
+        setTimeout(function () { try {
+          if (pPrompt && inputEl) { inputEl.focus(); inputEl.select(); }
+          else (pResolve ? cancelBtn : okBtn).focus();
+        } catch (e) {} }, 30);
       }
       function settle(result) {
         overlay.hidden = true;
-        var r = pResolve, form = pForm, sub = pSub; reset();
-        if (r) { r(!!result); return; }
+        var r = pResolve, form = pForm, sub = pSub, wasPrompt = pPrompt, val = inputEl ? inputEl.value : '';
+        reset();
+        if (inputEl) inputEl.hidden = true;
+        if (inputLbl) inputLbl.hidden = true;
+        if (r) { r(wasPrompt ? (result ? val : null) : !!result); return; }
         if (result && form) {
           // requestSubmit(submitter) preserves the clicked button's formaction; .submit() drops it.
           if (form.requestSubmit) form.requestSubmit(sub && sub.form === form ? sub : undefined);
@@ -1104,6 +1125,18 @@
           open({ message: message, title: o.title, okText: o.okText, danger: o.danger, resolve: resolve });
         });
       };
+      // window.appPrompt(title, {label, value, placeholder, okText, maxlength, message}) -> Promise<string|null>
+      // (null = cancelled). Reuses the same overlay, so it inherits the topmost z-index over windows + menus.
+      window.appPrompt = function (title, o) {
+        o = o || {};
+        return new Promise(function (resolve) {
+          open({ prompt: true, title: title || 'Enter a value', message: o.message, inputLabel: o.label,
+            value: o.value, placeholder: o.placeholder, okText: o.okText || 'OK', maxlength: o.maxlength, resolve: resolve });
+        });
+      };
+      if (inputEl) inputEl.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') { e.preventDefault(); settle(true); }
+      });
       window.appToast = function (message, type) {
         var t = document.createElement('div');
         t.className = 'toast ' + (type || 'success');

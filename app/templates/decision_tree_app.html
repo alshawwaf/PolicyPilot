@@ -1,5 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Decision tree{% endblock %}
+{# standalone /decision-tree needs room for the two-column split; matches base.html's main.wide{max-width:1480px} (embedded mode is already full-width). #}
+{% block main_class %}wide{% endblock %}
 {% block content %}
 <style>
   /* legend chips under the diagram (the rest of the diagram CSS travels with the card markup below) */
@@ -13,7 +15,7 @@
   .dw-chip:hover { transform:translateY(-1px); border-color:var(--c); }
   .dw-chip .dot { width:9px; height:9px; border-radius:50%; background:var(--c); flex:0 0 auto; }
   .dw-chip.active { background:var(--c-soft); border-color:var(--c); color:var(--c); }
-  .dw-stage { margin-top:15px; }
+  .dw-stage { margin-top:0; }   /* top rhythm now owned by #dw-steps' margin-top so the scroll container isn't double-spaced */
   .dw-step { display:grid; grid-template-columns:32px 1fr; gap:13px; opacity:.32; transition:opacity .32s ease; }
   .dw-step.shown { opacity:1; }
   .dw-rail { display:flex; flex-direction:column; align-items:center; }
@@ -38,6 +40,27 @@
   /* clamp node subtitles so the auto-layout grid stays tidy; the full text shows in the trace panel */
   .dtn-sub { display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
   @media (prefers-reduced-motion: reduce){ .dtedges path.dtflow{ animation:none; } }
+
+  /* ---- Split layout: trace step-list (left) + full graph (right) visible together, kept in sync on Play ---- */
+  .dt-split{ display:grid; grid-template-columns: minmax(320px,420px) minmax(0,1fr); gap:18px; align-items:start; container-type:inline-size; }
+  .dt-split > .card{ margin:0; }
+  .dt-left{ display:flex; flex-direction:column; min-height:0; }
+  #dw-steps{ overflow-y:auto; overflow-x:hidden; max-height:clamp(220px,56vh,620px); min-height:0; margin-top:15px; padding-right:4px; scroll-padding-block:12px; }
+  .dw-controls{ flex:0 0 auto; }
+  .dt-right{ position:sticky; top:16px; align-self:start; }
+  /* Standalone /decision-tree shows the 60px sticky site header — offset the sticky top so the graph's
+     toolbar isn't clipped behind it. Embedded (desktop window) hides the header, so 16px is correct there. */
+  html:not(.embedded) .dt-right{ top:76px; }
+  .dt-right .dtwrap{ height:min(70vh, calc(100vh - 220px)); }
+  @container (max-width:860px){
+    .dt-split{ grid-template-columns:1fr; }
+    .dt-right{ position:sticky; top:8px; order:-1; }
+    html:not(.embedded) .dt-right{ top:68px; }
+    .dt-right .dtwrap{ height:42vh; min-height:300px; }
+    .dt-left{ position:static; }
+    #dw-steps{ max-height:clamp(180px,40vh,420px); }
+  }
+  @media (max-width:980px){ .dt-split:not(.cq){ grid-template-columns:1fr; } }
 </style>
 <div class="page-head">
   <span class="icon-chip lg"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg></span>
@@ -47,7 +70,8 @@
   </div>
 </div>
 
-<div class="card" id="dw">
+<div class="dt-split" id="dt-split">
+<div class="card dt-left" id="dw">
   <div class="dw-h">Trace a decision</div>
   <p class="muted" style="margin:0 0 12px; font-size:12.5px; max-width:80ch;">Pick an outcome and step through the exact path the engine walks to reach it — each step is a real node from the graph below, with the branch it took and why. Use <b>Play</b> to watch it unfold.</p>
   <div class="dw-chips" id="dw-chips"></div>
@@ -63,7 +87,7 @@
   </div>
 </div>
 
-<div class="card">
+<div class="card dt-right" id="dt-graph-card">
   <div class="dw-h" style="margin-bottom:4px;">The full graph</div>
   <p class="muted" style="margin:0 0 4px;">Drag to rearrange, pan / zoom to explore, expand any node’s <b>＋N</b> for the deep branches, or download it as Mermaid / draw.io / Graphviz.</p>
   <style>
@@ -174,6 +198,7 @@
     <span class="pill" style="background:var(--warn-bg);color:var(--warn);">Create · new rule (above a deny if one blocks it)</span>
     <span class="pill" style="background:var(--info-bg);color:var(--info);">Note · flag &amp; keep going</span>
   </div>
+</div>
 </div>
 <script>
   /* Custom decision-tree renderer (no Mermaid): positioned cards from decision_tree.py's hand-placed
@@ -469,6 +494,8 @@
 
     render(true);
     var rt; window.addEventListener('resize', function () { clearTimeout(rt); rt = setTimeout(function () { fit(); }, 140); });
+    // refit when the column layout flips (split <-> stacked) or the wrap is otherwise resized
+    var _rt; if (window.ResizeObserver) { var _ro = new ResizeObserver(function () { clearTimeout(_rt); _rt = setTimeout(function () { fit(); }, 120); }); _ro.observe(wrap); }
   })();
 </script>
 <script>
@@ -479,6 +506,8 @@
   (function () {
     var chips = document.getElementById('dw-chips');
     if (!chips) return;
+    // container queries drive the split's responsive collapse; flag .cq so the @media fallback only fires when unsupported
+    try { if (window.CSS && CSS.supports && CSS.supports('container-type:inline-size')) { var _sp = document.getElementById('dt-split'); if (_sp) _sp.classList.add('cq'); } } catch (e) {}
     var GRAPH = null;
     try { GRAPH = JSON.parse(document.getElementById('dt-graph-data').textContent); } catch (e) {}
     if (!GRAPH || !GRAPH.nodes) { var dw = document.getElementById('dw'); if (dw) dw.style.display = 'none'; return; }
@@ -543,6 +572,7 @@
       for (var i = 0; i < kids.length; i++) kids[i].classList.toggle('shown', i <= step);
       prog.textContent = 'Step ' + (step + 1) + ' of ' + curPath.length;
       highlight(step);
+      if (window.PPDTree && curPath) window.PPDTree.focus(curPath.slice(0, step + 1));   // camera follows the traced path, same tick as highlight
       if (kids[step] && kids[step].scrollIntoView) kids[step].scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     }
     function stopPlay() { if (playT) { clearInterval(playT); playT = null; } var pb = document.getElementById('dw-play'); if (pb) pb.textContent = '▶ Play'; }

@@ -360,6 +360,18 @@ def _sanitize_layout(raw) -> dict:
             if w in DESKTOP_WIDGET_KEYS and w not in widgets:
                 widgets.append(w)
         out["widgets"] = widgets
+    # Per-app custom display names {key: name}. Keys allowlisted; value trimmed + length-capped + control-char
+    # stripped. Stored RAW (the client escapes at render — the single XSS barrier — so don't double-escape here).
+    raw_labels = raw.get("labels")
+    if isinstance(raw_labels, dict):
+        labels = {}
+        for k, v in list(raw_labels.items())[:len(DESKTOP_APP_KEYS)]:
+            if k in DESKTOP_APP_KEYS and isinstance(v, str):
+                name = "".join(ch for ch in v if ch >= " ").strip()[:40]
+                if name:
+                    labels[k] = name
+        if labels:
+            out["labels"] = labels
     return out
 
 
@@ -603,6 +615,7 @@ async def save_desktop_default(request: Request, db: Session = Depends(get_db)):
     except Exception:  # noqa: BLE001
         return Response(status_code=400)
     layout = _sanitize_layout(body)
+    layout.pop("labels", None)   # custom app names are per-user, not part of the org-wide default
     row = db.get(GlobalPref, "desktop_default")
     if row:
         row.value = layout

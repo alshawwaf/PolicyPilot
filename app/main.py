@@ -33,7 +33,7 @@ def _setup_logging() -> None:
         log.propagate = False
     log.setLevel(lvl)
 from .routers import (
-    access_automation, activity, api_v1, dynamic_layers, exports, gateways,
+    access_automation, activity, api_docs, api_v1, dynamic_layers, exports, gateways,
     gaia_mock, mgmt, notifications, settings as settings_router, ui,
 )
 # NOTE: the `policy_manager` router is intentionally NOT mounted yet — the Policy Manager feature is built
@@ -137,6 +137,7 @@ def create_app() -> FastAPI:
     app.include_router(notifications.router)
     app.include_router(exports.router)
     app.include_router(api_v1.router)   # general REST API for any HTTP client (api-scope key auth)
+    app.include_router(api_docs.router)   # in-portal themed Swagger UI for the REST API above (/api-docs)
 
     # MCP server for n8n / LLM agents — mounted at /mcp whenever the SDK is installed (Artifactory).
     # Auth is a single mechanism: an active mcp-scope API KEY, verified PER REQUEST. While none exists the

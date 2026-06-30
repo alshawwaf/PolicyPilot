@@ -1,0 +1,138 @@
+{# Shared Swagger-UI theming — themes Swagger onto the portal's CSS variables (follows dark/light), so the
+   Check Point API explorer and the PolicyPilot API docs render identically. Include once per page that
+   mounts a #swagger-ui. Page-specific chrome (toolbars, tabs) lives in each page's own <style>. #}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.17.14/swagger-ui.css">
+<style>
+  /* --- Theme Swagger UI onto the portal's own variables (follows dark/light automatically) --------- */
+  #swagger-ui { background:var(--surface); border:1px solid var(--line-soft); border-radius:var(--r-lg);
+    padding:6px 18px 18px; box-shadow:var(--shadow-sm); }
+  #swagger-ui .swagger-ui, #swagger-ui .swagger-ui .info .title { color:var(--text); }
+  #swagger-ui .topbar { display:none; }
+  /* Hide Swagger's own info block (title + the long raw spec URL + description) — the page-head already
+     says what this is, so it's pure noise + an ugly URL line. */
+  #swagger-ui .information-container { display:none; }
+  #swagger-ui .info { margin:14px 0; }
+  #swagger-ui .info .title small.version-stamp { background:var(--chip-bg); }
+  #swagger-ui .info .title small { background:var(--accent); }
+  #swagger-ui .info p, #swagger-ui .info li, #swagger-ui .info table td,
+  #swagger-ui .renderedMarkdown p, #swagger-ui .markdown p { color:var(--text-2); }
+  #swagger-ui .info a, #swagger-ui a.nostyle, #swagger-ui .info a:hover { color:var(--accent); }
+  /* server / authorize bar */
+  /* Authorize is lifted into the portal toolbar (the page clicks Swagger's real button), so hide Swagger's
+     own scheme-container band entirely (it parked the button in a tall, mostly-empty bar). It stays in the
+     DOM (display:none, not removed) so the real React-bound button still fires on click. */
+  #swagger-ui .scheme-container { display:none; }
+  #swagger-ui label { color:var(--text-2); }
+  /* command-group headers */
+  #swagger-ui .opblock-tag { color:var(--text); border-bottom:1px solid var(--line); }
+  #swagger-ui .opblock-tag:hover { background:var(--hover); }
+  #swagger-ui .opblock-tag small, #swagger-ui .opblock-tag .info__tgdescription { color:var(--muted); }
+  #swagger-ui .opblock-tag svg { fill:var(--muted); }
+  /* operation blocks */
+  #swagger-ui .opblock { background:var(--surface-2); border:1px solid var(--line);
+    box-shadow:none; border-radius:9px; margin:0 0 10px; }
+  #swagger-ui .opblock .opblock-summary { border-color:var(--line); }
+  #swagger-ui .opblock .opblock-summary-method { background:var(--accent); color:var(--on-accent);
+    text-shadow:none; }
+  #swagger-ui .opblock .opblock-summary-path,
+  #swagger-ui .opblock .opblock-summary-path__deprecated { color:var(--text); }
+  #swagger-ui .opblock .opblock-summary-description { color:var(--text-2); }
+  #swagger-ui .opblock.opblock-post { border-color:var(--line); background:var(--surface-2); }
+  #swagger-ui .opblock.opblock-post .opblock-summary { border-color:var(--line); }
+  /* GET (the REST API has reads too) gets a cooler accent so it reads distinct from POST */
+  #swagger-ui .opblock.opblock-get .opblock-summary-method { background:#3b82f6; }
+  #swagger-ui .opblock-description-wrapper p, #swagger-ui .opblock-title_normal p,
+  #swagger-ui .opblock-external-docs-wrapper p { color:var(--text-2); }
+  #swagger-ui .opblock-section-header { background:var(--surface-3); box-shadow:none;
+    border-bottom:1px solid var(--line); }
+  #swagger-ui .opblock-section-header h4, #swagger-ui .opblock-section-header > label,
+  #swagger-ui .tab li { color:var(--text); }
+  #swagger-ui .opblock-section-header h4 span, #swagger-ui .tab li.active { color:var(--text); }
+  /* tables: parameters + responses */
+  #swagger-ui table thead tr td, #swagger-ui table thead tr th { color:var(--muted);
+    border-bottom:1px solid var(--line); }
+  #swagger-ui .parameters-col_description, #swagger-ui .response-col_description,
+  #swagger-ui .response-col_status, #swagger-ui .responses-inner > div > p { color:var(--text-2); }
+  #swagger-ui .parameter__name, #swagger-ui .parameter__type,
+  #swagger-ui .parameter__in, #swagger-ui .prop-type { color:var(--text-2); }
+  #swagger-ui .parameter__name.required::after { color:var(--accent); }
+  #swagger-ui .responses-inner h4, #swagger-ui .responses-inner h5,
+  #swagger-ui .response-col_links { color:var(--text); }
+  #swagger-ui .response .response-col_status { color:var(--text); }
+  /* inputs */
+  #swagger-ui input[type=text], #swagger-ui input[type=password], #swagger-ui input[type=email],
+  #swagger-ui input[type=search], #swagger-ui input[type=number], #swagger-ui textarea,
+  #swagger-ui select { background:var(--input-bg); color:var(--text);
+    border:1px solid var(--line); box-shadow:none; }
+  #swagger-ui .filter .operation-filter-input { border:1px solid var(--line); background:var(--input-bg);
+    color:var(--text); }
+  /* buttons */
+  #swagger-ui .btn { color:var(--text); background:var(--surface-3); border:1px solid var(--line-strong);
+    box-shadow:none; }
+  #swagger-ui .btn:hover { background:var(--hover); }
+  #swagger-ui .btn.execute { background:var(--accent); color:var(--on-accent); border-color:var(--accent); }
+  #swagger-ui .btn.cancel { color:var(--accent); border-color:var(--accent); background:transparent; }
+  #swagger-ui .btn.authorize { color:var(--ok); border-color:var(--ok-line); background:var(--ok-bg); }
+  #swagger-ui .btn.authorize svg { fill:var(--ok); }
+  #swagger-ui .try-out__btn { background:var(--surface-3); }
+  /* models / schemas */
+  #swagger-ui section.models { border:1px solid var(--line); background:var(--surface); }
+  #swagger-ui section.models.is-open h4 { border-bottom:1px solid var(--line); }
+  #swagger-ui section.models h4 { color:var(--text); }
+  #swagger-ui section.models .model-container { background:var(--surface-2); }
+  #swagger-ui .model, #swagger-ui .model-title, #swagger-ui .model .property,
+  #swagger-ui .prop-format { color:var(--text-2); }
+  #swagger-ui .model-toggle:after { background:none; }
+  /* the Authorize modal — Swagger UI 5.x wraps it in .dialog-ux (NOT .dialog-ng); the old selector never
+     matched, so the modal rendered with Swagger's default white theme. Theme the whole dialog here. */
+  #swagger-ui .dialog-ux .modal-ux { background:var(--surface); border:1px solid var(--line);
+    box-shadow:var(--shadow-lg); border-radius:12px; }
+  #swagger-ui .dialog-ux .modal-ux-header { border-bottom:1px solid var(--line); }
+  #swagger-ui .dialog-ux .modal-ux-header h3 { color:var(--text); }
+  #swagger-ui .dialog-ux .close-modal { background:transparent; }
+  #swagger-ui .dialog-ux .close-modal svg { fill:var(--muted); }
+  #swagger-ui .dialog-ux .modal-ux-content h4,
+  #swagger-ui .dialog-ux .modal-ux-content .scopes h2 { color:var(--text); }
+  #swagger-ui .dialog-ux .modal-ux-content p,
+  #swagger-ui .dialog-ux .modal-ux-content label,
+  #swagger-ui .dialog-ux .modal-ux-content .scope-def,
+  #swagger-ui .dialog-ux .modal-ux-content table td { color:var(--text-2); }
+  #swagger-ui .dialog-ux .modal-ux-content code { background:var(--chip-bg); color:var(--text); }
+  #swagger-ui .dialog-ux .auth-container { border-bottom:1px solid var(--line); }
+  #swagger-ui .dialog-ux .modal-ux-content input[type=text],
+  #swagger-ui .dialog-ux .modal-ux-content input[type=password] { background:var(--input-bg);
+    color:var(--text); border:1px solid var(--line); }
+  #swagger-ui .dialog-ux .auth-btn-wrapper .btn.authorize { color:var(--ok);
+    border-color:var(--ok-line); background:var(--ok-bg); }
+  #swagger-ui .dialog-ux .auth-btn-wrapper .btn.authorize svg { fill:var(--ok); }
+  #swagger-ui .backdrop-ux { background:var(--overlay); }
+  /* responses: example/schema code blocks, media-type select, sub-tabs */
+  #swagger-ui .responses-inner { background:transparent; }
+  #swagger-ui table.responses-table td, #swagger-ui table.responses-table th { background:transparent; }
+  #swagger-ui .model-example { background:transparent; border:0; }
+  /* Read-only code blocks (curl, Request URL, request/response body, Example Value, Schema). Swagger's
+     per-token inline highlight colors are a MIX tuned for the wrong background — force ONE legible colour
+     that follows the portal theme and strip the per-token boxes. Monochrome, but always crisp. */
+  #swagger-ui .microlight, #swagger-ui pre.microlight, #swagger-ui .highlight-code,
+  #swagger-ui .body-param__example, #swagger-ui .example, #swagger-ui .curl-command,
+  #swagger-ui .request-url, #swagger-ui .request-url pre, #swagger-ui .responses-inner pre {
+    background:var(--input-bg) !important; color:var(--text) !important;
+    border:1px solid var(--line); border-radius:8px; }
+  #swagger-ui .microlight *, #swagger-ui .highlight-code *, #swagger-ui .body-param__example *,
+  #swagger-ui .example *, #swagger-ui .curl-command *, #swagger-ui .request-url pre *,
+  #swagger-ui .responses-inner pre *, #swagger-ui .renderedMarkdown pre code {
+    color:var(--text) !important; background:transparent !important; text-shadow:none !important; }
+  #swagger-ui select, #swagger-ui .content-type, #swagger-ui .examples-select select {
+    background:var(--input-bg); color:var(--text); border:1px solid var(--line); }
+  /* the "Example Value | Schema" / "Model | Example" sub-tabs */
+  #swagger-ui .tab li { color:var(--muted); }
+  #swagger-ui .tab li.active, #swagger-ui .tab li button.tablinks.active { color:var(--text); }
+  #swagger-ui .tab li button.tablinks { color:var(--muted); }
+  #swagger-ui .response-control-media-type__title,
+  #swagger-ui .response-control-media-type__accept-message,
+  #swagger-ui .response-control-examples__title { color:var(--muted); }
+  #swagger-ui .response-control-media-type--accept-controller select { border-color:var(--accent); }
+  #swagger-ui .copy-to-clipboard { background:var(--surface-3); border-radius:6px; }
+  #swagger-ui .copy-to-clipboard button { background:var(--surface-3); }
+  #swagger-ui svg.arrow { fill:var(--muted); }
+</style>

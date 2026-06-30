@@ -15,7 +15,7 @@ def client():
 
 # One representative protected HTML page per live router — these redirect anonymous callers to /login.
 @pytest.mark.parametrize("path", [
-    "/management", "/gateways", "/layers", "/activity", "/access-automation", "/settings",
+    "/management", "/gateways", "/layers", "/activity", "/access-automation", "/settings", "/api-docs",
 ])
 def test_anonymous_html_page_redirects_to_login(client, path):
     r = client.get(path, follow_redirects=False)
@@ -23,7 +23,8 @@ def test_anonymous_html_page_redirects_to_login(client, path):
 
 
 # JSON/data endpoints deny anonymous callers too — they answer 401/403/404 (never 200), not an HTML redirect.
-@pytest.mark.parametrize("path", ["/notifications", "/exports", "/management/1/rulebase?name=Network"])
+@pytest.mark.parametrize("path", ["/notifications", "/exports", "/management/1/rulebase?name=Network",
+                                  "/api-docs/openapi.json"])
 def test_anonymous_data_endpoint_denied(client, path):
     r = client.get(path, follow_redirects=False)
     assert r.status_code != 200, f"{path} served an anonymous caller"

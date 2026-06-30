@@ -339,7 +339,16 @@ def _sanitize_layout(raw) -> dict:
             except (TypeError, ValueError):
                 x, y = 0, 0
             desk.append({"key": k, "x": x, "y": y})
-    return {"dock": dock or list(DEFAULT_DESKTOP_LAYOUT["dock"]), "desktop": desk}
+    win = {}
+    raw_win = raw.get("win") if isinstance(raw.get("win"), dict) else {}
+    for k, v in list(raw_win.items())[:48]:
+        if k in DESKTOP_APP_KEYS and isinstance(v, dict):
+            try:
+                win[k] = {"x": max(0, min(int(v.get("x", 0)), 8000)), "y": max(0, min(int(v.get("y", 0)), 8000)),
+                          "w": max(300, min(int(v.get("w", 600)), 8000)), "h": max(200, min(int(v.get("h", 400)), 8000))}
+            except (TypeError, ValueError):
+                pass
+    return {"dock": dock or list(DEFAULT_DESKTOP_LAYOUT["dock"]), "desktop": desk, "win": win}
 
 
 def _is_admin(user: User) -> bool:

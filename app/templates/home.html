@@ -145,6 +145,7 @@
     ? window.PP_LAYOUT : { dock: ['access', 'layers', 'management', 'gateways', 'agents', 'settings', 'activity'], desktop: [] };
   if (!Array.isArray(LAYOUT.dock)) LAYOUT.dock = [];
   if (!Array.isArray(LAYOUT.desktop)) LAYOUT.desktop = [];
+  if (!LAYOUT.win || typeof LAYOUT.win !== 'object') LAYOUT.win = {};   // per-app remembered window geometry
 
   var I = {
     access: '<path d="M16 3h5v5"/><path d="M21 3l-7 7"/><path d="M8 3H3v5"/><path d="M3 3l7 7"/><path d="M3 16v5h5"/><path d="M3 21l7-7"/><path d="M16 21h5v-5"/><path d="M21 21l-7-7"/>',
@@ -165,12 +166,11 @@
     pulse: '<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>'
   };
   function svg(p) { return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">' + p + '</svg>'; }
-  var COUNTS = { layers: {{ counts.layers|default(0) }}, management: {{ counts.management|default(0) }}, gateways: {{ counts.gateways|default(0) }} };
   var CATALOG = {
     access:      { label: 'Access automation', href: '/access-automation', ic: I.access,  grad: 'linear-gradient(135deg,#3b82f6,#22d3ee)' },
-    layers:      { label: 'Dynamic Layers',     href: '/layers',            ic: I.layers,  grad: 'linear-gradient(135deg,#1d9e75,#34d399)', badge: COUNTS.layers },
-    management:  { label: 'Connections',        href: '/management',        ic: I.server,  grad: 'linear-gradient(135deg,#5566dd,#7b3ff2)', badge: COUNTS.management },
-    gateways:    { label: 'Gateways',           href: '/gateways',          ic: I.gateway, grad: 'linear-gradient(135deg,#06b6d4,#3b82f6)', badge: COUNTS.gateways },
+    layers:      { label: 'Dynamic Layers',     href: '/layers',            ic: I.layers,  grad: 'linear-gradient(135deg,#1d9e75,#34d399)' },
+    management:  { label: 'Connections',        href: '/management',        ic: I.server,  grad: 'linear-gradient(135deg,#5566dd,#7b3ff2)' },
+    gateways:    { label: 'Gateways',           href: '/gateways',          ic: I.gateway, grad: 'linear-gradient(135deg,#06b6d4,#3b82f6)' },
     agents:      { label: 'Agents & API',       href: '/mcp-guide',         ic: I.robot,   grad: 'linear-gradient(135deg,#f59e0b,#f43f5e)' },
     apiexplorer: { label: 'API explorer',       href: '/api-explorer',      ic: I.code,    grad: 'linear-gradient(135deg,#22d3ee,#3b82f6)' },
     settings:    { label: 'Settings',           href: '/settings',          ic: I.sliders, grad: 'linear-gradient(135deg,#a855f7,#7b3ff2)' },
@@ -196,6 +196,12 @@
   function focusWin(w) { w.style.zIndex = (++z); Object.keys(wins).forEach(function (k) { wins[k].classList.remove('active'); }); w.classList.add('active'); }
   function setRunning(key, on) { var d = dock.querySelector('.os-dik[data-key="' + key + '"]'); if (d) d.classList.toggle('running', on); }
   function showDesktop() { Object.keys(wins).forEach(function (k) { wins[k].style.display = 'none'; }); }
+  function rememberGeom(w) {                                    // persist a window's size+position per app
+    if (!w || !w.dataset.key || w.dataset.max) return;          // skip while maximized — keep the restore size
+    LAYOUT.win[w.dataset.key] = { x: parseInt(w.style.left, 10) || 0, y: parseInt(w.style.top, 10) || 0,
+      w: w.offsetWidth, h: w.offsetHeight };
+    saveLayout();
+  }
 
   function makeDraggable(w, handle) {
     handle.addEventListener('mousedown', function (e) {
@@ -207,7 +213,7 @@
         w.style.left = clamp(ev.clientX - dr.left - ox, 0, desktop.clientWidth - w.offsetWidth) + 'px';
         w.style.top = clamp(ev.clientY - dr.top - oy, 0, desktop.clientHeight - 40) + 'px';
       }
-      function up() { document.removeEventListener('mousemove', mv); document.removeEventListener('mouseup', up); if (ov) ov.style.pointerEvents = ''; }
+      function up() { document.removeEventListener('mousemove', mv); document.removeEventListener('mouseup', up); if (ov) ov.style.pointerEvents = ''; rememberGeom(w); }
       document.addEventListener('mousemove', mv); document.addEventListener('mouseup', up); e.preventDefault();
     });
     handle.addEventListener('dblclick', function (e) {           // double-click title bar = zoom (macOS)
@@ -231,7 +237,7 @@
           nw = Math.min(nw, desktop.clientWidth - nx); nh = Math.min(nh, desktop.clientHeight - ny);
           w.style.left = nx + 'px'; w.style.top = ny + 'px'; w.style.width = nw + 'px'; w.style.height = nh + 'px';
         }
-        function up() { document.removeEventListener('mousemove', mv); document.removeEventListener('mouseup', up); if (ov) ov.style.pointerEvents = ''; }
+        function up() { document.removeEventListener('mousemove', mv); document.removeEventListener('mouseup', up); if (ov) ov.style.pointerEvents = ''; rememberGeom(w); }
         document.addEventListener('mousemove', mv); document.addEventListener('mouseup', up); e.preventDefault();
       });
     });
@@ -241,11 +247,19 @@
     if (wins[key]) { wins[key].style.display = 'flex'; focusWin(wins[key]); return; }
     if (hello) hello.style.display = 'none';
     var w = document.createElement('div'); w.className = 'os-win'; w.dataset.key = key;
-    var ww = Math.min(960, Math.round(desktop.clientWidth * 0.74)), wh = Math.min(640, Math.round(desktop.clientHeight * 0.82));
-    var off = (openCount % 6) * 30; openCount++;
-    w.style.width = ww + 'px'; w.style.height = wh + 'px';
-    w.style.left = clamp(Math.round((desktop.clientWidth - ww) / 2) - 90 + off, 8, desktop.clientWidth - ww - 8) + 'px';
-    w.style.top = clamp(34 + off, 8, desktop.clientHeight - 80) + 'px';
+    var g = LAYOUT.win[key];
+    if (g) {                                                     // restore the remembered size + position
+      var gw = clamp(g.w, 360, desktop.clientWidth - 16), gh = clamp(g.h, 240, desktop.clientHeight - 16);
+      w.style.width = gw + 'px'; w.style.height = gh + 'px';
+      w.style.left = clamp(g.x, 0, desktop.clientWidth - gw) + 'px';
+      w.style.top = clamp(g.y, 8, desktop.clientHeight - 40) + 'px';
+    } else {
+      var ww = Math.min(960, Math.round(desktop.clientWidth * 0.74)), wh = Math.min(640, Math.round(desktop.clientHeight * 0.82));
+      var off = (openCount % 6) * 30; openCount++;
+      w.style.width = ww + 'px'; w.style.height = wh + 'px';
+      w.style.left = clamp(Math.round((desktop.clientWidth - ww) / 2) - 90 + off, 8, desktop.clientWidth - ww - 8) + 'px';
+      w.style.top = clamp(34 + off, 8, desktop.clientHeight - 80) + 'px';
+    }
     w.innerHTML =
       '<div class="os-tbar"><span class="os-lights">' +
         '<button class="os-lt r" title="Close" data-act="close"><span>✕</span></button>' +
@@ -280,8 +294,7 @@
       var app = CATALOG[key]; if (!app) return;
       var d = document.createElement('button'); d.type = 'button'; d.className = 'os-dik'; d.dataset.key = key;
       d.style.background = app.grad;
-      d.innerHTML = svg(app.ic) + '<span class="os-tip">' + app.label + '</span><span class="os-run"></span>' +
-        (app.badge ? '<span class="os-badge">' + app.badge + '</span>' : '');
+      d.innerHTML = svg(app.ic) + '<span class="os-tip">' + app.label + '</span><span class="os-run"></span>';
       if (wins[key] && wins[key].style.display !== 'none') d.classList.add('running');
       d.addEventListener('click', function () { openApp(key); });
       dock.appendChild(d);

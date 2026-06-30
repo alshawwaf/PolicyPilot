@@ -8,7 +8,7 @@
          only the page-nav links are hidden — the dock is the navigation). ---- */
   body.desktop-mode { overflow:hidden; }
   body.desktop-mode header { height:48px; min-height:48px; padding:0 16px; background:rgba(12,17,32,.62);
-    backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px); border-bottom:1px solid rgba(255,255,255,.07); }
+    backdrop-filter:blur(16px) saturate(180%); -webkit-backdrop-filter:blur(16px) saturate(180%); border-bottom:1px solid rgba(255,255,255,.07); }
   html[data-theme="light"] body.desktop-mode header { background:rgba(255,255,255,.7); border-bottom:1px solid var(--line); }
   body.desktop-mode .nav-main, body.desktop-mode .nav-toggle, body.desktop-mode .navsep { display:none !important; }
   body.desktop-mode .nav-side { margin-left:auto; }
@@ -24,6 +24,9 @@
       radial-gradient(1100px 460px at 78% -8%, rgba(123,63,242,.18), transparent 60%),
       radial-gradient(900px 420px at 8% 112%, rgba(255,61,154,.14), transparent 55%),
       linear-gradient(160deg,#eef1f8,#e7ebf4); }
+  .os-desktop::before { content:""; position:absolute; inset:0; pointer-events:none; opacity:.022;   /* subtle film-grain texture */
+    background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); }
+  html[data-theme="light"] .os-desktop::before { opacity:.04; }
   .os-hello { position:absolute; top:42px; left:0; right:0; text-align:center; pointer-events:none; }
   .os-hello h2 { font-size:30px; font-weight:700; margin:0; letter-spacing:-.4px;
     background:var(--accent-grad); -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; }
@@ -41,8 +44,8 @@
 
   /* ---- Dock ---- */
   .os-dock { position:absolute; left:50%; transform:translateX(-50%); bottom:18px; display:flex; gap:13px;
-    padding:11px 15px; border-radius:20px; background:rgba(22,28,48,.5); backdrop-filter:blur(18px);
-    -webkit-backdrop-filter:blur(18px); border:1px solid rgba(255,255,255,.12);
+    padding:11px 15px; border-radius:20px; background:rgba(22,28,48,.5); backdrop-filter:blur(18px) saturate(180%);
+    -webkit-backdrop-filter:blur(18px) saturate(180%); border:1px solid rgba(255,255,255,.12);
     box-shadow:0 16px 50px rgba(0,0,0,.45); z-index:90000; }   /* above all windows — the dock is always visible (macOS) */
   html[data-theme="light"] .os-dock { background:rgba(255,255,255,.62); border-color:rgba(0,0,0,.06); box-shadow:0 16px 40px rgba(16,24,40,.18); }
   .os-dock .os-sep { width:1px; align-self:stretch; margin:4px 1px; background:rgba(255,255,255,.16); }
@@ -64,7 +67,7 @@
 
   /* ---- Launchpad ---- */
   .os-launch { position:absolute; inset:0; z-index:100000; display:none; align-items:flex-start; justify-content:center;
-    background:rgba(8,11,20,.6); backdrop-filter:blur(22px); -webkit-backdrop-filter:blur(22px); padding:54px 24px; }
+    background:rgba(8,11,20,.6); backdrop-filter:blur(22px) saturate(180%); -webkit-backdrop-filter:blur(22px) saturate(180%); padding:54px 24px; }
   .os-launch.open { display:flex; }
   .os-launch-grid { display:grid; grid-template-columns:repeat(auto-fill,150px); gap:18px; align-content:start;
     width:100%; max-width:840px; }
@@ -83,7 +86,7 @@
 
   /* ---- Right-click context menu ---- */
   .os-ctx { position:absolute; z-index:100002; min-width:212px; padding:6px; display:none;
-    background:rgba(20,26,44,.97); backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px);
+    background:rgba(20,26,44,.97); backdrop-filter:blur(14px) saturate(180%); -webkit-backdrop-filter:blur(14px) saturate(180%);
     border:1px solid rgba(255,255,255,.12); border-radius:12px; box-shadow:0 18px 50px rgba(0,0,0,.5); }
   html[data-theme="light"] .os-ctx { background:rgba(255,255,255,.98); border-color:var(--line); box-shadow:0 18px 44px rgba(16,24,40,.2); }
   .os-ctx.open { display:block; }
@@ -95,10 +98,12 @@
 
   /* ---- Windows ---- */
   .os-win { position:absolute; display:flex; flex-direction:column; background:var(--surface); border:1px solid var(--line-strong);
-    border-radius:13px; overflow:hidden; box-shadow:0 28px 70px rgba(0,0,0,.55), 0 0 0 1px rgba(255,255,255,.04) inset;
-    min-width:360px; min-height:240px; }
-  html[data-theme="light"] .os-win { box-shadow:0 24px 60px rgba(16,24,40,.22); }
-  .os-win.active { box-shadow:0 30px 80px rgba(0,0,0,.62), 0 0 0 1px var(--accent-soft) inset; }
+    border-radius:13px; overflow:hidden; box-shadow:0 24px 60px -16px rgba(0,0,0,.7), 0 0 0 1px rgba(255,255,255,.04) inset;
+    min-width:360px; min-height:240px; animation:os-win-in .16s cubic-bezier(.4,0,.2,1); transform-origin:center; }
+  @keyframes os-win-in { from { opacity:0; transform:scale(.965); } to { opacity:1; transform:scale(1); } }
+  @media (prefers-reduced-motion: reduce) { .os-win { animation:none; } }
+  html[data-theme="light"] .os-win { box-shadow:0 24px 60px -16px rgba(16,24,40,.28); }
+  .os-win.active { box-shadow:0 34px 80px -18px rgba(0,0,0,.85), 0 0 0 1px var(--accent-soft) inset; }
   .os-tbar { height:40px; flex:none; display:flex; align-items:center; gap:9px; padding:0 13px; cursor:grab;
     background:linear-gradient(180deg, var(--surface-3), var(--surface-2)); border-bottom:1px solid var(--line); user-select:none; }
   .os-tbar:active { cursor:grabbing; }

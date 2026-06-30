@@ -34,6 +34,10 @@
   .dtcanvas.tracing .dtnode { opacity:.2; filter:saturate(.45); transition:opacity .25s, filter .25s; }
   .dtcanvas.tracing .dtnode.dt-trace { opacity:1; filter:none; outline:2px solid var(--accent); outline-offset:3px;
     box-shadow:0 0 0 1px var(--accent), 0 0 30px -2px var(--accent), 0 8px 22px -8px rgba(0,0,0,.6); }
+  /* the CURRENT step pops: magnified, brightest glow, on top — so the eye never loses it as Play advances */
+  .dtcanvas.tracing .dtnode.dt-current { z-index:40; transform:scale(1.16); outline-width:3px;
+    box-shadow:0 0 0 2px var(--accent), 0 0 52px 0 var(--accent), 0 14px 32px -8px rgba(0,0,0,.75); }
+  @media (prefers-reduced-motion: reduce){ .dtcanvas.tracing .dtnode.dt-current { transform:none; } }
   .dtedges path.dtedge-active { stroke:var(--accent) !important; stroke-width:2.5px; filter:url(#dtglow); }
   .dtedges path.dtflow { stroke:#fff; stroke-width:1.8px; fill:none; stroke-dasharray:2 15; opacity:.9; animation:dtflow 1s linear infinite; }
   @keyframes dtflow { to { stroke-dashoffset:-34; } }
@@ -267,7 +271,7 @@
       }
       GRAPH.nodes.forEach(function (n) { if (!isCore(n) && hasCoreParent(n.id) && !placed[n.id]) placeBand(n.id); });
     })();
-    var activeNodes = {}, activePairs = {};   // the traced path (set by the walkthrough via window.PPDTree)
+    var activeNodes = {}, activePairs = {}, activeCurrent = null;   // the traced path + the current step (set by the walkthrough)
 
     // pan / zoom — an absolute transform on the canvas
     var s = 1, tx = 0, ty = 0, fitS = 1, natW = 600, natH = 400, panMoved = false;
@@ -367,6 +371,7 @@
         var d = document.createElement('div');
         d.className = 'dtnode k-' + n.kind; d.setAttribute('data-node', n.id);
         if (activeNodes[n.id]) d.classList.add('dt-trace');
+        if (activeCurrent === n.id) d.classList.add('dt-current');
         d.style.left = nodeX(n) + 'px'; d.style.top = nodeY(n) + 'px'; d.style.width = n.w + 'px';
         d.innerHTML = '<div class="dtn-title">' + esc(n.label) + '</div>' +
                       (n.sub ? '<div class="dtn-sub">' + esc(n.sub) + '</div>' : '');
@@ -390,7 +395,12 @@
       });
       canvas.classList.toggle('tracing', Object.keys(activeNodes).length > 0);
       // labels wrap, so measure heights next frame, then draw edges + (optionally) fit
-      requestAnimationFrame(function () { drawEdges(); if (refit) fit(); else { clampPan(); apply(); } });
+      requestAnimationFrame(function () {
+        drawEdges();
+        if (refit) fit();
+        else if (activeCurrent && cards[activeCurrent]) { clampPan(); apply(); focusNode(activeCurrent); }   // tracing: re-centre the current step last
+        else { clampPan(); apply(); }
+      });
     }
     // A STRUCTURAL change (expand/collapse) clears any active trace first, so a stale dim from a selected
     // scenario never greys out the freshly revealed nodes. (The walkthrough's setActive/focusPath are
@@ -497,14 +507,27 @@
     })();
 
     // Trace hook for the walkthrough: light up a path (nodes + flowing edges), dim the rest, frame it.
-    function setActive(ids) {
+    function setActive(ids, currentId) {
       activeNodes = {}; activePairs = {}; ids = ids || [];
       ids.forEach(function (id) { activeNodes[id] = 1; });
       for (var i = 1; i < ids.length; i++) activePairs[ids[i - 1] + '>' + ids[i]] = 1;
       ids.forEach(function (id) { visible.add(id); });   // reveal a collapsed branch if the path runs through it
+      activeCurrent = (currentId != null) ? currentId : (ids.length ? ids[ids.length - 1] : null);
       render(false);
     }
-    function clearActive() { activeNodes = {}; activePairs = {}; render(false); }
+    function clearActive() { activeNodes = {}; activePairs = {}; activeCurrent = null; render(false); }
+    // Centre + MAGNIFY a single node (the current step) so it never shrinks away as the path grows.
+    function focusNode(id) {
+      var p = curPos(id); if (!p) return;
+      var ns = Math.min(vpW() / (p.w + 360), vpH() / (p.h + 300), 1.15);
+      ns = Math.max(0.85, ns); s = ns;
+      // centre the node exactly — do NOT clampPan() here: clamping is for free user-panning, but a focus must
+      // be able to bring a node near the graph's edge to the middle even if the rest spills off-screen.
+      tx = vpW() / 2 - (p.x + p.w / 2) * ns;
+      ty = vpH() / 2 - (p.y + p.h / 2) * ns;
+      canvas.style.transition = 'transform .5s cubic-bezier(.4,.8,.3,1)'; apply();
+      setTimeout(function () { canvas.style.transition = ''; }, 560);
+    }
     function focusPath(ids) {
       if (!ids || !ids.length) return;
       var x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9, any = false;
@@ -516,12 +539,13 @@
       canvas.style.transition = 'transform .45s ease'; apply();
       setTimeout(function () { canvas.style.transition = ''; }, 520);
     }
-    window.PPDTree = { setActive: setActive, clearActive: clearActive, focus: focusPath, fit: fit };
+    window.PPDTree = { setActive: setActive, clearActive: clearActive, focus: focusPath, focusNode: focusNode, fit: fit };
 
     render(true);
-    var rt; window.addEventListener('resize', function () { clearTimeout(rt); rt = setTimeout(function () { fit(); }, 140); });
-    // refit when the column layout flips (split <-> stacked) or the wrap is otherwise resized
-    var _rt; if (window.ResizeObserver) { var _ro = new ResizeObserver(function () { clearTimeout(_rt); _rt = setTimeout(function () { fit(); }, 120); }); _ro.observe(wrap); }
+    // on resize: keep the current trace step centred if a trace is active, else re-fit
+    function reflow() { if (activeCurrent && cards[activeCurrent]) focusNode(activeCurrent); else fit(); }
+    var rt; window.addEventListener('resize', function () { clearTimeout(rt); rt = setTimeout(reflow, 140); });
+    var _rt; if (window.ResizeObserver) { var _ro = new ResizeObserver(function () { clearTimeout(_rt); _rt = setTimeout(reflow, 120); }); _ro.observe(wrap); }
   })();
 </script>
 <script>
@@ -555,13 +579,22 @@
                widen: '#2bb8d6', create: 'var(--warn)', note: '#5aa8ff', review: 'var(--danger)', terminal: '#7e8db0' };
     function kc(id) { var n = byId[id]; return (n && KC[n.kind]) || 'var(--muted)'; }
 
+    // Explicit traced paths (not BFS shortest) so each scenario walks the INTENDED nodes — together the six
+    // cover every core node, so no block is left greyed-out in every mode. A path falls back to BFS if a node
+    // is missing in this graph; scenarios whose path can't be realised are dropped.
     var SCN = [
-      { key: 'noop',   label: 'Already allowed',            target: 'noop',    c: 'var(--ok)',     cs: 'var(--ok-bg)' },
-      { key: 'widen',  label: 'Extend a rule',              target: 'doWiden', c: 'var(--info)',   cs: 'var(--info-bg)' },
-      { key: 'create', label: 'New rule (deny in the way)', target: 'create',  c: 'var(--warn)',   cs: 'var(--warn-bg)' },
-      { key: 'note',   label: 'Can’t fully resolve',        target: 'noteO',   c: 'var(--info)',   cs: 'var(--info-bg)' },
-      { key: 'fix',    label: 'Broken request',             target: 'review',  c: 'var(--danger)', cs: 'var(--danger-bg)' }
-    ].filter(function (s) { return pathTo(s.target); });        // only outcomes that exist in this graph
+      { key: 'noop',   label: 'Already allowed',            path: ['req','resolve','action','perm','noop'],            c: 'var(--ok)',     cs: 'var(--ok-bg)' },
+      { key: 'widen',  label: 'Extend a rule',              path: ['req','resolve','action','perm','deny','widen','doWiden'], c: 'var(--info)', cs: 'var(--info-bg)' },
+      { key: 'create', label: 'New rule (deny in the way)', path: ['req','resolve','action','perm','deny','create'],   c: 'var(--warn)',   cs: 'var(--warn-bg)' },
+      { key: 'block',  label: 'Blocked / diverted',         path: ['req','resolve','action','verdict'],                c: 'var(--warn)',   cs: 'var(--warn-bg)' },
+      { key: 'note',   label: 'Can’t fully resolve',        path: ['req','resolve','noteO'],                           c: 'var(--info)',   cs: 'var(--info-bg)' },
+      { key: 'fix',    label: 'Broken request',             path: ['req','resolve','review'],                          c: 'var(--danger)', cs: 'var(--danger-bg)' }
+    ].map(function (s) {                                         // validate each path against this graph; else fall back to BFS
+      var ok = s.path && s.path.every(function (id) { return byId[id]; })
+        && s.path.every(function (id, i) { return i === 0 || (adj[s.path[i - 1]] || []).some(function (e) { return e.dst === id; }); });
+      if (!ok) { var bfs = pathTo(s.path ? s.path[s.path.length - 1] : null); s.path = bfs || null; }
+      return s;
+    }).filter(function (s) { return s.path && s.path.length; });
 
     var stage = document.getElementById('dw-stage'), stepsEl = document.getElementById('dw-steps'),
         prog = document.getElementById('dw-progress'), canvas = document.getElementById('aa-flow-canvas');
@@ -577,7 +610,7 @@
 
     function clearHighlight() { if (window.PPDTree) window.PPDTree.clearActive(); }
     function highlight(upto) {
-      if (window.PPDTree && curPath) window.PPDTree.setActive(curPath.slice(0, upto + 1));   // glow path up to this step
+      if (window.PPDTree && curPath) window.PPDTree.setActive(curPath.slice(0, upto + 1), curPath[upto]);   // glow path; mark current
     }
     function renderSteps() {
       stepsEl.innerHTML = '';
@@ -597,16 +630,15 @@
       var kids = stepsEl.children;
       for (var i = 0; i < kids.length; i++) kids[i].classList.toggle('shown', i <= step);
       prog.textContent = 'Step ' + (step + 1) + ' of ' + curPath.length;
-      highlight(step);
-      if (window.PPDTree && curPath) window.PPDTree.focus(curPath.slice(0, step + 1));   // camera follows the traced path, same tick as highlight
+      highlight(step);   // setActive() marks the current node; render() then centres + magnifies it (in its rAF)
       if (kids[step] && kids[step].scrollIntoView) kids[step].scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     }
     function stopPlay() { if (playT) { clearInterval(playT); playT = null; } var pb = document.getElementById('dw-play'); if (pb) pb.textContent = '▶ Play'; }
     function selectScenario(s) {
       stopPlay();
       var cs = chips.children; for (var i = 0; i < cs.length; i++) cs[i].classList.toggle('active', cs[i].getAttribute('data-k') === s.key);
-      curPath = pathTo(s.target) || []; step = 0; stage.hidden = false; renderSteps();
-      if (window.PPDTree) requestAnimationFrame(function () { window.PPDTree.focus(curPath); });   // frame the route
+      curPath = (s.path ? s.path.slice() : (pathTo(s.target) || [])); step = 0; stage.hidden = false; renderSteps();
+      // (no whole-route framing here — showUpTo centres + magnifies the current step instead)
     }
     document.getElementById('dw-next').addEventListener('click', function () { if (curPath && step < curPath.length - 1) { step++; showUpTo(); } });
     document.getElementById('dw-prev').addEventListener('click', function () { if (curPath && step > 0) { step--; showUpTo(); } });

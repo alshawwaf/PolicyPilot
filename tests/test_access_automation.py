@@ -1251,22 +1251,23 @@ def test_access_automation_detail_renders_form_and_webhook():
     assert "dt.value = 'internet'" in html       # syncSvcType auto-selects Internet for an app request
     # rollback panel: a "disabled" rule is a non-terminal state (Re-enable | Delete rule), and re-enable maps
     assert "c.state === 'disabled'" in html and "bodyObj.reenable = true" in html
-    # the "behind the scenes" decision tree — a custom canvas the client renders from the engine's own
-    # graph JSON, still exportable to the user's diagram tool (.drawio / .mmd / .dot)
+    # the decision tree is now its OWN app (/decision-logic); this page only links out to it
+    assert 'data-open-app="decisionlogic"' in html and "How it decides" in html
+    assert 'id="aa-flow-canvas"' not in html        # the canvas no longer lives on this page
+
+
+def test_decision_logic_app_renders_standalone():
+    # "How it decides" is its own app — server-independent (engine logic + global knobs), no credential gate.
+    req = types.SimpleNamespace(base_url="https://portal.example/")
+    html = _render("decision_logic.html", request=req,
+                   decision_graph_json=json.dumps(dt.to_graph()),
+                   aa_options_json=json.dumps({"profile": "custom", "values": {}}))
     assert 'id="aa-flow-canvas"' in html and "How it decides" in html
+    # a custom canvas the client renders from the engine's graph JSON, still exportable (.drawio / .mmd / .dot)
     assert "/access-automation/decision-tree/drawio" in html and "decision-tree/mmd" in html
     for leaf in ("No-op", "Widen the rule", "Create least-privilege rule", "Note & keep going"):
         assert leaf in html        # leaf labels live in the embedded decision-graph JSON
     assert "Review" not in html    # the flow is reuse-or-create — no policy "review" stop
-
-
-def test_access_automation_diagram_shows_without_credential():
-    ms = types.SimpleNamespace(id=9, name="No-Secret", host="10.0.0.9", port=443, domain="")
-    req = types.SimpleNamespace(base_url="https://portal.example/")
-    html = _render("access_automation_detail.html", ms=ms, has_secret=False, flash=None, request=req,
-                   decision_graph_json=json.dumps(dt.to_graph()))
-    # the explainer is educational, so it renders even when policy can't be pulled
-    assert 'id="aa-flow-canvas"' in html and "How it decides" in html
 
 
 # --- group dereferencing: an unresolved group source must REVIEW; a resolved one must not block -----

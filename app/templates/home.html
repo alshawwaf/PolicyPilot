@@ -169,11 +169,13 @@
     external: '<path d="M14 3h7v7"/><path d="M21 3l-9 9"/><path d="M21 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5"/>',
     star: '<polygon points="12 2 15 9 22 9.3 16.5 14 18.5 21 12 17 5.5 21 7.5 14 2 9.3 9 9"/>',
     pulse: '<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>',
-    terminal: '<polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/>'
+    terminal: '<polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/>',
+    branch: '<line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/>'
   };
   function svg(p) { return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">' + p + '</svg>'; }
   var CATALOG = {
     access:      { label: 'Access automation', href: '/access-automation', ic: I.access,  grad: 'linear-gradient(135deg,#3b82f6,#22d3ee)' },
+    decisionlogic: { label: 'How it decides',   href: '/decision-logic',    ic: I.branch,  grad: 'linear-gradient(135deg,#6366f1,#a855f7)' },
     layers:      { label: 'Dynamic Layers',     href: '/layers',            ic: I.layers,  grad: 'linear-gradient(135deg,#1d9e75,#34d399)' },
     management:  { label: 'Connections',        href: '/management',        ic: I.server,  grad: 'linear-gradient(135deg,#5566dd,#7b3ff2)' },
     gateways:    { label: 'Gateways',           href: '/gateways',          ic: I.gateway, grad: 'linear-gradient(135deg,#06b6d4,#3b82f6)' },
@@ -185,7 +187,7 @@
     system:      { label: 'System',             href: '/system',            ic: I.pulse,   grad: 'linear-gradient(135deg,#10b981,#22d3ee)' },
     account:     { label: 'Account',            href: '/account',           ic: I.user,    grad: 'linear-gradient(135deg,#94a3b8,#64748b)' }
   };
-  var ORDER = ['access', 'layers', 'management', 'gateways', 'agents', 'apiexplorer', 'apidocs', 'settings', 'activity', 'system', 'account'];
+  var ORDER = ['access', 'decisionlogic', 'layers', 'management', 'gateways', 'agents', 'apiexplorer', 'apidocs', 'settings', 'activity', 'system', 'account'];
   var wins = {}, z = 100, openCount = 0;
 
   function clamp(v, lo, hi) { return Math.max(lo, Math.min(v, hi)); }
@@ -478,7 +480,11 @@
   // An embedded page asked to return to the desktop (a "/" link inside a window) — minimize windows
   // instead of nesting a desktop in the window.
   window.addEventListener('message', function (e) {
-    if (e.origin === window.location.origin && e.data && e.data.pp === 'showDesktop') showDesktop();
+    if (e.origin !== window.location.origin || !e.data || !e.data.pp) return;
+    if (e.data.pp === 'showDesktop') showDesktop();
+    // An embedded app asked to open ANOTHER app as its own window (cross-app link). Validate the key
+    // against the catalog so a framed page can only open real apps, never an arbitrary URL.
+    else if (e.data.pp === 'openApp' && CATALOG[e.data.key]) openApp(e.data.key);
   });
 
   renderDock(); renderDesktopIcons();

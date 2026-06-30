@@ -22,6 +22,16 @@
       if (!framed) return;
       document.documentElement.classList.add('embedded');
       document.addEventListener('click', function (e) {
+        // A [data-open-app] control opens ANOTHER app as its own desktop window (cross-app link) — the OS
+        // way to "go to that app" rather than navigating this window away. Standalone (unframed) pages skip
+        // this whole block, so the link's href just navigates normally.
+        var oa = e.target.closest && e.target.closest('[data-open-app]');
+        if (oa) {
+          e.preventDefault();
+          try { window.parent.postMessage({ pp: 'openApp', key: oa.getAttribute('data-open-app') }, location.origin); }
+          catch (e3) { var h = oa.getAttribute('href'); if (h) location.href = h; }
+          return;
+        }
         var a = e.target.closest && e.target.closest('a[href]'); if (!a) return;
         var u; try { u = new URL(a.href, location.origin); } catch (x) { return; }
         if (u.origin === location.origin && u.pathname === '/') {
@@ -821,6 +831,7 @@
     <nav class="nav-main" id="nav-main">
       <a href="/">Home</a>
       <a href="/access-automation">Access automation</a>
+      <a href="/decision-logic">How it decides</a>
       <a href="/layers">Dynamic Layers</a>
       <div class="menu">
         <a href="#" class="menu-trigger" data-match="/management,/gateways">Connections ▾</a>

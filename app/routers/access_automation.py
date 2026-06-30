@@ -113,13 +113,9 @@ def aa_detail(sid: int, request: Request, db: Session = Depends(get_db)):
     if user is None:
         return RedirectResponse("/login", status_code=303)
     ms = _owned(db, sid, user)
-    # The "how it decides" tree is rendered client-side from this engine graph (custom canvas, no Mermaid).
-    import json
+    # "How it decides" (the decision tree) is now its own app at /decision-logic.
     return templates.TemplateResponse(request, "access_automation_detail.html",
                                       {"ms": ms, "has_secret": mgmt_creds.has_secret(db, ms),
-                                       "decision_graph_json": json.dumps(
-                                           decision_tree.to_graph()).replace("<", "\\u003c"),
-                                       "aa_options_json": json.dumps(_aa_option_state()).replace("<", "\\u003c"),
                                        "flash": _pop_flash(request)})
 
 
@@ -135,6 +131,20 @@ def _aa_option_state() -> dict:
             "values": {"aa_app_carveout": o.app_carveout, "aa_override_blocking_deny": o.override_blocking_deny,
                        "aa_prefer_widen": o.prefer_widen, "aa_emit_notes": o.emit_notes,
                        "aa_ignore_conditions": o.ignore_conditions}}
+
+
+@router.get("/decision-logic", response_class=HTMLResponse)
+def decision_logic_page(request: Request, db: Session = Depends(get_db)):
+    """"How it decides" — its own app: the engine's first-match decision tree + the click-to-tune knobs.
+    Server-independent (the logic + the global decision options), so it isn't scoped to a Management server;
+    split out of the access-automation page so that page stays focused on making the request."""
+    import json
+    if get_user_or_none(request, db) is None:
+        return RedirectResponse("/login", status_code=303)
+    return templates.TemplateResponse(request, "decision_logic.html",
+                                      {"decision_graph_json": json.dumps(
+                                          decision_tree.to_graph()).replace("<", "\\u003c"),
+                                       "aa_options_json": json.dumps(_aa_option_state()).replace("<", "\\u003c")})
 
 
 class AAOptionBody(BaseModel):

@@ -70,6 +70,15 @@
     var current = 'terraform';
     var EXT = { terraform: '.tf', ansible: '.ansible.yml', mgmt_cli: '.mgmt_cli.sh', web_api: '.web_api.json' };
 
+    // Output pops in a floating OS window on top: progress (#gen-status) + the generated IaC (#results)
+    // both live in the window body. Falls back to inline rendering if the helper is unavailable.
+    var win = window.PPWin ? window.PPWin.create({ title: 'Policy export', width: 'min(860px, calc(100vw - 28px))' }) : null;
+    if (win) {
+      status.style.display = 'block'; status.style.margin = '0 0 10px';
+      win.body.appendChild(status); win.body.appendChild(results);
+      results.hidden = false; results.style.marginTop = '0';   // window visibility governs it now
+    }
+
     function esc(s) { var d = document.createElement('div'); d.textContent = (s == null ? '' : s); return d.innerHTML; }
     function slug(s) { return (s || 'policy').replace(/[^0-9A-Za-z._-]+/g, '_').replace(/^_+|_+$/g, '') || 'policy'; }
 
@@ -115,6 +124,7 @@
       genBtn.disabled = true;
       status.innerHTML = '<span class="muted">Pulling “' + esc(layer) + '” + objects over web_api…</span>';
       results.hidden = true;
+      if (win) win.show();
       fetch('/management/' + id + '/export?name=' + encodeURIComponent(layer), { method: 'POST' })
         .then(function (r) { return r.json(); })
         .then(function (j) {

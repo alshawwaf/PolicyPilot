@@ -57,6 +57,7 @@
               grip = root.querySelector('.pp-fwin-grip'),
               placed = false, mounted = false;
           titleEl.textContent = opts.title || '';
+          if (opts.width) root.style.width = opts.width;
           function center() {
             var w = root.offsetWidth, h = root.offsetHeight;
             root.style.left = clamp((window.innerWidth - w) / 2, 8, Math.max(8, window.innerWidth - w - 8)) + 'px';

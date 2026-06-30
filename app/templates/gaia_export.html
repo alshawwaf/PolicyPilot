@@ -73,6 +73,15 @@
     var EXT = { terraform: '.gaia.tf', ansible: '.gaia.yml', clish: '.gaia.clish.sh', web_api: '.gaia.web_api.json' };
     var BASE = {{ host|tojson }}.split(':')[0].replace(/[^0-9A-Za-z._-]+/g, '_') || 'gaia';
 
+    // Output pops in a floating OS window on top: progress (#gen-status) + the generated IaC (#results)
+    // both live in the window body. Falls back to inline rendering if the helper is unavailable.
+    var win = window.PPWin ? window.PPWin.create({ title: 'Gaia config export', width: 'min(860px, calc(100vw - 28px))' }) : null;
+    if (win) {
+      status.style.display = 'block'; status.style.margin = '0 0 10px';
+      win.body.appendChild(status); win.body.appendChild(results);
+      results.hidden = false; results.style.marginTop = '0';   // window visibility governs it now
+    }
+
     function esc(s) { var d = document.createElement('div'); d.textContent = (s == null ? '' : s); return d.innerHTML; }
     function renderTab() { code.textContent = data[current] || ''; fileName.textContent = BASE + EXT[current]; }
     function renderStats() {
@@ -108,6 +117,7 @@
       status.innerHTML = '<span class="muted">Reading the live Gaia config over <code>gaia_api</code> — ' +
         'this can take a few seconds…</span>';
       results.hidden = true;
+      if (win) win.show();
       function restore() { genBtn.disabled = false; genBtn.textContent = genBtn.dataset.t; }
       var body = new URLSearchParams(); if (pw.value) body.set('password', pw.value);
       fetch(runUrl, { method: 'POST', body: body })

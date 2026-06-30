@@ -192,9 +192,10 @@ def decide_access(server_id: str, source: str, destination: str, layer: str, ser
     space — e.g. does a host have access to the domain ``alshawwaf.ca`` (source_kind stays ip,
     destination_kind=domain, destination='alshawwaf.ca').
 
-    ``server_id`` is the numeric id OR the server name/host from list_management_servers. If the user
-    doesn't name a server and only ONE is configured, it's used automatically — pass its id/name if you
-    know it, but don't invent a placeholder like "localhost" or stop to ask when there's only one."""
+    ``server_id`` MUST be a REAL server — its numeric id, name, or host from list_management_servers.
+    NEVER invent or default it (not "localhost", "127.0.0.1", a hostname, or any guess — a fabricated value
+    just fails to resolve). If the user named no management server: call list_management_servers — if exactly
+    one exists, use it; if more than one, ASK the user which management server to use. Do not assume."""
     db = SessionLocal()
     try:
         ms, secret = _server_secret(db, server_id)
@@ -260,9 +261,10 @@ def apply_access(server_id: str, source: str, destination: str, layer: str, serv
     REPLAYS the first committed result (adds ``idempotent_replay: true``) instead of publishing twice — so an
     agent retry or webhook redelivery can't double-commit. Safe to omit for dry-runs.
 
-    ``server_id`` is the numeric id OR the server name/host from list_management_servers. If the user
-    doesn't name a server and only ONE is configured, it's used automatically — pass its id/name if you
-    know it, but don't invent a placeholder like "localhost" or stop to ask when there's only one."""
+    ``server_id`` MUST be a REAL server — its numeric id, name, or host from list_management_servers.
+    NEVER invent or default it (not "localhost", "127.0.0.1", a hostname, or any guess — a fabricated value
+    just fails to resolve). If the user named no management server: call list_management_servers — if exactly
+    one exists, use it; if more than one, ASK the user which management server to use. Do not assume."""
     if idempotency_key and publish:
         from . import idempotency
         cached = idempotency.replay(idempotency_key)
@@ -320,9 +322,10 @@ def remove_access(server_id: str, source: str, destination: str, layer: str, ser
     an opaque/inline/conditional/multi-rule path (won't guess a destructive change). With publish=false it
     DRY-RUNS (validate then discard); publish=true COMMITS, allowed ONLY when 'mcp_allow_publish' is enabled.
 
-    ``server_id`` is the numeric id OR the server name/host from list_management_servers. If the user
-    doesn't name a server and only ONE is configured, it's used automatically — pass its id/name if you
-    know it, but don't invent a placeholder like "localhost" or stop to ask when there's only one."""
+    ``server_id`` MUST be a REAL server — its numeric id, name, or host from list_management_servers.
+    NEVER invent or default it (not "localhost", "127.0.0.1", a hostname, or any guess — a fabricated value
+    just fails to resolve). If the user named no management server: call list_management_servers — if exactly
+    one exists, use it; if more than one, ASK the user which management server to use. Do not assume."""
     if publish:
         from . import app_settings
         try:

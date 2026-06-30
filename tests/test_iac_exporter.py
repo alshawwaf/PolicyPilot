@@ -32,14 +32,31 @@ def test_renders_server_in_rail_and_wires_both_export_endpoints():
     assert "/gaia-export/run" in html      # Gaia OS config export endpoint, called inline
 
 
-def test_no_credential_server_marked_and_gaia_password_available():
+def test_no_password_field__exporter_reuses_saved_credentials():
     ms = types.SimpleNamespace(id=4, name="NoCred", host="h", port=443, domain="d1")
-    html = _render(rows=[{"ms": ms, "has_secret": False}])
-    assert 'data-id="4"' in html and 'data-secret="0"' in html and "no credential" in html
-    # Gaia export accepts a runtime password (the field is always present)…
-    assert 'id="iax-gaia-pw"' in html
-    # …while the policy side shows the "needs a saved credential" note instead of pulling.
-    assert "no saved credential" in html
+    html = _render(rows=[{"ms": ms, "has_secret": False, "has_gaia": False}])
+    assert 'data-id="4"' in html and 'data-secret="0"' in html and 'data-gaia="0"' in html
+    # No password field — Gaia export reuses saved credentials (gateway password / the SMS's Gaia creds).
+    assert 'id="iax-gaia-pw"' not in html
+    # The "no Gaia credentials saved" note is in the panel for the JS to surface when none are on file.
+    assert 'id="iax-gaia-nocred"' in html
+
+
+def test_management_form_has_distinct_gaia_section():
+    ms = types.SimpleNamespace(id=1, name="SMS", host="h", port=443, domain="", username="api",
+                               gaia_username="admin", cert_pem="", auto_trust=True)
+    html = templates.env.get_template("_management_form.html").render(
+        ms=ms, error=None, action="/x", has_secret=True, has_gaia_secret=True, crypto_ok=True)
+    assert "SmartConsole / Management API" in html          # the API creds are clearly labelled now
+    assert "Gaia OS credentials" in html                    # the separate, optional Gaia section
+    assert 'name="gaia_username"' in html and 'name="gaia_password"' in html
+    assert 'name="clear_gaia_password"' in html             # clear control shown when a Gaia secret is saved
+
+
+def test_server_gaia_creds_flag_in_rail():
+    ms = types.SimpleNamespace(id=2, name="SMS2", host="h", port=443, domain="")
+    assert 'data-gaia="1"' in _render(rows=[{"ms": ms, "has_secret": True, "has_gaia": True}])
+    assert 'data-gaia="0"' in _render(rows=[{"ms": ms, "has_secret": True, "has_gaia": False}])
 
 
 def test_empty_state_when_no_servers_or_gateways():

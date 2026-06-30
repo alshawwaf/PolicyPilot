@@ -29,11 +29,11 @@
   </div>
 
   <hr>
-  <div class="form-sec">Credentials</div>
+  <div class="form-sec">SmartConsole / Management API</div>
   <div class="ms-grp">
     <label>Username</label>
     <input name="username" value="{{ ms.username if ms else '' }}" placeholder="api-admin">
-    <p class="muted">A management admin/API user. For delegated access, give it permission to only the layers it manages — the portal does exactly what this account can.</p>
+    <p class="muted">The SmartConsole / Management&nbsp;API account — used over the <code>web_api</code> to pull, view, edit and export <b>policy</b>. For delegated access, scope it to only the layers it manages.</p>
 
     <label>Password <span class="muted" style="font-weight:400;">— optional, stored AES-256-encrypted</span></label>
     {% if crypto_ok %}
@@ -48,6 +48,26 @@
     {% else %}
     <input type="password" disabled placeholder="Encryption unavailable — secret can't be stored in this environment">
     <p class="muted">Storing a secret needs the encryption library, which isn't available here. It's entered per action for now.</p>
+    {% endif %}
+  </div>
+
+  <hr>
+  <div class="form-sec">Gaia OS credentials <span class="muted" style="font-weight:600; text-transform:none; letter-spacing:0;">· optional</span></div>
+  <div class="ms-grp">
+    <p class="muted" style="margin:13px 0 0;">A <b>separate</b> login for the appliance's own <b>Gaia OS</b> — used only to export this server's OS config (hostname, DNS, NTP, interfaces, routes…) in the <a href="/iac-export">IaC Exporter</a>. This is <b>not</b> the Management&nbsp;API account above. Leave blank if you won't export the SMS's Gaia config.</p>
+    <label>Gaia username</label>
+    <input name="gaia_username" value="{{ ms.gaia_username if ms else '' }}" placeholder="admin" autocomplete="off">
+
+    <label>Gaia password <span class="muted" style="font-weight:400;">— optional, stored AES-256-encrypted</span></label>
+    {% if crypto_ok %}
+    <input name="gaia_password" type="password" autocomplete="new-password"
+           placeholder="{{ 'Leave blank to keep the saved Gaia secret' if has_gaia_secret else 'Stored encrypted; reused for Gaia export' }}">
+    {% if has_gaia_secret %}
+    <div class="check" style="margin-top:8px;"><input type="checkbox" id="clear_gaia_password" name="clear_gaia_password" value="1"><label for="clear_gaia_password">Clear the saved Gaia secret</label></div>
+    <p class="muted">A Gaia secret is currently <b>saved (encrypted)</b>. Type a new one to replace it, tick “Clear” to remove it, or leave blank to keep it.</p>
+    {% endif %}
+    {% else %}
+    <input type="password" disabled placeholder="Encryption unavailable — secret can't be stored in this environment">
     {% endif %}
   </div>
 

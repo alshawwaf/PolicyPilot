@@ -318,12 +318,16 @@ class ManagementServer(Base):
     port: Mapped[int] = mapped_column(Integer, default=443)
     username: Mapped[str] = mapped_column(String(120), default="")
     domain: Mapped[str] = mapped_column(String(200), default="")   # MDS/CMA domain; blank = single SMS
+    gaia_username: Mapped[str] = mapped_column(String(120), default="")  # Gaia OS login for THIS appliance's
+    # own OS config (gaia_api) — distinct from `username` (the SmartConsole / Management-API account). Optional.
     cert_pem: Mapped[str] = mapped_column(Text, default="")
     auto_trust: Mapped[bool] = mapped_column(Boolean, default=True)
     owner_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
     created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
     secret: Mapped["ManagementSecret"] = relationship(
+        back_populates="server", cascade="all, delete-orphan", uselist=False)
+    gaia_secret: Mapped["ManagementGaiaSecret"] = relationship(
         back_populates="server", cascade="all, delete-orphan", uselist=False)
 
 
@@ -342,5 +346,23 @@ class ManagementSecret(Base):
         DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 
     server: Mapped["ManagementServer"] = relationship(back_populates="secret")
+
+
+class ManagementGaiaSecret(Base):
+    """The Management Server's GAIA OS password, encrypted at rest (AES-256-GCM). The SMS appliance's own
+    Gaia OS uses a DIFFERENT login than the SmartConsole / Management API, so its Gaia-config export
+    (gaia_api) reuses this — paired with ManagementServer.gaia_username — never the API credentials. Its
+    own table, separate from ManagementSecret, so the two secrets are isolated."""
+
+    __tablename__ = "management_gaia_secrets"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    server_id: Mapped[int] = mapped_column(ForeignKey("management_servers.id"), unique=True, index=True)
+    ciphertext: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+
+    server: Mapped["ManagementServer"] = relationship(back_populates="gaia_secret")
 
 

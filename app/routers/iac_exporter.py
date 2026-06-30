@@ -33,7 +33,11 @@ def iac_exporter(request: Request, db: Session = Depends(get_db)):
     gateways = db.scalars(
         select(Gateway).where(Gateway.owner_id == user.id).order_by(Gateway.created_at.desc())
     ).all()
-    rows = [{"ms": m, "has_secret": mgmt_creds.has_secret(db, m)} for m in servers]
+    # has_secret = the SmartConsole/Management-API secret (policy export); has_gaia = the SEPARATE Gaia
+    # OS creds (username + password) for the SMS's own config export. A gateway's saved password IS its
+    # Gaia login, so for gateways has_secret doubles as the Gaia-cred flag.
+    rows = [{"ms": m, "has_secret": mgmt_creds.has_secret(db, m),
+             "has_gaia": mgmt_creds.has_gaia_creds(db, m)} for m in servers]
     gw_rows = [{"gw": g, "has_secret": gateway_creds.has_password(db, g)} for g in gateways]
     return templates.TemplateResponse(request, "iac_exporter.html",
                                       {"rows": rows, "gateways": gw_rows, "flash": _pop_flash(request)})

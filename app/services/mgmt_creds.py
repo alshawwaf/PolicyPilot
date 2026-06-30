@@ -12,12 +12,13 @@ import logging
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from ..models import ManagementSecret, ManagementServer
+from ..models import ManagementGaiaSecret, ManagementSecret, ManagementServer
 from . import crypto
 
 _log = logging.getLogger("policypilot.creds")
 
 _INFO = b"policypilot-mgmt-secret-v1"   # HKDF context label — distinct from gateway/datacenter secrets
+_GAIA_INFO = b"policypilot-mgmt-gaia-secret-v1"   # distinct again, so a Gaia token can't open as the API one
 
 
 def available() -> bool:
@@ -80,3 +81,55 @@ def clear_secret(db: Session, server: ManagementServer) -> None:
     if row:
         db.delete(row)
         db.commit()
+
+
+# --------------------------------------------------------------------------- #
+# GAIA OS secret — the SMS appliance's own OS login (gaia_api), separate from the API password above.
+# Paired with ManagementServer.gaia_username; encrypted under its own context label.
+# --------------------------------------------------------------------------- #
+def _gaia_row(db: Session, server: ManagementServer) -> ManagementGaiaSecret | None:
+    return db.scalar(select(ManagementGaiaSecret).where(ManagementGaiaSecret.server_id == server.id))
+
+
+def has_gaia_secret(db: Session, server: ManagementServer) -> bool:
+    if not available():
+        return False
+    row = _gaia_row(db, server)
+    return bool(row and row.ciphertext)
+
+
+def has_gaia_creds(db: Session, server: ManagementServer) -> bool:
+    """Both halves present — a username AND a usable password — so a Gaia export can run unattended."""
+    return bool((server.gaia_username or "").strip()) and has_gaia_secret(db, server)
+
+
+def get_gaia_secret(db: Session, server: ManagementServer) -> str | None:
+    row = _gaia_row(db, server)
+    if not (row and row.ciphertext):
+        return None
+    plain = decrypt_gaia(row.ciphertext)
+    if plain is None and available():
+        _log.warning("management-server GAIA credential for id=%s did not decrypt (key changed?) — "
+                     "re-enter it on the server's Edit page", server.id)
+    return plain
+
+
+def store_gaia_secret(db: Session, server: ManagementServer, plaintext: str) -> None:
+    token = crypto.encrypt(plaintext, _GAIA_INFO)
+    row = _gaia_row(db, server)
+    if row:
+        row.ciphertext = token
+    else:
+        db.add(ManagementGaiaSecret(server_id=server.id, ciphertext=token))
+    db.commit()
+
+
+def clear_gaia_secret(db: Session, server: ManagementServer) -> None:
+    row = _gaia_row(db, server)
+    if row:
+        db.delete(row)
+        db.commit()
+
+
+def decrypt_gaia(token: str) -> str | None:
+    return crypto.decrypt(token, _GAIA_INFO)

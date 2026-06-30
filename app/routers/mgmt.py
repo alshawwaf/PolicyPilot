@@ -75,7 +75,8 @@ def mgmt_new(request: Request, db: Session = Depends(get_db)):
         return RedirectResponse("/login", status_code=303)
     return templates.TemplateResponse(request, _form_tpl(request),
                                       {"ms": None, "error": None, "action": "/management/new",
-                                       "has_secret": False, "crypto_ok": mgmt_creds.available()})
+                                       "has_secret": False, "has_gaia_secret": False,
+                                       "crypto_ok": mgmt_creds.available()})
 
 
 def _autotrust_note(db: Session, ms) -> str:
@@ -93,13 +94,14 @@ def _autotrust_note(db: Session, ms) -> str:
 @router.post("/management/new")
 def mgmt_create(request: Request, name: str = Form(...), host: str = Form(...), port: str = Form("443"),
                 username: str = Form(""), domain: str = Form(""), cert_pem: str = Form(""),
-                password: str = Form(""), auto_trust: str = Form(""), db: Session = Depends(get_db)):
+                password: str = Form(""), gaia_username: str = Form(""), gaia_password: str = Form(""),
+                auto_trust: str = Form(""), db: Session = Depends(get_db)):
     user = get_user_or_none(request, db)
     if user is None:
         return RedirectResponse("/login", status_code=303)
     ms = ManagementServer(name=name, host=host, port=_port(port), username=username,
-                          domain=domain.strip(), cert_pem=cert_pem, auto_trust=bool(auto_trust),
-                          owner_id=user.id)
+                          domain=domain.strip(), gaia_username=gaia_username.strip(), cert_pem=cert_pem,
+                          auto_trust=bool(auto_trust), owner_id=user.id)
     db.add(ms)
     db.commit()
     db.refresh(ms)
@@ -108,6 +110,10 @@ def mgmt_create(request: Request, name: str = Form(...), host: str = Form(...), 
         mgmt_creds.store_secret(db, ms, password, kind="password")
     elif password:
         note = " (the secret was not stored — encryption is unavailable in this environment)"
+    if gaia_password and mgmt_creds.available():
+        mgmt_creds.store_gaia_secret(db, ms, gaia_password)
+    elif gaia_password and not note:
+        note = " (the Gaia secret was not stored — encryption is unavailable in this environment)"
     msg = f"Management server “{name}” saved.{note}{_autotrust_note(db, ms)}"
     _flash(request, msg, "error" if note else "success")
     return RedirectResponse("/management", status_code=303)
@@ -261,19 +267,22 @@ def mgmt_gaia_export_page(sid: int, request: Request, db: Session = Depends(get_
 @router.post("/management/{sid}/gaia-export/run")
 def mgmt_gaia_export_run(sid: int, request: Request, password: str = Form(""),
                          db: Session = Depends(get_db)):
-    """JSON: pull the SMS's Gaia config (via its gaia_api) and render the three IaC targets."""
+    """JSON: pull the SMS's Gaia OS config via its gaia_api, using the appliance's GAIA credentials
+    (gaia_username + Gaia secret) — distinct from the SmartConsole / Management-API login used for policy."""
     user = get_user_or_none(request, db)
     if user is None:
         return JSONResponse({"error": "Not authenticated"}, status_code=401)
     ms = _owned(db, sid, user)
-    if not ms.username:
-        return JSONResponse({"error": "This server has no username — set one on Edit."}, status_code=400)
+    if not (ms.gaia_username or "").strip():
+        return JSONResponse({"error": "No Gaia credentials configured for this server — add the Gaia OS "
+                                      "username/password on Edit (they're separate from the Management "
+                                      "API login)."}, status_code=400)
     ensure_pinned(db, ms)
-    secret = password or mgmt_creds.get_secret(db, ms)
+    secret = password or mgmt_creds.get_gaia_secret(db, ms)
     if not secret:
-        return JSONResponse({"error": "No saved credential — enter the OS password, or store one on Edit."},
+        return JSONResponse({"error": "No saved Gaia password — add the Gaia OS credentials on Edit."},
                             status_code=400)
-    return JSONResponse(gaia_export.pull_and_generate(ms.host, ms.port, ms.username, secret,
+    return JSONResponse(gaia_export.pull_and_generate(ms.host, ms.port, ms.gaia_username, secret,
                                                       ms.cert_pem or None))
 
 
@@ -298,6 +307,7 @@ def mgmt_edit(sid: int, request: Request, db: Session = Depends(get_db)):
     return templates.TemplateResponse(request, _form_tpl(request),
                                       {"ms": ms, "error": None, "action": f"/management/{sid}/edit",
                                        "has_secret": mgmt_creds.has_secret(db, ms),
+                                       "has_gaia_secret": mgmt_creds.has_gaia_secret(db, ms),
                                        "crypto_ok": mgmt_creds.available()})
 
 
@@ -305,13 +315,16 @@ def mgmt_edit(sid: int, request: Request, db: Session = Depends(get_db)):
 def mgmt_update(sid: int, request: Request, name: str = Form(...), host: str = Form(...),
                 port: str = Form("443"), username: str = Form(""), domain: str = Form(""),
                 cert_pem: str = Form(""), password: str = Form(""), clear_password: str = Form(""),
-                auto_trust: str = Form(""), db: Session = Depends(get_db)):
+                gaia_username: str = Form(""), gaia_password: str = Form(""),
+                clear_gaia_password: str = Form(""), auto_trust: str = Form(""),
+                db: Session = Depends(get_db)):
     user = get_user_or_none(request, db)
     if user is None:
         return RedirectResponse("/login", status_code=303)
     ms = _owned(db, sid, user)
     ms.name, ms.host, ms.port, ms.username = name, host, _port(port), username
-    ms.domain, ms.cert_pem, ms.auto_trust = domain.strip(), cert_pem, bool(auto_trust)
+    ms.domain, ms.gaia_username = domain.strip(), gaia_username.strip()
+    ms.cert_pem, ms.auto_trust = cert_pem, bool(auto_trust)
     note = ""
     if clear_password:
         mgmt_creds.clear_secret(db, ms)
@@ -320,6 +333,13 @@ def mgmt_update(sid: int, request: Request, name: str = Form(...), host: str = F
             mgmt_creds.store_secret(db, ms, password, kind="password")
         else:
             note = " (the new secret was not stored — encryption is unavailable here)"
+    if clear_gaia_password:
+        mgmt_creds.clear_gaia_secret(db, ms)
+    elif gaia_password:
+        if mgmt_creds.available():
+            mgmt_creds.store_gaia_secret(db, ms, gaia_password)
+        elif not note:
+            note = " (the new Gaia secret was not stored — encryption is unavailable here)"
     db.commit()
     _flash(request, f"Management server “{name}” updated.{note}{_autotrust_note(db, ms)}",
            "error" if note else "success")

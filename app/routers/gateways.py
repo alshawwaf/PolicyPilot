@@ -11,7 +11,7 @@ from ..models import DynamicLayer, Gateway, GatewayLayerSnapshot, User
 from ..security import get_user_or_none, new_feed_token
 from ..services import gateway_creds, gaia_export, table_prefs
 from ..services.apply_runner import fetch_dynamic_content
-from ..services.gaia_client import ensure_pinned, fetch_gateway_cert, pin_now
+from ..services.gaia_client import cert_fingerprint, ensure_pinned, fetch_gateway_cert, pin_now
 from .ui import _flash, _pop_flash, templates
 
 router = APIRouter(include_in_schema=False)
@@ -57,9 +57,31 @@ def gateways_list(request: Request, db: Session = Depends(get_db)):
         gid = (layer.content or {}).get("gateway_id")
         if gid:
             counts[gid] = counts.get(gid, 0) + 1
-    rows = [{"gw": g, "layers": counts.get(g.id, 0)} for g in gws]
+    snaps = {s.gateway_id: s for s in db.scalars(
+        select(GatewayLayerSnapshot).where(
+            GatewayLayerSnapshot.gateway_id.in_([g.id for g in gws] or [0]))).all()} if gws else {}
+    rows = []
+    for g in gws:
+        snap = snaps.get(g.id)
+        fp = ""
+        if g.cert_pem:
+            try:
+                fp = cert_fingerprint(g.cert_pem)
+            except Exception:  # noqa: BLE001 — display-only, never block the list
+                fp = ""
+        rows.append({"gw": g, "layers": counts.get(g.id, 0),
+                     "has_pw": gateway_creds.has_password(db, g), "snap": snap, "cert_fp": fp})
+    health = {
+        "total": len(gws),
+        "reachable": sum(1 for r in rows if r["snap"] and r["snap"].ok),
+        "errored": sum(1 for r in rows if r["snap"] and not r["snap"].ok),
+        "never": sum(1 for r in rows if not r["snap"]),
+        "trusted": sum(1 for g in gws if g.cert_pem),
+        "with_pw": sum(1 for r in rows if r["has_pw"]),
+        "fetched_layers": sum(len(r["snap"].layers or []) for r in rows if r["snap"]),
+    }
     return templates.TemplateResponse(request, "gateway_list.html", {
-        "rows": rows, "flash": _pop_flash(request),
+        "rows": rows, "flash": _pop_flash(request), "health": health,
         "cols": table_prefs.spec("gateways"),
         "vis": table_prefs.visible_columns(db, user.id, "gateways"),
     })

@@ -52,8 +52,14 @@ def mgmt_list(request: Request, db: Session = Depends(get_db)):
         .order_by(ManagementServer.created_at.desc())
     ).all()
     rows = [{"ms": m, "has_secret": mgmt_creds.has_secret(db, m)} for m in servers]
+    summary = {
+        "total": len(servers),
+        "ready": sum(1 for r in rows if r["ms"].username and r["has_secret"]),   # has user + saved secret → can pull
+        "pinned": sum(1 for m in servers if m.cert_pem),
+        "mds": len({(m.domain or "").strip() for m in servers if (m.domain or "").strip()}),
+    }
     return templates.TemplateResponse(request, "management_list.html",
-                                      {"rows": rows, "flash": _pop_flash(request),
+                                      {"rows": rows, "flash": _pop_flash(request), "summary": summary,
                                        "cols": table_prefs.spec("management"),
                                        "vis": table_prefs.visible_columns(db, user.id, "management")})
 

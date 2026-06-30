@@ -6,7 +6,7 @@
 <div class="page-head">
   <span class="icon-chip lg"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></span>
   <div class="ph-main">
-    <h1>Gateways</h1>
+    <h1>Gateways{% if rows %} <span class="ph-count">{{ rows|length }}</span>{% endif %}</h1>
     <p class="ph-sub">Saved gateway connection profiles. The password is optional — store it AES-256-encrypted for reuse, or leave it blank to enter each time you apply.</p>
   </div>
   <div class="ph-actions">
@@ -19,23 +19,46 @@
    'Add one to reuse its address and credentials when applying Dynamic Layers.',
    '+ New gateway', '/gateways/new', 'New gateway') }}</div>
 {% else %}
-<div class="statrow" style="margin:2px 0 20px;">
-  <div class="stat"><span class="n">{{ rows|length }}</span><span class="l">Gateways</span></div>
+<div class="statushero">
+  <div class="shero">
+    <span class="shi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></span>
+    <div class="shm"><div class="shn grad">{{ health.total }}</div><div class="shl">Gateways</div></div>
+  </div>
+  <div class="shero s-ok">
+    <span class="shi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>
+    <div class="shm"><div class="shn">{{ health.reachable }}</div><div class="shl">Reachable</div></div>
+  </div>
+  <div class="shero{% if health.errored %} s-bad{% endif %}">
+    <span class="shi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span>
+    <div class="shm"><div class="shn">{{ health.errored }}</div><div class="shl">Fetch errors</div></div>
+  </div>
+  <div class="shero">
+    <span class="shi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span>
+    <div class="shm"><div class="shn">{{ health.trusted }}</div><div class="shl">Pinned TLS</div></div>
+  </div>
 </div>
 <div class="card" style="padding:6px 6px 2px;">
 <div class="tablewrap">
 <table data-paginate="10">
-  <thead><tr><th>Name</th>{% if 'address' in vis %}<th class="nowrap">Address</th>{% endif %}{% if 'username' in vis %}<th class="nowrap">Username</th>{% endif %}{% if 'tls' in vis %}<th class="nowrap">TLS</th>{% endif %}{% if 'layers' in vis %}<th class="nowrap num">Layers</th>{% endif %}{% if 'created' in vis %}<th class="nowrap">Created</th>{% endif %}<th style="text-align:right; padding-top:6px; padding-bottom:6px;"><span class="thead-tools">{{ export_menu('gateways') }}{{ columns_menu('gateways', cols, vis, '/gateways', compact=true) }}</span></th></tr></thead>
+  <thead><tr><th>Name</th>{% if 'health' in vis %}<th class="nowrap">Health</th>{% endif %}{% if 'address' in vis %}<th class="nowrap">Address</th>{% endif %}{% if 'username' in vis %}<th class="nowrap">Username</th>{% endif %}{% if 'tls' in vis %}<th class="nowrap">TLS</th>{% endif %}{% if 'layers' in vis %}<th class="nowrap num">Layers</th>{% endif %}{% if 'created' in vis %}<th class="nowrap">Created</th>{% endif %}<th style="text-align:right; padding-top:6px; padding-bottom:6px;"><span class="thead-tools">{{ export_menu('gateways') }}{{ columns_menu('gateways', cols, vis, '/gateways', compact=true) }}</span></th></tr></thead>
   <tbody>
   {% for r in rows %}
     <tr>
-      <td><a class="feedname" href="/gateways/{{ r.gw.id }}">{{ r.gw.name }}</a></td>
-      {% if 'address' in vis %}<td class="nowrap mono"><code>{{ r.gw.host }}:{{ r.gw.port }}</code></td>{% endif %}
+      <td><a class="feedname cellclip" href="/gateways/{{ r.gw.id }}" title="{{ r.gw.name }}">{{ r.gw.name }}</a></td>
+      {% if 'health' in vis %}<td class="nowrap">
+        {% if r.snap and r.snap.ok %}<span class="sdot ok"><i></i>reachable <time class="ts" data-ts="{{ r.snap.fetched_at.isoformat() }}"></time></span>
+        {% elif r.snap %}<span class="sdot bad" title="{{ r.snap.error }}"><i></i>fetch error <time class="ts" data-ts="{{ r.snap.fetched_at.isoformat() }}"></time></span>
+        {% else %}<span class="sdot idle"><i></i>never fetched</span>{% endif %}
+      </td>{% endif %}
+      {% if 'address' in vis %}<td><code class="cellclip mono" title="{{ r.gw.host }}:{{ r.gw.port }}">{{ r.gw.host }}:{{ r.gw.port }}</code></td>{% endif %}
       {% if 'username' in vis %}<td class="nowrap">{{ r.gw.username or '—' }}</td>{% endif %}
-      {% if 'tls' in vis %}<td class="nowrap">{% if r.gw.cert_pem %}<span class="pill ok">pinned cert</span>{% elif r.gw.auto_trust %}<span class="pill faint">auto-trust</span>{% else %}<span class="pill faint">system trust</span>{% endif %}</td>{% endif %}
-      {% if 'layers' in vis %}<td class="nowrap num">{{ r.layers }}</td>{% endif %}
+      {% if 'tls' in vis %}<td class="nowrap">{% if r.gw.cert_pem %}<span class="pill ok" title="Certificate pinned — verified on every connect{% if r.cert_fp %} · {{ r.cert_fp }}{% endif %}">pinned</span>{% elif r.gw.auto_trust %}<span class="pill info" title="Trust-on-first-use — pins on first connect">auto-trust</span>{% else %}<span class="pill faint" title="Verified against the system CA store">system</span>{% endif %}</td>{% endif %}
+      {% if 'layers' in vis %}<td class="nowrap num">{% if r.layers %}<a class="feedname" href="/gateways/{{ r.gw.id }}">{{ r.layers }}</a>{% else %}<span class="muted">0</span>{% endif %}</td>{% endif %}
       {% if 'created' in vis %}<td class="nowrap"><time class="ts mono" data-ts="{{ r.gw.created_at.isoformat() }}">{{ r.gw.created_at.strftime('%Y-%m-%d') }}</time></td>{% endif %}
-      {{ row_actions(links=[{'label':'Edit','url':'/gateways/' ~ r.gw.id ~ '/edit', 'modal':'Edit gateway'}], delete={'url':'/gateways/' ~ r.gw.id ~ '/delete', 'name': r.gw.name}) }}
+      {{ row_actions(
+           links=[{'label':'Edit','url':'/gateways/' ~ r.gw.id ~ '/edit', 'modal':'Edit gateway'}],
+           menu=[{'label':'Fetch layers','attrs':('onclick="location.href=\'/gateways/' ~ r.gw.id ~ '\'"')|safe}],
+           delete={'url':'/gateways/' ~ r.gw.id ~ '/delete', 'name': r.gw.name}) }}
     </tr>
   {% endfor %}
   </tbody>

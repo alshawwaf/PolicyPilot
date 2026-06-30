@@ -24,7 +24,7 @@ def test_defaults_validate_persist_reset():
     with _db() as db:
         u = _user(db)
         # default visible = the spec's default+locked, in spec order (Created is off by default)
-        assert tp.visible_columns(db, u.id, "gateways") == ["name", "address", "username", "tls", "layers"]
+        assert tp.visible_columns(db, u.id, "gateways") == ["name", "health", "address", "username", "tls", "layers"]
 
         # save: enable Created, drop the rest, include a bogus id -> bogus dropped, locked Name forced,
         # result stays in spec order
@@ -37,7 +37,7 @@ def test_defaults_validate_persist_reset():
 
         # reset -> back to defaults
         tp.reset(db, u.id, "gateways")
-        assert tp.visible_columns(db, u.id, "gateways") == ["name", "address", "username", "tls", "layers"]
+        assert tp.visible_columns(db, u.id, "gateways") == ["name", "health", "address", "username", "tls", "layers"]
 
 
 def test_unknown_table_is_inert():

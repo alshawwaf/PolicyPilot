@@ -25,6 +25,7 @@ class Col:
 TABLE_SPECS: dict[str, list[Col]] = {
     "gateways": [
         Col("name", "Name", locked=True),
+        Col("health", "Health"),
         Col("address", "Address"),
         Col("username", "Username"),
         Col("tls", "TLS"),
@@ -33,6 +34,7 @@ TABLE_SPECS: dict[str, list[Col]] = {
     ],
     "management": [
         Col("name", "Name", locked=True),
+        Col("status", "Status"),
         Col("address", "Address"),
         Col("domain", "Domain"),
         Col("username", "Username"),

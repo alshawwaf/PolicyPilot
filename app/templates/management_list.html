@@ -33,22 +33,42 @@
    "Add one to pull a layer's rulebase + objects, then view, edit or export them as Terraform / Ansible.",
    '+ New management server', '/management/new', 'New management server') }}</div>
 {% else %}
+<div class="statushero">
+  <div class="shero">
+    <span class="shi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 5v14c0 1.66-4 3-9 3s-9-1.34-9-3V5"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/></svg></span>
+    <div class="shm"><div class="shn grad">{{ summary.total }}</div><div class="shl">Connections</div></div>
+  </div>
+  <div class="shero s-ok">
+    <span class="shi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2l-2 2m-7.6 7.6a5 5 0 1 0-7 7 5 5 0 0 0 7-7zm0 0L15.5 7.5m0 0 3 3L22 7l-3-3"/></svg></span>
+    <div class="shm"><div class="shn">{{ summary.ready }}<span class="u"> / {{ summary.total }}</span></div><div class="shl">Ready to pull</div></div>
+  </div>
+  <div class="shero">
+    <span class="shi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span>
+    <div class="shm"><div class="shn">{{ summary.pinned }}</div><div class="shl">TLS pinned</div></div>
+  </div>
+  <div class="shero">
+    <span class="shi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg></span>
+    <div class="shm"><div class="shn">{{ summary.mds }}</div><div class="shl">MDS domains</div></div>
+  </div>
+</div>
 <div class="card" style="padding:6px 6px 2px;">
 <div class="tablewrap">
 <table data-paginate="10">
-  <thead><tr><th>Name</th>{% if 'address' in vis %}<th class="nowrap">Address</th>{% endif %}{% if 'domain' in vis %}<th class="nowrap">Domain</th>{% endif %}{% if 'username' in vis %}<th class="nowrap">Username</th>{% endif %}{% if 'tls' in vis %}<th class="nowrap">TLS</th>{% endif %}{% if 'secret' in vis %}<th class="nowrap">Secret</th>{% endif %}{% if 'created' in vis %}<th class="nowrap">Created</th>{% endif %}<th style="text-align:right; padding-top:6px; padding-bottom:6px;"><span class="thead-tools">{{ export_menu('management') }}{{ columns_menu('management', cols, vis, '/management', compact=true) }}</span></th></tr></thead>
+  <thead><tr><th>Name</th>{% if 'status' in vis %}<th class="nowrap">Status</th>{% endif %}{% if 'address' in vis %}<th class="nowrap">Address</th>{% endif %}{% if 'domain' in vis %}<th class="nowrap">Domain</th>{% endif %}{% if 'username' in vis %}<th class="nowrap">Username</th>{% endif %}{% if 'tls' in vis %}<th class="nowrap">TLS</th>{% endif %}{% if 'secret' in vis %}<th class="nowrap">Secret</th>{% endif %}{% if 'created' in vis %}<th class="nowrap">Created</th>{% endif %}<th style="text-align:right; padding-top:6px; padding-bottom:6px;"><span class="thead-tools">{{ export_menu('management') }}{{ columns_menu('management', cols, vis, '/management', compact=true) }}</span></th></tr></thead>
   <tbody>
   {% for r in rows %}
-    <tr>
+    <tr data-ms-id="{{ r.ms.id }}">
       <td><a class="feedname cellclip" href="/management/{{ r.ms.id }}" title="{{ r.ms.name }}">{{ r.ms.name }}</a></td>
+      {% if 'status' in vis %}<td class="nowrap">{% if r.ms.username and r.has_secret %}<span class="sdot ok"><i></i>ready</span>{% elif r.ms.username %}<span class="sdot idle" title="Add a saved secret to pull policy"><i></i>no secret</span>{% else %}<span class="sdot idle" title="Add a username to pull policy"><i></i>needs user</span>{% endif %}</td>{% endif %}
       {% if 'address' in vis %}<td><code class="cellclip mono" title="{{ r.ms.host }}:{{ r.ms.port }}">{{ r.ms.host }}:{{ r.ms.port }}</code></td>{% endif %}
       {% if 'domain' in vis %}<td class="nowrap">{{ r.ms.domain or '—' }}</td>{% endif %}
       {% if 'username' in vis %}<td class="nowrap">{{ r.ms.username or '—' }}</td>{% endif %}
-      {% if 'tls' in vis %}<td class="nowrap">{% if r.ms.cert_pem %}<span class="pill ok">pinned cert</span>{% elif r.ms.auto_trust %}<span class="pill faint">auto-trust</span>{% else %}<span class="pill faint">system trust</span>{% endif %}</td>{% endif %}
+      {% if 'tls' in vis %}<td class="nowrap">{% if r.ms.cert_pem %}<span class="pill ok" title="Certificate pinned — verified on every connect">pinned</span>{% elif r.ms.auto_trust %}<span class="pill info" title="Trust-on-first-use — pins on first connect">auto-trust</span>{% else %}<span class="pill faint" title="Verified against the system CA store">system</span>{% endif %}</td>{% endif %}
       {% if 'secret' in vis %}<td class="nowrap">{% if r.has_secret %}<span class="pill ok">saved</span>{% else %}<span class="pill faint">none</span>{% endif %}</td>{% endif %}
       {% if 'created' in vis %}<td class="nowrap"><time class="ts mono" data-ts="{{ r.ms.created_at.isoformat() }}">{{ r.ms.created_at.strftime('%Y-%m-%d') }}</time></td>{% endif %}
       {{ row_actions(
-           links=[{'label':'Edit','url':'/management/' ~ r.ms.id ~ '/edit', 'modal':'Edit management server'}],
+           links=[{'label':'Open','url':'/management/' ~ r.ms.id},
+                  {'label':'Edit','url':'/management/' ~ r.ms.id ~ '/edit', 'modal':'Edit management server'}],
            menu=[{'label':'Test connection','attrs':'data-test="/management/'|safe ~ r.ms.id ~ '/test" data-name="'|safe ~ (r.ms.name | e) ~ '"'|safe}],
            delete={'url':'/management/' ~ r.ms.id ~ '/delete', 'name': r.ms.name}
          ) }}

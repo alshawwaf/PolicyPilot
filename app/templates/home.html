@@ -39,7 +39,8 @@
   .os-deskicon .os-tile { width:54px; height:54px; border-radius:15px; display:flex; align-items:center; justify-content:center;
     color:#fff; box-shadow:0 8px 20px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.25); }
   .os-deskicon .os-tile svg { width:28px; height:28px; }
-  .os-deskicon .os-lbl { font-size:11.5px; color:#fff; text-shadow:0 1px 3px rgba(0,0,0,.6); line-height:1.2; }
+  .os-deskicon .os-lbl { font-size:11.5px; color:#fff; text-shadow:0 1px 3px rgba(0,0,0,.6); line-height:1.2;
+    display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
   html[data-theme="light"] .os-deskicon .os-lbl { color:#1a2236; text-shadow:none; }
 
   /* ---- Dock ---- */
@@ -195,7 +196,7 @@
     layers:      { label: 'Dynamic Layers',     href: '/layers',            ic: I.layers,  grad: 'linear-gradient(135deg,#1d9e75,#34d399)' },
     management:  { label: 'Connections',        href: '/management',        ic: I.server,  grad: 'linear-gradient(135deg,#5566dd,#7b3ff2)' },
     gateways:    { label: 'Gateways',           href: '/gateways',          ic: I.gateway, grad: 'linear-gradient(135deg,#06b6d4,#3b82f6)' },
-    agents:      { label: 'Agents & API',       href: '/mcp-guide',         ic: I.robot,   grad: 'linear-gradient(135deg,#f59e0b,#f43f5e)' },
+    agents:      { label: 'Agents & MCP',       href: '/mcp-guide',         ic: I.robot,   grad: 'linear-gradient(135deg,#f59e0b,#f43f5e)' },
     apiexplorer: { label: 'API explorer',       href: '/api-explorer',      ic: I.code,    grad: 'linear-gradient(135deg,#22d3ee,#3b82f6)' },
     apidocs:     { label: 'PolicyPilot API',     href: '/api-docs',          ic: I.terminal, grad: 'linear-gradient(135deg,#0ea5e9,#6366f1)' },
     settings:    { label: 'Settings',           href: '/settings',          ic: I.sliders, grad: 'linear-gradient(135deg,#a855f7,#7b3ff2)' },
@@ -327,9 +328,10 @@
   }
 
   /* ---- desktop icons ---- */
-  // Desktop icons snap to an aligned grid (104px cols x 92px rows from a 24,18 origin) and never stack on
+  // Desktop icons snap to an aligned grid (104px cols x 116px rows from a 24,18 origin) and never stack on
   // another icon — a dropped icon lands in the nearest FREE cell, so it tucks neatly beside its neighbours.
-  var GX = 104, GY = 92, OX = 24, OY = 18;
+  // The row pitch leaves room for a two-line label (e.g. "Ticketing webhook") without crowding the icon below.
+  var GX = 104, GY = 116, OX = 24, OY = 18;
   function cellOf(x, y) { return { col: Math.max(0, Math.round((x - OX) / GX)), row: Math.max(0, Math.round((y - OY) / GY)) }; }
   function slotXY(col, row) { return { x: OX + col * GX, y: OY + row * GY }; }
   function occupied(col, row, exceptKey) {
@@ -350,6 +352,24 @@
       for (var t = 0; t < tries.length; t++) if (!occupied(tries[t][0], tries[t][1], key)) return slotXY(tries[t][0], tries[t][1]);
     }
     return slotXY(c.col, c.row);
+  }
+  // Re-flow stored positions onto the current grid (preserve each icon's column + vertical order, compact
+  // rows at the current pitch). Migrates layouts saved at an older, tighter pitch so two-line labels stop
+  // crowding the icon below. Returns true if anything moved.
+  function normalizeDesktop() {
+    var byCol = {}, changed = false;
+    LAYOUT.desktop.forEach(function (it) {
+      var col = Math.max(0, Math.round(((it.x || 0) - OX) / GX));
+      (byCol[col] = byCol[col] || []).push(it);
+    });
+    Object.keys(byCol).forEach(function (col) {
+      byCol[col].sort(function (a, b) { return (a.y || 0) - (b.y || 0); });
+      byCol[col].forEach(function (it, idx) {
+        var p = slotXY(+col, idx);
+        if (it.x !== p.x || it.y !== p.y) { it.x = p.x; it.y = p.y; changed = true; }
+      });
+    });
+    return changed;
   }
   function renderDesktopIcons() {
     desktop.querySelectorAll('.os-deskicon').forEach(function (n) { n.remove(); });
@@ -527,6 +547,7 @@
     else if (e.data.pp === 'openApp' && CATALOG[e.data.key]) openApp(e.data.key);
   });
 
+  if (normalizeDesktop()) saveLayout();   // migrate any tight, older-pitch layout to the roomier grid
   renderDock(); renderDesktopIcons();
 })();
 </script>

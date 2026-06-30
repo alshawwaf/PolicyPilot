@@ -78,14 +78,13 @@
     {% if snapshot %}<span class="muted">last fetched {{ snapshot.fetched_at.strftime('%Y-%m-%d %H:%M:%S') }} UTC</span>{% endif %}</div>
   {% if snapshot and not snapshot.ok and snapshot.error %}<div class="err" style="margin:10px 0;">{{ snapshot.error }}</div>{% endif %}
 
-  <form method="post" action="/gateways/{{ gw.id }}/fetch" id="gw-fetch-form" class="row endalign" style="gap:8px; margin:12px 0;">
+  <form method="post" action="/gateways/{{ gw.id }}/fetch" id="gw-fetch-form" class="row" style="gap:10px; margin:12px 0; align-items:flex-end;">
+    {% if not has_password %}
     <div class="grow" style="max-width:360px;"><label>Gateway password</label>
-      {% if has_password %}
-      <input name="password" type="password" placeholder="Using the saved password — leave blank, or type to override">
-      {% else %}
-      <input name="password" type="password" placeholder="Password (used for this call, never stored)" required>
-      {% endif %}</div>
+      <input name="password" type="password" placeholder="Password (used for this call, never stored)" required></div>
+    {% endif %}
     <button class="btn" type="submit">⤓ Fetch now</button>
+    {% if has_password %}<span class="muted" style="align-self:center; font-size:12.5px;">Uses this gateway's saved password — no need to re-enter.</span>{% endif %}
   </form>
 
   {% if snapshot %}

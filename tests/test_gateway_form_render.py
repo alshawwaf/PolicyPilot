@@ -70,7 +70,11 @@ def test_layer_apply_form_drops_the_password_field():
 
 
 def test_detail_shows_password_status():
+    # A saved password is used automatically on Fetch — no re-prompt field (the redundancy the user flagged).
     saved = _render("gateway_detail.html", gw=_GW(), snapshot=None, has_password=True, flash=None)
-    assert "saved (encrypted)" in saved and "leave blank, or type to override" in saved
+    assert "saved (encrypted)" in saved                         # Connection-card status row
+    assert 'name="password"' not in saved                       # no fetch password field when one is saved
+    assert "Uses this gateway's saved password" in saved
+    # A per-apply gateway (no saved password) still prompts on Fetch.
     plain = _render("gateway_detail.html", gw=_GW(), snapshot=None, has_password=False, flash=None)
-    assert "entered per apply" in plain
+    assert "entered per apply" in plain and 'name="password"' in plain

@@ -42,7 +42,7 @@
       --accent-soft:rgba(255,61,154,.15); --focus-ring:rgba(255,61,154,.32);
       /* Signature magenta→violet gradient — used for icon chips, primary buttons, active chips. Defined
          once here (references var(--accent), so it follows the theme); also covers light mode below. */
-      --accent-grad:linear-gradient(135deg, var(--accent) 0%, #7b3ff2 100%);
+      --accent-grad:linear-gradient(135deg, var(--accent-dark) 0%, #6a2fd6 100%);
       /* Cool secondary gradient — for a SECOND selector on the same view (e.g. PROTOCOL vs FORMAT) so two
          adjacent pickers don't read as the same control. */
       --accent-grad-2:linear-gradient(135deg, #06b6d4 0%, #3b82f6 100%);
@@ -250,13 +250,13 @@
     /* ============================ Buttons ============================ */
     a.btn, button { font:inherit; font-size:13.5px; font-weight:650; border:none; border-radius:var(--r);
       padding:10px 17px; cursor:pointer; text-decoration:none; display:inline-flex; align-items:center; gap:6px;
-      line-height:1; background:var(--accent-grad); color:var(--on-accent);
+      line-height:1; background:var(--accent-grad); color:var(--on-accent); text-shadow:0 1px 2px rgba(0,0,0,.28);
       box-shadow:0 1px 2px rgba(0,0,0,.18); transition:filter .14s, transform .1s, box-shadow .14s, background .14s, border-color .14s, color .14s; }
     a.btn:hover, button:hover { filter:brightness(1.08); box-shadow:0 4px 16px var(--accent-soft); transform:translateY(-1px); }
     a.btn:active, button:active { transform:translateY(0); }
-    a.btn.secondary, button.secondary { background:var(--surface-2); color:var(--text); border:1px solid var(--line); box-shadow:none; }
+    a.btn.secondary, button.secondary { background:var(--surface-2); color:var(--text); border:1px solid var(--line); box-shadow:none; text-shadow:none; }
     a.btn.secondary:hover, button.secondary:hover { background:var(--hover); border-color:var(--line-strong); filter:none; }
-    a.btn.danger, button.danger { background:var(--danger-bg); color:var(--danger); border:1px solid var(--danger-line); box-shadow:none; }
+    a.btn.danger, button.danger { background:var(--danger-bg); color:var(--danger); border:1px solid var(--danger-line); box-shadow:none; text-shadow:none; }
     a.btn.danger:hover, button.danger:hover { filter:none; background:var(--danger-bg); border-color:var(--danger); }
     button:disabled, button:disabled:hover { opacity:.5; cursor:default; transform:none; filter:none; box-shadow:none; }
 

@@ -267,8 +267,15 @@
           placed[id] = true; order.push(id);
           kids(id).forEach(function (c) { if (byId[c] && !isCore(byId[c]) && depth[c] == null) { depth[c] = depth[id] + 1; dfs(c); } });
         })(rootId);
-        order.forEach(function (id, i) { var n = byId[id]; n.x = DET_X + depth[id] * COL; n.y = bandY + i * ROW; n.w = W; });
-        if (order.length) bandY += order.length * ROW + ROW * BAND_GAP;
+        // Place by DEPTH COLUMNS: x = depth, y = a per-column row counter — so each tier stacks vertically
+        // in its own column (a clean left-to-right tree) instead of cascading diagonally down-and-right.
+        var rowAt = {}, maxRow = 0;
+        order.forEach(function (id) {
+          var d = depth[id]; if (rowAt[d] == null) rowAt[d] = 0;
+          var r = rowAt[d]++; if (r > maxRow) maxRow = r;
+          var n = byId[id]; n.x = DET_X + d * COL; n.y = bandY + r * ROW; n.w = W;
+        });
+        if (order.length) bandY += (maxRow + 1) * ROW + ROW * BAND_GAP;
       }
       GRAPH.nodes.forEach(function (n) { if (!isCore(n) && hasCoreParent(n.id) && !placed[n.id]) placeBand(n.id); });
     })();
@@ -319,7 +326,7 @@
 
     // per-node position overrides from user drag — persisted per browser so a custom layout survives reload.
     // Bump the version when the DEFAULT layout changes so a stale saved arrangement doesn't mask the new one.
-    var LSKEY = 'dt-layout-v4', override = {};   // bumped: new lane/band auto-layout — drop stale v3 drags
+    var LSKEY = 'dt-layout-v5', override = {};   // bumped: depth-column band layout — drop stale drags
     try { override = JSON.parse(localStorage.getItem(LSKEY) || '{}') || {}; } catch (e) { override = {}; }
     function saveOverride() { try { localStorage.setItem(LSKEY, JSON.stringify(override)); } catch (e) {} }
     function nodeX(n) { return (override[n.id] && override[n.id].x != null) ? override[n.id].x : n.x; }

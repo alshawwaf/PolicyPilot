@@ -167,6 +167,17 @@ def decide_access(server_id: str, source: str, destination: str, layer: str, ser
     `currently_allowed` is whether the access exists today: no_op→true (allowed), create/widen→false (a
     change would be required), review→null (can't be sure). Never report "yes, allowed" for a create/widen.
 
+    When a create result also has **`partially_allowed: true`**, the destination + service ARE already
+    permitted by an existing rule (see **`allowed_by`**: the rule + the narrower field + its values) — just
+    not for the broader source/destination/service that was asked. Relay the `answer` verbatim ("Partially —
+    already permitted for these sources … just not the one asked"); don't flatten it to a bare "No". If the
+    result also has **`assumed_any_field`** (e.g. "source"), the user did not give that field so it was
+    evaluated as Any — say so and offer to re-check with a specific value (the `answer` already does this).
+
+    So: when the user leaves source (or destination/service) unspecified, pass "Any" — the answer will tell
+    them it assumed Any and invite a specific value. Only assume Any for fields the user truly omitted; if
+    they named a source, pass it, and the answer is precise for that source.
+
     Source/destination default to IP/CIDR/Any; set ``source_kind``/``destination_kind`` to a typed kind
     (domain / access-role / dynamic-object / updatable-object / security-zone) to reason in that identity
     space — e.g. does a host have access to the domain ``alshawwaf.ca`` (source_kind stays ip,

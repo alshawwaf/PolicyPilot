@@ -615,6 +615,12 @@ class ParsedRule:
     svc: ServiceSet
     source_group_uids: list = field(default_factory=list)
     dest_group_uids: list = field(default_factory=list)
+    # Human object NAMES in each cell (preserved verbatim from the rulebase) — used only for messages,
+    # e.g. the near-miss "already permitted for these sources: win_client, GW, …" reporting. Never used
+    # for matching (that's done on the resolved extents above); empty for cells we couldn't name.
+    src_names: list = field(default_factory=list)
+    dst_names: list = field(default_factory=list)
+    svc_names: list = field(default_factory=list)
     complex: bool = False                       # negation / unresolved -> excluded from reuse
     # Per-cell "extent unknown" FOR AN IP REQUEST: the cell was negated, held a truly-unresolvable
     # object, OR held a typed (non-IP) object (a domain/role/zone/dynamic/updatable that could resolve
@@ -694,6 +700,13 @@ class Decision:
                                                 # opaque rules the walk continued PAST (an updatable feed,
                                                 # an unresolvable cell): never block the automated flow,
                                                 # just flag them. The outcome is still acted on.
+    partial: Optional["ParsedRule"] = None      # a reachable, unconditional ACCEPT that already permits the
+                                                # request EXCEPT it is NARROWER on exactly one dimension (the
+                                                # request is broader there) — i.e. "already permitted for a
+                                                # narrower {source|destination|service}". Display-only: it
+                                                # makes a CREATE answer say "permitted for these sources, just
+                                                # not the one asked" instead of a misleading flat "No".
+    partial_field: Optional[str] = None         # which dimension the partial accept is narrower on
 
 
 # --------------------------------------------------------------------------- #
@@ -741,6 +754,17 @@ def _deref(ref, objdict: dict) -> dict:
     if isinstance(ref, dict):
         return objdict.get(ref.get("uid")) or ref
     return {}
+
+
+def _cell_names(cell, objdict: dict) -> list:
+    """The human object names in a rule cell (deduped, order-preserving). Display-only — used to name the
+    objects in a near-miss explanation (e.g. "permitted for these sources: …"); never used for matching."""
+    out: list = []
+    for ref in (cell or []):
+        nm = (_deref(ref, objdict) or {}).get("name")
+        if nm and nm not in out:
+            out.append(nm)
+    return out
 
 
 def _parse_net(cell, objdict: dict):
@@ -1025,6 +1049,9 @@ def _parse_rule(e, objdict: dict) -> ParsedRule:
         action=action or "",
         src=src, dst=dst, svc=svc,
         source_group_uids=src_groups, dest_group_uids=dst_groups,
+        src_names=_cell_names(e.get("source", []), objdict),
+        dst_names=_cell_names(e.get("destination", []), objdict),
+        svc_names=_cell_names(e.get("service", []), objdict),
         complex=bool(src_unknown or dst_unknown or svc_unknown),
         src_unknown=src_unknown, dst_unknown=dst_unknown, svc_unknown=svc_unknown,
         src_approx=src_ap, dst_approx=dst_ap,
@@ -1445,6 +1472,13 @@ def _decide(req: AccessRequest, rules: list[ParsedRule], options: "DecideOptions
     widen_below_uncertain = False                # was the widen target found BELOW an opaque possible-deny?
     lower_anchor: Optional[ParsedRule] = None     # last rule strictly more specific than req
     conditional_skip: Optional[ParsedRule] = None  # a conditional ACCEPT we skipped (for the CREATE note)
+    # A reachable, unconditional ACCEPT that covers the request on two dimensions and is NARROWER on the
+    # third (the request is strictly BROADER there) — e.g. the request source is Any but the rule grants a
+    # specific host set. It does NOT grant the request as asked (so the outcome is still CREATE), but the
+    # access IS already permitted for that narrower scope. Recorded for the answer ONLY (it turns a
+    # misleading "No — not permitted" into "permitted for these sources, just not the one you asked").
+    partial_rule: Optional[ParsedRule] = None
+    partial_field: Optional[str] = None
     last_enabled = max((i for i, r in enumerate(rules) if r.enabled), default=-1)
 
     # ``uncertain_deny`` records that the walk continued past an opaque rule that COULD block (a drop /
@@ -1876,6 +1910,27 @@ def _decide(req: AccessRequest, rules: list[ParsedRule], options: "DecideOptions
                     widen_target, widen_field = r, field
                     widen_below_uncertain = uncertain_deny
 
+        # NEAR-MISS for the ANSWER (display-only — never changes the outcome): a reachable, unconditional
+        # ACCEPT that already permits the request on two dimensions and is NARROWER on exactly the third
+        # (the request is strictly BROADER there — e.g. the request source is Any, but this rule grants a
+        # specific host set). The access is genuinely NOT granted as asked (so we still CREATE), but it IS
+        # permitted for that narrower scope — so the answer can say "already permitted for these sources,
+        # just not the one you asked about" instead of a flat, misleading "No". Recorded only while the
+        # accept is still reachable (no covering drop / opaque possible-deny passed above, which would
+        # shadow the claim); the first (topmost) such rule wins. A fully-covering accept already returned
+        # NO_OP above, so anything reaching here genuinely fails to cover the request as asked.
+        if (partial_rule is None and r.is_accept and not complex_eff and not svc_indeterminate
+                and not r.conditional and covering_drop is None and not uncertain_deny
+                and not src_approx and not dst_approx):
+            # An approx cell on ANY dimension (an infra object — gateway/cluster/mgmt — resolved to its main
+            # IP) is an UNDER-approximation: its true reach may be wider than the resolved extent. Excluding
+            # it on every dimension (not just the gap) keeps the "already permitted for these {names}" claim
+            # provable — we assert it only when each dimension's extent is exactly known.
+            _rel = {"source": rel_src, "destination": rel_dst, "service": rel_svc}
+            _ncov = [d for d in ("source", "destination", "service") if not _dim_covered(_rel[d])]
+            if len(_ncov) == 1 and _rel[_ncov[0]] == Relation.SUPERSET:
+                partial_rule, partial_field = r, _ncov[0]
+
         # Placement lower bound: a fully-resolved rule strictly MORE specific than req (don't shadow it).
         if not complex_eff and _is_proper_superset(rel_src, rel_dst, rel_svc):
             lower_anchor = r
@@ -1913,6 +1968,7 @@ def _decide(req: AccessRequest, rules: list[ParsedRule], options: "DecideOptions
         reason,
         target_rule=covering_drop or anchor,
         position=_placement(covering_drop, anchor),
+        partial=partial_rule, partial_field=partial_field,
     )
 
 
@@ -2760,6 +2816,69 @@ def _allowed_summary(outcome: str, target_rule: Optional[dict]) -> tuple[Optiona
     return None, "Can't confirm automatically — this needs manual review (see reason)."
 
 
+def _partial_fields(decision: "Decision", asked_name: str) -> dict:
+    """Build the near-miss overlay fields (``partially_allowed`` + ``allowed_by`` + a restated ``answer``,
+    and ``assumed_any_field`` for the Any case) for a CREATE whose access IS already permitted for a NARROWER
+    scope — the request was simply broader on one dimension (e.g. asked from "Any", granted from a specific
+    host set). ``asked_name`` is the request's value on the gap dimension, supplied by the caller (the preview
+    path reads it from the object preview; the apply path derives it from the request) — so the SAME wording
+    is produced no matter which surface assembles the result. Returns {} when there is no near-miss."""
+    pr = decision.partial
+    if pr is None:
+        return {}
+    gap = decision.partial_field or "source"
+    names = {"source": pr.src_names, "destination": pr.dst_names, "service": pr.svc_names}.get(gap) or []
+    shown = names[:12]
+    listed = ", ".join(shown) + (f" (+{len(names) - len(shown)} more)" if len(names) > len(shown) else "")
+    scope = f"these {gap}s: {listed}" if shown else f"a narrower {gap}"
+    asked = (asked_name or gap).strip()
+    fields = {"partially_allowed": True,
+              "allowed_by": {"rule": {"number": pr.number, "name": pr.name}, "field": gap, "values": names}}
+    if asked.lower() == "any":
+        # The broad "Any" on the gap dimension is what made the request "not permitted" — but it IS already
+        # permitted for SPECIFIC values. Make that assumption explicit and invite the user to narrow it, so
+        # they get a definite yes/no instead of a verdict against a field they may not have meant to leave open.
+        fields["assumed_any_field"] = gap
+        fields["answer"] = (
+            f"Partially — checked with {gap} = Any (the broadest case). It is already permitted by rule "
+            f"{pr.number} ({pr.name}) for {scope}, but not for every {gap}. Specify a {gap} and I'll give a "
+            f"definite yes/no for that one.")
+    else:
+        fields["answer"] = (
+            f"Partially — already permitted by rule {pr.number} ({pr.name}) for {scope}. That rule does not "
+            f"cover the requested {gap} ({asked}), so the access is NOT permitted as asked; a new "
+            f"least-privilege rule would grant it.")
+    return fields
+
+
+def _partial_overlay(decision: "Decision", out: dict) -> None:
+    """Apply the near-miss overlay onto a preview ``out`` dict. ``currently_allowed`` deliberately stays False
+    (the request AS ASKED is not permitted), but the ``answer`` no longer reads as a flat "No" that hides the
+    rule already granting the destination/service. Reads the gap's requested value from the object preview."""
+    if decision.partial is None:
+        return
+    gap = decision.partial_field or "source"
+    asked = ((out.get(gap) or {}).get("name")) or gap
+    out.update(_partial_fields(decision, asked))
+
+
+def _req_gap_label(req: "AccessRequest", gap: str) -> str:
+    """The request's value on the gap dimension, as a display name — derived from the request alone (no
+    session reads), so the apply path can produce the same near-miss wording as the preview path. Mirrors how
+    the preview names each endpoint: a typed value by its identity, an IP request by "Any" or its CIDR(s)."""
+    if gap == "service":
+        return (req.service or req.application
+                or (f"{(req.protocol or 'tcp').lower()}/{req.ports}" if req.ports else "service"))
+    kind = req.src_kind if gap == "source" else req.dst_kind
+    value = req.src_value if gap == "source" else req.dst_value
+    cidrs = req.src_cidrs if gap == "source" else req.dst_cidrs
+    if kind != "ip" and (value or "").strip():
+        return value
+    if any(_is_any(c) for c in (cidrs or [])):
+        return "Any"
+    return ", ".join(cidrs or []) or "Any"
+
+
 def build_preview(session, decision: Decision, req: AccessRequest, rules: list[ParsedRule]) -> dict:
     """Read-only: report exactly what execute() would do, without writing anything."""
     out: dict = {"outcome": decision.outcome.value, "reason": decision.reason,
@@ -2786,6 +2905,7 @@ def build_preview(session, decision: Decision, req: AccessRequest, rules: list[P
         out["position"] = _position_human(decision.position, _rules_for_layer(decision, rules))
         if (decision.position or {}).get("_anomaly"):
             out["anomaly"] = True
+        _partial_overlay(decision, out)   # "already permitted for these sources, just not the one asked"
     return out
 
 
@@ -3427,6 +3547,12 @@ def execute(server, secret, req: AccessRequest, layer: str, *, package: Optional
                 base["layer_note"] = layer_note
             if decision.notes:
                 base["notes"] = list(decision.notes)
+            # Surface the same near-miss overlay the preview path shows ("already permitted for these
+            # sources, just not the one asked") so a dry-run apply / REST /access/apply / MCP apply_access
+            # don't diverge from decide_access for the same request. Derived from the request (no extra
+            # reads on the write path); only present when the walk recorded a near-miss.
+            if decision.outcome is Outcome.CREATE and decision.partial is not None:
+                base.update(_partial_fields(decision, _req_gap_label(req, decision.partial_field or "source")))
             if decision.outcome in (Outcome.NO_OP, Outcome.REVIEW):
                 return {"ok": True, "applied": False, "published": False, **base, "trace": s.trace}
             try:

@@ -3483,6 +3483,108 @@ def test_allowed_summary_separates_ok_from_currently_allowed():
     assert unk is None and "review" in ans.lower()
 
 
+# --- near-miss reporting: "already permitted for a narrower scope" (the live DNS_Layer 8.8.4.4 bug) -----
+def _dns_public_rule():
+    # Mirrors the lab "Public DNS Servers" rule: a SPECIFIC source set -> {8.8.4.4, 8.8.8.8} -> Any svc.
+    r = ParsedRule(
+        uid="r72", number=72, name="Public DNS Servers", enabled=True, action="Accept",
+        src=_host("10.1.1.10") + _host("10.1.1.20"), dst=_host("8.8.4.4") + _host("8.8.8.8"),
+        svc=ServiceSet(any=True))
+    r.src_names = ["win_client", "GW", "SMS", "win_server", "ubuntu25"]
+    r.dst_names = ["DNS_8_8_4_4", "DNS_8_8_8_8"]
+    return r
+
+
+def test_decide_records_partial_when_request_source_broader_than_accept():
+    # "does the layer allow access to 8.8.4.4:53?" with NO source -> evaluated as source=Any. The accept
+    # grants 8.8.4.4:53 only for its host set, so Any is NOT fully covered -> CREATE (correct), but the
+    # access IS already permitted for those sources -> the walk must record that near-miss for the answer.
+    d = aa.decide(AccessRequest(["Any"], ["8.8.4.4/32"], "tcp", "53"), [_dns_public_rule(), CLEANUP])
+    assert d.outcome is aa.Outcome.CREATE
+    assert d.partial is not None and d.partial.name == "Public DNS Servers"
+    assert d.partial_field == "source"
+
+
+def test_partial_overlay_any_source_states_assumption_and_invites_a_specific_source():
+    # The agent-facing answer must stop reading as a flat "No": name the rule + the sources it grants, make
+    # the "source = Any" assumption EXPLICIT, and invite the user to specify a source for a definite answer.
+    d = aa.decide(AccessRequest(["Any"], ["8.8.4.4/32"], "tcp", "53"), [_dns_public_rule(), CLEANUP])
+    out = {"outcome": "create", "currently_allowed": False, "answer": "No — not currently permitted.",
+           "source": {"name": "Any"}, "destination": {"name": "DNS_8_8_4_4"}, "service": {"name": "domain-tcp"}}
+    aa._partial_overlay(d, out)
+    assert out["partially_allowed"] is True
+    assert out["assumed_any_field"] == "source"
+    assert out["allowed_by"] == {"rule": {"number": 72, "name": "Public DNS Servers"},
+                                 "field": "source", "values": d.partial.src_names}
+    ans = out["answer"].lower()
+    assert ans.startswith("partially")
+    assert "Public DNS Servers" in out["answer"] and "win_client" in out["answer"]
+    assert "any" in ans and "specify a source" in ans       # states the assumption + the invitation
+    assert out["currently_allowed"] is False   # the literal request (from Any) is still not permitted
+
+
+def test_partial_overlay_specific_broader_source_has_no_any_invite():
+    # When the user DID give a (broader) source, there's nothing to "specify" — the answer explains the gap
+    # and offers the new rule, with no Any-assumption framing and no assumed_any_field.
+    r = _dns_public_rule()
+    # request source is a concrete /24 (broader than the rule's host set, but explicitly chosen).
+    d = aa.decide(AccessRequest(["10.1.1.0/24"], ["8.8.4.4/32"], "tcp", "53"), [r, CLEANUP])
+    assert d.outcome is aa.Outcome.CREATE and d.partial is not None and d.partial_field == "source"
+    out = {"outcome": "create", "source": {"name": "net_10_1_1_0_24"},
+           "destination": {"name": "DNS_8_8_4_4"}, "service": {"name": "domain-tcp"}}
+    aa._partial_overlay(d, out)
+    assert out["partially_allowed"] is True
+    assert "assumed_any_field" not in out
+    assert "specify a source" not in out["answer"].lower()
+    assert "net_10_1_1_0_24" in out["answer"]               # names the actual requested (broader) source
+
+
+def test_decide_no_partial_when_source_is_actually_covered():
+    # A request from a host INSIDE the accept's source is genuinely permitted -> NO_OP, no near-miss noise.
+    d = aa.decide(AccessRequest(["10.1.1.10/32"], ["8.8.4.4/32"], "tcp", "53"), [_dns_public_rule(), CLEANUP])
+    assert d.outcome is aa.Outcome.NO_OP
+    assert d.partial is None
+
+
+def test_decide_no_partial_when_no_accept_covers_dest():
+    # Any -> 9.9.9.9:53 is covered by NO accept (the rule's dst is 8.8.x) -> CREATE with no partial overlay.
+    d = aa.decide(AccessRequest(["Any"], ["9.9.9.9/32"], "tcp", "53"), [_dns_public_rule(), CLEANUP])
+    assert d.outcome is aa.Outcome.CREATE
+    assert d.partial is None
+
+
+def test_decide_no_partial_when_an_accept_dimension_is_approx():
+    # If the accept's source is an APPROX infra cell (gateway resolved to its main IP — true reach may be
+    # wider), the "already permitted for these" claim isn't provable -> no near-miss recorded.
+    r = _dns_public_rule()
+    r.src_approx = True
+    d = aa.decide(AccessRequest(["Any"], ["8.8.4.4/32"], "tcp", "53"), [r, CLEANUP])
+    assert d.outcome is aa.Outcome.CREATE and d.partial is None
+
+
+def test_req_gap_label_mirrors_preview_naming():
+    # The apply-path label derivation matches how the preview names the gap dimension.
+    r = AccessRequest(["Any"], ["8.8.4.4/32"], "tcp", "53")
+    assert aa._req_gap_label(r, "source") == "Any"
+    assert aa._req_gap_label(AccessRequest(["10.0.0.5/32"], ["Any"], "tcp", "53"), "destination") == "Any"
+    assert aa._req_gap_label(r, "service") == "tcp/53"
+
+
+def test_apply_path_surfaces_same_partial_overlay_as_preview():
+    # The fix's consistency guarantee: a CREATE near-miss must read IDENTICALLY whether assembled by the
+    # preview path (_partial_overlay) or the apply path (_partial_fields via _req_gap_label). Regression for
+    # the divergence where a dry-run apply / REST apply returned the bare reason while preview said "Partially".
+    d = aa.decide(AccessRequest(["Any"], ["8.8.4.4/32"], "tcp", "53"), [_dns_public_rule(), CLEANUP])
+    # preview surface
+    prev = {"source": {"name": "Any"}, "destination": {"name": "DNS_8_8_4_4"}, "service": {"name": "domain-tcp"}}
+    aa._partial_overlay(d, prev)
+    # apply surface (no object previews — label derived from the request)
+    appl = aa._partial_fields(d, aa._req_gap_label(AccessRequest(["Any"], ["8.8.4.4/32"], "tcp", "53"), "source"))
+    assert appl["answer"] == prev["answer"]
+    assert appl["partially_allowed"] is True and appl["assumed_any_field"] == "source"
+    assert appl["allowed_by"] == prev["allowed_by"]
+
+
 def test_allow_to_gateway_carves_above_stealth_not_below():
     # A Stealth rule (Any -> Gateway, Drop) resolves the gateway as an APPROX infra IP. A request TO the
     # gateway is provably covered by that drop, so an allow placed BELOW it would be shadowed (dead). It

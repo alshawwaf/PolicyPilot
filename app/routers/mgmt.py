@@ -253,7 +253,7 @@ def mgmt_gaia_export_page(sid: int, request: Request, db: Session = Depends(get_
     return templates.TemplateResponse(request, "gaia_export.html",
                                       {"title": ms.name, "host": f"{ms.host}:{ms.port}",
                                        "run_url": f"/management/{ms.id}/gaia-export/run",
-                                       "back_url": f"/management/{ms.id}", "back_label": "Policy viewer",
+                                       "back_url": "/iac-export", "back_label": "IaC Exporter",
                                        "has_secret": mgmt_creds.has_secret(db, ms),
                                        "flash": _pop_flash(request)})
 

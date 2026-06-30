@@ -148,6 +148,16 @@
     opacity:.82; transition:opacity .12s, background .12s, transform .12s; }
   .os-lp-more:hover { background:rgba(0,0,0,.55); opacity:1; transform:scale(1.08); }
   .os-lp-more svg { width:15px; height:15px; }
+  /* Hover ✎ — a discoverable rename affordance on dock + desktop icons (the right-click menu still works). */
+  .os-deskicon .os-tile { position:relative; }
+  .os-edit { position:absolute; top:-5px; right:-5px; width:19px; height:19px; border-radius:50%; padding:0;
+    display:flex; align-items:center; justify-content:center; border:0; cursor:pointer; color:#fff;
+    background:rgba(0,0,0,.5); backdrop-filter:blur(4px); -webkit-backdrop-filter:blur(4px);
+    opacity:0; transform:scale(.8); transition:opacity .12s, transform .12s, background .12s; z-index:4; }
+  .os-edit svg { width:12px; height:12px; }
+  .os-edit:hover { background:rgba(0,0,0,.72); }
+  .os-dik:hover .os-edit, .os-deskicon:hover .os-edit { opacity:1; transform:scale(1); }
+  @media (hover: none) { .os-edit { display:none; } }   /* touch: use the ⋯ menu / long-press instead */
   /* checkable rows in the shared context menu (used by the launchpad ⋯ menu) */
   .os-ctx .os-ck { width:16px; flex:none; display:inline-flex; align-items:center; }
   .os-ctx .os-ck svg { width:16px; height:16px; color:var(--accent); }
@@ -226,7 +236,7 @@
       hello = document.getElementById('os-hello'), launch = document.getElementById('os-launch'),
       lgrid = document.getElementById('os-launch-grid');
   var LAYOUT = window.PP_LAYOUT && typeof window.PP_LAYOUT === 'object'
-    ? window.PP_LAYOUT : { dock: ['access', 'layers', 'management', 'gateways', 'agents', 'settings', 'activity'], desktop: [] };
+    ? window.PP_LAYOUT : { dock: ['access', 'layers', 'management', 'policymanager', 'iacexporter', 'gateways', 'agents', 'settings', 'activity'], desktop: [] };
   if (!Array.isArray(LAYOUT.dock)) LAYOUT.dock = [];
   if (!Array.isArray(LAYOUT.desktop)) LAYOUT.desktop = [];
   if (!LAYOUT.win || typeof LAYOUT.win !== 'object') LAYOUT.win = {};   // per-app remembered window geometry
@@ -257,7 +267,9 @@
     webhook: '<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>',
     dots: '<circle cx="5" cy="12" r="1.6" fill="currentColor"/><circle cx="12" cy="12" r="1.6" fill="currentColor"/><circle cx="19" cy="12" r="1.6" fill="currentColor"/>',
     edit: '<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>',
-    check: '<polyline points="20 6 9 17 4 12"/>'
+    check: '<polyline points="20 6 9 17 4 12"/>',
+    rules: '<rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/>',
+    download: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>'
   };
   function svg(p) { return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">' + p + '</svg>'; }
   var CATALOG = {
@@ -267,7 +279,9 @@
     changelog:   { label: 'Change log',         href: '/changes',           ic: I.history, grad: 'linear-gradient(135deg,#14b8a6,#0ea5e9)' },
     webhook:     { label: 'Ticketing webhook',  href: '/ticketing-webhook', ic: I.webhook, grad: 'linear-gradient(135deg,#f59e0b,#ef4444)' },
     layers:      { label: 'Dynamic Layers',     href: '/layers',            ic: I.layers,  grad: 'linear-gradient(135deg,#1d9e75,#34d399)' },
-    management:  { label: 'Connections',        href: '/management',        ic: I.server,  grad: 'linear-gradient(135deg,#5566dd,#7b3ff2)' },
+    management:  { label: 'Management Servers',  href: '/management',        ic: I.server,  grad: 'linear-gradient(135deg,#5566dd,#7b3ff2)' },
+    policymanager: { label: 'Policy Manager',   href: '/policy-manager',    ic: I.rules,   grad: 'linear-gradient(135deg,#7b3ff2,#22d3ee)' },
+    iacexporter: { label: 'IaC Exporter',       href: '/iac-export',        ic: I.download, grad: 'linear-gradient(135deg,#f59e0b,#ef4444)' },
     gateways:    { label: 'Gateways',           href: '/gateways',          ic: I.gateway, grad: 'linear-gradient(135deg,#06b6d4,#3b82f6)' },
     agents:      { label: 'Agents & MCP',       href: '/mcp-guide',         ic: I.robot,   grad: 'linear-gradient(135deg,#f59e0b,#f43f5e)' },
     apiexplorer: { label: 'API explorer',       href: '/api-explorer',      ic: I.code,    grad: 'linear-gradient(135deg,#22d3ee,#3b82f6)' },
@@ -277,7 +291,7 @@
     system:      { label: 'System',             href: '/system',            ic: I.pulse,   grad: 'linear-gradient(135deg,#10b981,#22d3ee)' },
     account:     { label: 'Account',            href: '/account',           ic: I.user,    grad: 'linear-gradient(135deg,#94a3b8,#64748b)' }
   };
-  var ORDER = ['access', 'decisionmap', 'decisiontree', 'changelog', 'layers', 'management', 'gateways', 'agents', 'apidocs', 'webhook', 'apiexplorer', 'settings', 'activity', 'system', 'account'];
+  var ORDER = ['access', 'decisionmap', 'decisiontree', 'changelog', 'layers', 'management', 'policymanager', 'iacexporter', 'gateways', 'agents', 'apidocs', 'webhook', 'apiexplorer', 'settings', 'activity', 'system', 'account'];
   var wins = {}, z = 100, openCount = 0;
 
   function clamp(v, lo, hi) { return Math.max(lo, Math.min(v, hi)); }
@@ -423,9 +437,11 @@
       var app = CATALOG[key]; if (!app) return;
       var d = document.createElement('button'); d.type = 'button'; d.className = 'os-dik'; d.dataset.key = key;
       d.style.background = app.grad;
-      d.innerHTML = svg(app.ic) + '<span class="os-tip">' + esc(labelOf(key)) + '</span><span class="os-run"></span>';
+      d.innerHTML = svg(app.ic) + '<span class="os-tip">' + esc(labelOf(key)) + '</span><span class="os-run"></span>' +
+        '<span class="os-edit" title="Rename app" aria-hidden="true">' + svg(I.edit) + '</span>';
       if (wins[key] && wins[key].style.display !== 'none') d.classList.add('running');
       d.addEventListener('click', function () { openApp(key); });
+      d.querySelector('.os-edit').addEventListener('click', function (e) { e.stopPropagation(); renameApp(key); });
       dock.appendChild(d);
     });
   }
@@ -480,7 +496,12 @@
       var app = CATALOG[it.key]; if (!app) return;
       var el = document.createElement('div'); el.className = 'os-deskicon'; el.dataset.key = it.key;
       el.style.left = (it.x || 0) + 'px'; el.style.top = (it.y || 0) + 'px';
-      el.innerHTML = '<span class="os-tile" style="background:' + app.grad + '">' + svg(app.ic) + '</span><span class="os-lbl">' + esc(labelOf(it.key)) + '</span>';
+      el.innerHTML = '<span class="os-tile" style="background:' + app.grad + '">' + svg(app.ic) +
+        '<span class="os-edit" title="Rename app" aria-hidden="true">' + svg(I.edit) + '</span></span>' +
+        '<span class="os-lbl">' + esc(labelOf(it.key)) + '</span>';
+      var ed = el.querySelector('.os-edit');                 // hover ✎ — rename without dragging/opening
+      ed.addEventListener('mousedown', function (e) { e.stopPropagation(); });   // don't start a drag/open
+      ed.addEventListener('click', function (e) { e.stopPropagation(); renameApp(it.key); });
       var moved = false, sx, sy;
       el.addEventListener('mousedown', function (e) {
         if (e.button !== 0) return;        // right/middle click -> let the context menu handle it (don't open)

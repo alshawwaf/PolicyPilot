@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block title %}IaC Exporter — PolicyPilot{% endblock %}
+{% block content %}
+<style>
+  .iac-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:14px; margin-top:4px; }
+  .iac-card { border:1px solid var(--line); border-radius:var(--r-lg); padding:18px 19px; background:var(--surface);
+    box-shadow:var(--shadow-sm); display:flex; flex-direction:column; gap:10px;
+    transition:border-color .14s, box-shadow .14s; }
+  .iac-card:hover { border-color:var(--line-strong); box-shadow:var(--shadow); }
+  .iac-card h3 { margin:0; font-size:16px; display:flex; align-items:center; gap:8px; }
+  .iac-card .iac-meta { font-size:12.5px; color:var(--muted); }
+  .iac-card .iac-actions { margin-top:auto; display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .iac-do { display:flex; gap:14px; flex-wrap:wrap; margin:2px 0; }
+  .iac-do .iac-do-item { display:flex; gap:12px; align-items:flex-start; flex:1; min-width:240px; max-width:360px;
+    background:var(--surface-2); border:1px solid var(--line-soft); border-radius:12px; padding:14px 15px; }
+  .iac-do .iac-do-item .iac-do-ic { flex:none; width:32px; height:32px; border-radius:9px; display:flex;
+    align-items:center; justify-content:center; background:var(--accent-grad); color:#fff;
+    box-shadow:0 2px 8px rgba(123,63,242,.22); }
+  .iac-do .iac-do-item .iac-do-ic svg { width:17px; height:17px; }
+  .iac-do .iac-do-item b { display:block; font-size:13.5px; margin-bottom:2px; }
+  .iac-do .iac-do-item span { font-size:12.5px; color:var(--muted); line-height:1.45; }
+</style>
+
+<div class="page-head">
+  <span class="icon-chip lg"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></span>
+  <div class="ph-main">
+    <h1>IaC Exporter</h1>
+    <p class="ph-sub">Turn a live Management Server into Infrastructure-as-Code — export a <b>policy layer</b> or the <b>Gaia OS config</b> to Terraform, Ansible and clish/mgmt_cli. A backup-as-code of the appliance.</p>
+  </div>
+</div>
+
+<div class="card">
+  <div class="iac-do">
+    <div class="iac-do-item"><span class="iac-do-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M3 12h18M3 18h18"/></svg></span>
+      <div><b>Export policy</b><span>Pick an access layer; PolicyPilot pulls its rulebase + every referenced object over the <code>web_api</code> and renders <b>Terraform</b>, <b>Ansible</b> and a <b>mgmt_cli</b> script.</span></div></div>
+    <div class="iac-do-item"><span class="iac-do-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg></span>
+      <div><b>Export Gaia config</b><span>Pull the SMS's live Gaia OS config (hostname, DNS, NTP, interfaces, static routes, proxy) over the <code>gaia_api</code> as <b>Terraform</b>, <b>Ansible</b> and a <b>clish</b> script.</span></div></div>
+    <div class="iac-do-item"><span class="iac-do-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg></span>
+      <div><b>Copy, download, commit</b><span>Every target is read-only — preview it, copy it, or download the file. Nothing is written back to the SMS; this is export-only.</span></div></div>
+  </div>
+</div>
+
+{% if rows %}
+<div class="section-label">Management servers</div>
+<div class="iac-grid">
+  {% for r in rows %}
+  <div class="iac-card">
+    <h3><span class="pill">Management</span> {{ r.ms.name }}</h3>
+    <div class="iac-meta"><code>{{ r.ms.host }}:{{ r.ms.port }}</code>{% if r.ms.domain %} · domain <b>{{ r.ms.domain }}</b>{% endif %}</div>
+    <div class="iac-meta">
+      {% if r.has_secret %}<span class="pill ok">credential saved</span>{% else %}<span class="pill faint">no credential — policy export needs one</span>{% endif %}
+    </div>
+    <div class="iac-actions">
+      {% if r.has_secret %}
+      <a class="btn" href="/management/{{ r.ms.id }}/export">Export policy →</a>
+      <a class="btn secondary" href="/management/{{ r.ms.id }}/gaia-export">Export Gaia config →</a>
+      {% else %}
+      <a class="btn secondary" href="/management/{{ r.ms.id }}/gaia-export">Export Gaia config →</a>
+      <a class="btn secondary" href="/management/{{ r.ms.id }}/edit" data-modal-form="/management/{{ r.ms.id }}/edit" data-modal-title="Edit management server">Add a credential</a>
+      {% endif %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="card">
+  <p class="muted" style="margin:0;">No management servers yet. <a href="/management/new" data-modal-form="/management/new" data-modal-title="Add management server">Add a Management Server</a> (host + a least-privilege API account), then come back to export its policy or Gaia config as code.</p>
+</div>
+{% endif %}
+{% endblock %}

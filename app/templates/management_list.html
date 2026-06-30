@@ -21,7 +21,7 @@
   <span class="icon-chip lg"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 5v14c0 1.66-4 3-9 3s-9-1.34-9-3V5"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/></svg></span>
   <div class="ph-main">
     <h1>Management Servers{% if rows %} <span class="ph-count">{{ rows|length }}</span>{% endif %}</h1>
-    <p class="ph-sub">Pull, view, edit and export policy from a Management Server or MDS domain over the <code>web_api</code> — secrets AES-256-encrypted, TLS always verified.</p>
+    <p class="ph-sub">Configure your Management Servers &amp; MDS domains — connection, credentials and TLS. Browse &amp; edit policy in <b>Policy Manager</b>; export it as code in <b>IaC Exporter</b>. Secrets AES-256-encrypted, TLS always verified.</p>
   </div>
   <div class="ph-actions">
     <a class="btn" href="/management/new" data-modal-form="/management/new" data-modal-title="New management server">+ New management server</a>
@@ -30,7 +30,7 @@
 
 {% if not rows %}
 <div class="card">{{ empty_state('No management servers yet',
-   "Add one to pull a layer's rulebase + objects, then view, edit or export them as Terraform / Ansible.",
+   'Add one (host + a least-privilege API account) to connect over the web_api — then browse its policy in Policy Manager and export it in IaC Exporter.',
    '+ New management server', '/management/new', 'New management server') }}</div>
 {% else %}
 <div class="statushero">
@@ -58,7 +58,7 @@
   <tbody>
   {% for r in rows %}
     <tr data-ms-id="{{ r.ms.id }}">
-      <td><a class="feedname cellclip" href="/management/{{ r.ms.id }}" title="{{ r.ms.name }}">{{ r.ms.name }}</a></td>
+      <td><a class="feedname cellclip" href="/management/{{ r.ms.id }}/edit" data-modal-form="/management/{{ r.ms.id }}/edit" data-modal-title="Edit management server" title="{{ r.ms.name }}">{{ r.ms.name }}</a></td>
       {% if 'status' in vis %}<td class="nowrap">{% if r.ms.username and r.has_secret %}<span class="sdot ok"><i></i>ready</span>{% elif r.ms.username %}<span class="sdot idle" title="Add a saved secret to pull policy"><i></i>no secret</span>{% else %}<span class="sdot idle" title="Add a username to pull policy"><i></i>needs user</span>{% endif %}</td>{% endif %}
       {% if 'address' in vis %}<td><code class="cellclip mono" title="{{ r.ms.host }}:{{ r.ms.port }}">{{ r.ms.host }}:{{ r.ms.port }}</code></td>{% endif %}
       {% if 'domain' in vis %}<td class="nowrap">{{ r.ms.domain or '—' }}</td>{% endif %}
@@ -67,9 +67,10 @@
       {% if 'secret' in vis %}<td class="nowrap">{% if r.has_secret %}<span class="pill ok">saved</span>{% else %}<span class="pill faint">none</span>{% endif %}</td>{% endif %}
       {% if 'created' in vis %}<td class="nowrap"><time class="ts mono" data-ts="{{ r.ms.created_at.isoformat() }}">{{ r.ms.created_at.strftime('%Y-%m-%d') }}</time></td>{% endif %}
       {{ row_actions(
-           links=[{'label':'Open','url':'/management/' ~ r.ms.id},
-                  {'label':'Edit','url':'/management/' ~ r.ms.id ~ '/edit', 'modal':'Edit management server'}],
-           menu=[{'label':'Test connection','attrs':'data-test="/management/'|safe ~ r.ms.id ~ '/test" data-name="'|safe ~ (r.ms.name | e) ~ '"'|safe}],
+           links=[{'label':'Edit','url':'/management/' ~ r.ms.id ~ '/edit', 'modal':'Edit management server'}],
+           menu=[{'label':'Test connection','attrs':'data-test="/management/'|safe ~ r.ms.id ~ '/test" data-name="'|safe ~ (r.ms.name | e) ~ '"'|safe},
+                 {'label':'Browse policy →','url':'/policy-manager'},
+                 {'label':'Export to IaC →','url':'/iac-export'}],
            delete={'url':'/management/' ~ r.ms.id ~ '/delete', 'name': r.ms.name}
          ) }}
     </tr>

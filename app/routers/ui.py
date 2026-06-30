@@ -312,12 +312,13 @@ def update_profile(
 # --- Desktop layout (OS-style Home): which apps are on the dock + which icons sit on the desktop ------
 # Server-side allowlist of app keys (anything else in a saved layout is dropped — no junk/injection).
 DESKTOP_APP_KEYS = {"access", "decisionmap", "decisiontree", "changelog", "webhook", "layers", "management",
-                    "gateways", "agents", "apiexplorer", "apidocs", "settings", "activity", "account", "system"}
+                    "policymanager", "iacexporter", "gateways", "agents", "apiexplorer", "apidocs",
+                    "settings", "activity", "account", "system"}
 # Toggleable desktop widgets (the right-hand rail on the OS Home). Each is backed by real, DB-side data.
 DESKTOP_WIDGET_KEYS = {"decisions", "activity", "last", "connections", "coverage",
                        "errors", "latency", "recent", "clock", "quick"}
-DEFAULT_DESKTOP_LAYOUT = {"dock": ["access", "layers", "management", "gateways", "agents", "settings",
-                                   "activity", "system"],
+DEFAULT_DESKTOP_LAYOUT = {"dock": ["access", "layers", "management", "policymanager", "iacexporter",
+                                   "gateways", "agents", "settings", "activity", "system"],
                           "desktop": []}
 
 

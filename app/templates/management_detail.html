@@ -26,8 +26,7 @@
     <p class="ph-sub"><code>{{ ms.host }}:{{ ms.port }}</code>{% if ms.domain %} · domain <b>{{ ms.domain }}</b>{% endif %} · pulled live over the <code>web_api</code>.</p>
   </div>
   <div class="ph-actions">
-    <a class="btn secondary" href="/management/{{ ms.id }}/gaia-export">Gaia config →</a>
-    <a class="btn secondary" href="/management/{{ ms.id }}/edit" data-modal-form="/management/{{ ms.id }}/edit" data-modal-title="Edit management server">Edit connection</a>
+    <a class="btn secondary" href="/policy-manager">← Policy Manager</a>
   </div>
 </div>
 
@@ -38,7 +37,6 @@
   <div class="row toolbar">
     <span class="viewer-eyebrow">Access layer</span>
     <span id="layer-picker" class="filterbar" style="margin:0;"><span class="muted">Loading layers…</span></span>
-    <a id="export-link" class="btn secondary" href="/management/{{ ms.id }}/export" style="margin-left:auto;">Export to IaC →</a>
   </div>
   <div id="rulebase" style="margin-top:14px;"><p class="muted">Pick a layer to pull its rulebase.</p></div>
 </div>
@@ -125,8 +123,6 @@
       });
     }
     function loadRulebase(name) {
-      var link = document.getElementById('export-link');
-      if (link) link.href = '/management/' + id + '/export?layer=' + encodeURIComponent(name);
       view.innerHTML = '<p class="muted">Pulling “' + esc(name) + '” over web_api…</p>';
       fetch('/management/' + id + '/rulebase?name=' + encodeURIComponent(name))
         .then(function (r) { return r.json(); }).then(renderRulebase)

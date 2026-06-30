@@ -45,8 +45,11 @@
   .dt-split{ display:grid; grid-template-columns: minmax(320px,420px) minmax(0,1fr); gap:18px; align-items:start; container-type:inline-size; }
   .dt-split > .card{ margin:0; }
   .dt-left{ display:flex; flex-direction:column; min-height:0; }
-  #dw-steps{ overflow-y:auto; overflow-x:hidden; max-height:clamp(220px,56vh,620px); min-height:0; margin-top:15px; padding-right:4px; scroll-padding-block:12px; }
-  .dw-controls{ flex:0 0 auto; }
+  /* keep the card short enough that the controls (Play) stay on-screen without scrolling the window */
+  #dw-steps{ overflow-y:auto; overflow-x:hidden; max-height:clamp(140px,32vh,380px); min-height:0; margin-top:15px; padding-right:4px; scroll-padding-block:12px; }
+  /* pin the controls to the bottom of the viewport while the left card is in view — Play is never hidden */
+  .dw-controls{ flex:0 0 auto; position:sticky; bottom:0; z-index:3; margin-top:10px; padding:9px 2px 2px;
+    background:var(--surface); border-top:1px solid var(--line-soft); }
   .dt-right{ position:sticky; top:16px; align-self:start; }
   /* Standalone /decision-tree shows the 60px sticky site header — offset the sticky top so the graph's
      toolbar isn't clipped behind it. Embedded (desktop window) hides the header, so 16px is correct there. */
@@ -58,7 +61,7 @@
     html:not(.embedded) .dt-right{ top:68px; }
     .dt-right .dtwrap{ height:42vh; min-height:300px; }
     .dt-left{ position:static; }
-    #dw-steps{ max-height:clamp(180px,40vh,420px); }
+    #dw-steps{ max-height:clamp(140px,30vh,360px); }
   }
   @media (max-width:980px){ .dt-split:not(.cq){ grid-template-columns:1fr; } }
 </style>
@@ -66,7 +69,7 @@
   <span class="icon-chip lg"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg></span>
   <div class="ph-main">
     <h1>Decision tree</h1>
-    <p class="ph-sub">Watch how PolicyPilot turns an access request into a decision — the same <b>first-match, top-down</b> walk of the rulebase the engine runs. <b>Pick an outcome</b> below to step through the exact path it takes, then explore the full graph: drag, zoom, expand any node’s <b>＋N</b>, and tune the logic by clicking a node’s knob. It’s the engine’s own logic — identical for every Management server. For the principles behind it, see the <a href="/decision-map" data-open-app="decisionmap">Decision map</a>.</p>
+    <p class="ph-sub">The same <b>first-match, top-down</b> walk of the rulebase the engine runs. <b>Pick an outcome</b> to step the exact path it takes, or explore the full graph — drag, zoom, expand a node’s <b>＋N</b>. For the principles, see the <a href="/decision-map" data-open-app="decisionmap">Decision map</a>.</p>
   </div>
 </div>
 

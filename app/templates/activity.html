@@ -12,6 +12,24 @@
   .act-row:hover .rowdel, .rowdel:focus-visible { opacity:1; }
   .acttable .rowdel:hover { background:var(--danger-bg); color:var(--danger); }
   @media (hover: none) { .acttable .rowdel { opacity:1; } }   /* touch: no hover, so always show */
+  /* dense status-coded rows: a left accent per status + an inline latency bar */
+  .acttable tr.act-row td:first-child { border-left:3px solid var(--rc, transparent); }
+  .acttable .lat { display:inline-block; width:36px; height:5px; border-radius:3px; background:var(--line);
+    overflow:hidden; vertical-align:middle; margin-right:8px; }
+  .acttable .lat-fill { display:block; height:100%; background:linear-gradient(90deg, var(--accent-2,#22d3ee), var(--accent)); }
+  /* premium header: live events/min area chart + error donut + KPIs */
+  #act-hero { display:grid; grid-template-columns:1fr 172px; gap:14px; margin-bottom:14px; }
+  @media (max-width:680px){ #act-hero { grid-template-columns:1fr; } }
+  #act-hero .ah-card { border:1px solid var(--line); border-radius:var(--r-lg); padding:14px 16px; box-shadow:var(--shadow-sm);
+    background:linear-gradient(180deg, rgba(255,255,255,.05), transparent 46%), linear-gradient(160deg, var(--surface-2), var(--surface)); }
+  #act-hero .ah-top { display:flex; justify-content:space-between; align-items:baseline; }
+  #act-hero .ah-l { font-size:11.5px; color:var(--muted); }
+  #act-spark { width:100%; height:54px; display:block; margin-top:6px; }
+  #act-hero .ah-kpis { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-top:11px; }
+  #act-hero .ah-kpi .n { font-size:20px; font-weight:650; color:var(--text); }
+  #act-hero .ah-kpi .n .u { font-size:12px; color:var(--muted); font-weight:400; }
+  #act-hero .ah-kpi .k { font-size:11px; color:var(--faint); margin-top:1px; }
+  #act-hero .ah-donut { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:5px; }
 </style>
 <div class="page-head">
   <span class="icon-chip lg"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span>
@@ -20,6 +38,34 @@
     <p class="ph-sub">Every API call the portal served — methods, status, timing and source. Filter by status or type, then expand a row for the full request/response record.</p>
   </div>
 </div>
+<div id="act-hero">
+  <div class="ah-card">
+    <div class="ah-top"><span class="ah-l">Events / min</span><span class="ah-l" id="ah-peak"></span></div>
+    <svg id="act-spark" viewBox="0 0 320 54" preserveAspectRatio="none" aria-hidden="true">
+      <defs>
+        <linearGradient id="ah-fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="var(--accent)" stop-opacity=".42"/><stop offset="1" stop-color="var(--accent)" stop-opacity="0"/></linearGradient>
+        <linearGradient id="ah-line" x1="0" x2="1"><stop offset="0" stop-color="var(--accent)"/><stop offset="1" stop-color="var(--accent-2, #22d3ee)"/></linearGradient>
+      </defs>
+      <path id="act-spark-area" fill="url(#ah-fill)" d=""></path>
+      <polyline id="act-spark-line" fill="none" stroke="url(#ah-line)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" points=""></polyline>
+    </svg>
+    <div class="ah-kpis">
+      <div class="ah-kpi"><div class="n" id="ah-total">—</div><div class="k">events</div></div>
+      <div class="ah-kpi"><div class="n" id="ah-avg">—</div><div class="k">avg latency</div></div>
+      <div class="ah-kpi"><div class="n" id="ah-sources">—</div><div class="k">sources</div></div>
+    </div>
+  </div>
+  <div class="ah-card ah-donut">
+    <svg width="92" height="92" viewBox="0 0 92 92" aria-hidden="true">
+      <circle cx="46" cy="46" r="36" fill="none" stroke="var(--line)" stroke-width="8"/>
+      <circle id="ah-ring" cx="46" cy="46" r="36" fill="none" stroke="var(--warn)" stroke-width="8" stroke-linecap="round" stroke-dasharray="226.2" stroke-dashoffset="226.2" transform="rotate(-90 46 46)"/>
+      <text id="ah-pct" x="46" y="44" text-anchor="middle" fill="var(--warn)" font-size="17" font-weight="650" font-family="inherit">—</text>
+      <text x="46" y="60" text-anchor="middle" fill="var(--muted)" font-size="10" font-family="inherit">errors</text>
+    </svg>
+    <div class="ah-l" id="ah-errcount"></div>
+  </div>
+</div>
+
 <form method="post" action="/activity/delete" id="act-form">
   <input type="hidden" name="page_size" id="ps-hidden" value="{{ page_size }}">
   <input type="hidden" name="q" id="q-hidden" value="{{ q }}">
@@ -93,6 +139,44 @@
     var modal = $('rec-modal'), recBody = $('rec-body');
     var page = 1, timer = null;
 
+    // ---- premium header: error donut + live events/min sparkline (accumulated from each load) ----
+    var spark = { samples: [], prevTotal: null, prevT: 0, peak: 0 };
+    function drawSpark() {
+      var line = $('act-spark-line'), area = $('act-spark-area'); if (!line) return;
+      var s = spark.samples;
+      if (s.length < 2) { line.setAttribute('points', ''); area.setAttribute('d', ''); return; }
+      var W = 320, H = 54, max = Math.max(spark.peak, 1), n = s.length, pts = [];
+      for (var i = 0; i < n; i++) {
+        var x = (i / (n - 1)) * W, y = H - (Math.min(s[i], max) / max) * (H - 6) - 3;
+        pts.push(x.toFixed(1) + ',' + y.toFixed(1));
+      }
+      line.setAttribute('points', pts.join(' '));
+      area.setAttribute('d', 'M0,' + H + ' L' + pts.join(' L') + ' L' + W + ',' + H + ' Z');
+    }
+    function resetChart() { spark.samples = []; spark.prevTotal = null; spark.prevT = 0; spark.peak = 0; drawSpark(); }
+    function num(el, v) { var e = $(el); if (e) e.textContent = v; }
+    function updateHeader() {
+      var sd = document.getElementById('act-statdata'); if (!sd) return;
+      var total = +sd.getAttribute('data-total') || 0, err = +sd.getAttribute('data-err') || 0,
+          avg = +sd.getAttribute('data-avg') || 0, sources = +sd.getAttribute('data-sources') || 0;
+      num('ah-total', total.toLocaleString());
+      var av = $('ah-avg'); if (av) av.innerHTML = avg + '<span class="u"> ms</span>';
+      num('ah-sources', sources);
+      var pct = total ? (err / total * 100) : 0, ring = $('ah-ring');
+      num('ah-pct', pct.toFixed(1) + '%');
+      num('ah-errcount', err + ' of ' + total.toLocaleString());
+      if (ring) ring.setAttribute('stroke-dashoffset', (226.2 * (1 - Math.min(pct, 100) / 100)).toFixed(1));
+      var nowt = Date.now();
+      if (spark.prevTotal !== null && total >= spark.prevTotal && spark.prevT) {
+        var dtMin = (nowt - spark.prevT) / 60000;
+        if (dtMin > 0) { var rate = (total - spark.prevTotal) / dtMin; spark.samples.push(rate);
+          if (spark.samples.length > 40) spark.samples.shift(); spark.peak = Math.max(spark.peak, rate); }
+      }
+      spark.prevTotal = total; spark.prevT = nowt;
+      num('ah-peak', spark.peak ? 'peak ' + Math.round(spark.peak) + '/min' : '');
+      drawSpark();
+    }
+
     function setHTML(el, html) { el.replaceChildren(document.createRange().createContextualFragment(html)); }
     function checkedVals(cls) {
       return Array.prototype.slice.call(form.querySelectorAll('.' + cls + ':checked')).map(function (c) { return c.value; });
@@ -154,10 +238,10 @@
     function load() {
       fetch('/activity/rows?' + query({ page: page }).toString())
         .then(function (r) { return r.text(); })
-        .then(function (html) { setHTML(rowsEl, html); syncDel(); updateTimes(); })
+        .then(function (html) { setHTML(rowsEl, html); syncDel(); updateTimes(); updateHeader(); })
         .catch(function () {});
     }
-    function reload() { page = 1; syncState(); load(); }
+    function reload() { page = 1; resetChart(); syncState(); load(); }
     window.gotoPage = function (n) { page = Math.max(1, n); load(); window.scrollTo({ top: 0, behavior: 'smooth' }); };
 
     function deleteOne(id) {

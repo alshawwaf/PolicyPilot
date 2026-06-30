@@ -90,8 +90,8 @@ def test_pager_and_rows_render_selectable_clickable():
     assert 'data-page="1"' in html and 'data-page="88"' in html      # First + Last
     assert 'data-page="5"' in html and 'data-page="7"' in html       # window around page 6
     assert 'aria-current="page"' in html                             # current page marked
-    # live stats strip
-    assert 'class="statbar"' in html and "4001" in html
+    # stats now ride on a hidden carrier that drives the premium header (chart + donut + KPIs)
+    assert 'id="act-statdata"' in html and 'data-ok="4001"' in html
     # each row is a clickable record with a selection checkbox
     assert 'class="act-row" data-id="42"' in html
     assert 'name="ids" value="42" class="row-cb"' in html

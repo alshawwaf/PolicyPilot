@@ -1,0 +1,127 @@
+{% extends "base.html" %}
+{% block title %}Decision map{% endblock %}
+{% block content %}
+<style>
+  /* Decision map — the engine's reasoning as a modern, OS-style overview: a priority ladder + principle
+     cards. Pure presentation (no server data); follows the portal's tokens + dark/light automatically. */
+  .dm-lead { color:var(--text-2); font-size:13.5px; line-height:1.6; max-width:78ch; margin:0 0 18px; }
+  .dm-lead b { color:var(--text); }
+
+  .dm-h { font-size:12px; font-weight:800; letter-spacing:.5px; text-transform:uppercase; color:var(--faint);
+    margin:22px 0 12px; }
+
+  /* The priority ladder — the order the engine TRIES things. Three glass tiers with a flow arrow. */
+  .dm-ladder { display:grid; gap:12px; }
+  .dm-tier { position:relative; display:flex; align-items:center; gap:16px; padding:16px 18px;
+    background:linear-gradient(135deg, var(--c-soft), transparent 70%), var(--surface-2);
+    border:1px solid var(--line); border-left:4px solid var(--c); border-radius:var(--r-lg);
+    box-shadow:var(--shadow-sm); transition:transform .15s, box-shadow .15s; }
+  .dm-tier:hover { transform:translateY(-2px); box-shadow:var(--shadow-md, 0 10px 26px -10px rgba(0,0,0,.5)); }
+  .dm-tier .dm-rank { flex:0 0 auto; width:40px; height:40px; border-radius:12px; display:flex;
+    align-items:center; justify-content:center; font-weight:800; font-size:16px; color:#fff;
+    background:var(--c); box-shadow:0 4px 12px -2px var(--c); }
+  .dm-tier .dm-when { flex:0 0 92px; font-size:11px; font-weight:800; letter-spacing:.4px;
+    text-transform:uppercase; color:var(--c); }
+  .dm-tier h3 { margin:0 0 3px; font-size:15px; color:var(--text); }
+  .dm-tier p { margin:0; font-size:12.5px; line-height:1.5; color:var(--muted); }
+  .dm-tier .dm-pill { margin-left:auto; flex:0 0 auto; align-self:flex-start; font-size:11px; font-weight:700;
+    padding:3px 10px; border-radius:999px; background:var(--c-soft); color:var(--c); white-space:nowrap; }
+  .dm-arrow { display:flex; justify-content:center; color:var(--faint); margin:-4px 0; }
+  .dm-arrow svg { width:18px; height:18px; }
+
+  /* Principle cards — the full rulebook, color-coded by outcome. */
+  .dm-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(290px, 1fr)); gap:12px; }
+  .dm-card { padding:15px 16px; background:var(--surface-2); border:1px solid var(--line-soft);
+    border-top:3px solid var(--c); border-radius:14px; box-shadow:var(--shadow-sm);
+    transition:transform .15s, border-color .15s; }
+  .dm-card:hover { transform:translateY(-2px); border-color:var(--c); }
+  .dm-card .dm-ico { width:34px; height:34px; border-radius:10px; display:flex; align-items:center;
+    justify-content:center; background:var(--c-soft); color:var(--c); margin-bottom:10px; }
+  .dm-card .dm-ico svg { width:19px; height:19px; }
+  .dm-card h4 { margin:0 0 5px; font-size:14px; color:var(--text); }
+  .dm-card p { margin:0; font-size:12.5px; line-height:1.55; color:var(--muted); }
+  .dm-card p b { color:var(--text); } .dm-card p em { font-style:normal; color:var(--text-2); }
+
+  .dm-foot { margin-top:22px; display:flex; align-items:center; gap:12px; flex-wrap:wrap;
+    padding:14px 16px; background:var(--surface-2); border:1px solid var(--line); border-radius:14px; }
+  .dm-foot .grow { flex:1; min-width:160px; color:var(--text-2); font-size:12.5px; }
+</style>
+
+<div class="page-head">
+  <span class="icon-chip lg"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></span>
+  <div class="ph-main">
+    <h1>Decision map</h1>
+    <p class="dm-lead">The principles PolicyPilot follows to turn an access request into the <b>minimal correct
+      change</b> — always aiming at an actionable result, never a hand-off to a human. It runs the same
+      <b>first-match, top-down</b> walk of the rulebase every time. To watch the flow node-by-node, open the
+      <a href="/decision-tree" data-open-app="decisiontree">Decision tree</a>.</p>
+  </div>
+</div>
+
+<div class="card">
+  <div class="dm-h">The priority order — what it tries, in order</div>
+  <div class="dm-ladder">
+    <div class="dm-tier" style="--c:var(--ok); --c-soft:var(--ok-bg);">
+      <span class="dm-rank">1</span><span class="dm-when">First</span>
+      <div><h3>Reuse</h3><p>If a rule already permits the traffic, it’s a <b>no-op</b> — just attach it to the ticket. No change to live policy.</p></div>
+      <span class="dm-pill">no change</span>
+    </div>
+    <div class="dm-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg></div>
+    <div class="dm-tier" style="--c:var(--info); --c-soft:var(--info-bg);">
+      <span class="dm-rank">2</span><span class="dm-when">Then</span>
+      <div><h3>Widen</h3><p>Extend an existing rule <b>only on an exact match</b> — when it already matches the request in the other two columns. So it never grants access nobody asked for.</p></div>
+      <span class="dm-pill">smallest edit</span>
+    </div>
+    <div class="dm-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg></div>
+    <div class="dm-tier" style="--c:var(--warn); --c-soft:var(--warn-bg);">
+      <span class="dm-rank">3</span><span class="dm-when">Otherwise</span>
+      <div><h3>Create least-privilege</h3><p>A fresh, narrow rule — placed <b>above a blocking deny</b> in the path so the requested access actually takes effect.</p></div>
+      <span class="dm-pill">new rule</span>
+    </div>
+  </div>
+
+  <div class="dm-h">The rules in full</div>
+  <div class="dm-grid">
+    <div class="dm-card" style="--c:var(--ok); --c-soft:var(--ok-bg);">
+      <span class="dm-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-6.2-8.6"/><polyline points="22 4 12 14.01 9 11.01"/></svg></span>
+      <h4>Reuse first</h4>
+      <p>If a rule already permits the traffic, it’s a <b>no-op</b> — just attach it to the ticket.</p>
+    </div>
+    <div class="dm-card" style="--c:var(--info); --c-soft:var(--info-bg);">
+      <span class="dm-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg></span>
+      <h4>Widen only on an exact match</h4>
+      <p>Extend an existing rule only when it already matches the request in the other two columns — so it never grants access nobody asked for.</p>
+    </div>
+    <div class="dm-card" style="--c:var(--warn); --c-soft:var(--warn-bg);">
+      <span class="dm-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></span>
+      <h4>Otherwise create least-privilege</h4>
+      <p>A fresh rule, placed <b>above a blocking deny</b> in the path so the requested access actually takes effect.</p>
+    </div>
+    <div class="dm-card" style="--c:var(--text-2); --c-soft:var(--surface-3);">
+      <span class="dm-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></span>
+      <h4>Match by kind</h4>
+      <p>Each source / destination is compared in its own space — an IP / CIDR by address, or a typed object (domain, access-role, dynamic, updatable, security-zone) by identity — so a domain is matched against a domain object, never confused with an IP.</p>
+    </div>
+    <div class="dm-card" style="--c:var(--info); --c-soft:var(--info-bg);">
+      <span class="dm-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span>
+      <h4>Note, don’t stop</h4>
+      <p>A rule it <em>can’t fully resolve</em> (an updatable feed, an unresolvable cell, a conditional or inline-layer rule) is flagged <b>“possible match — review later”</b> and the walk continues; the new rule goes <b>below</b> it, so it can’t leap over a possible block.</p>
+    </div>
+    <div class="dm-card" style="--c:var(--muted); --c-soft:var(--surface-3);">
+      <span class="dm-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3h18v18H3z"/><path d="M3 9h18M9 21V9"/></svg></span>
+      <h4>Dynamic layers are out of scope</h4>
+      <p>A rule applying a dynamic layer (sk182252) is skipped entirely — its contents are managed out-of-band (Gaia pushes them straight to the gateway), so they’re not handled on the management side.</p>
+    </div>
+    <div class="dm-card" style="--c:var(--danger); --c-soft:var(--danger-bg);">
+      <span class="dm-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg></span>
+      <h4>Only a broken request stops it</h4>
+      <p>The rare exception — if the request itself can’t be resolved (an empty service, or a typed object that doesn’t exist), it’s flagged for you to <b>fix and retry</b>.</p>
+    </div>
+  </div>
+
+  <div class="dm-foot">
+    <span class="grow">Want to see exactly how a specific outcome is reached? Step through the live flow node-by-node.</span>
+    <a class="btn secondary" href="/decision-tree" data-open-app="decisiontree">Open the Decision tree →</a>
+  </div>
+</div>
+{% endblock %}

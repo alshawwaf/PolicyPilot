@@ -1,28 +1,64 @@
 {% extends "base.html" %}
-{% block title %}How it decides{% endblock %}
+{% block title %}Decision tree{% endblock %}
 {% block content %}
 <style>
   /* legend chips under the diagram (the rest of the diagram CSS travels with the card markup below) */
   .aa-legend { display:flex; gap:8px; flex-wrap:wrap; justify-content:center; margin-top:14px; }
+
+  /* ---- "Trace a decision" walkthrough: pick an outcome, step the exact path the engine walks ---- */
+  .dw-h { font-size:13px; font-weight:800; letter-spacing:.4px; text-transform:uppercase; color:var(--faint); margin:0 0 8px; }
+  .dw-chips { display:flex; gap:8px; flex-wrap:wrap; }
+  .dw-chip { display:inline-flex; align-items:center; gap:8px; padding:8px 14px; border-radius:999px; cursor:pointer;
+    border:1px solid var(--line-strong); background:var(--surface-2); color:var(--text); font-size:12.5px; font-weight:600; transition:all .14s; }
+  .dw-chip:hover { transform:translateY(-1px); border-color:var(--c); }
+  .dw-chip .dot { width:9px; height:9px; border-radius:50%; background:var(--c); flex:0 0 auto; }
+  .dw-chip.active { background:var(--c-soft); border-color:var(--c); color:var(--c); }
+  .dw-stage { margin-top:15px; }
+  .dw-step { display:grid; grid-template-columns:32px 1fr; gap:13px; opacity:.32; transition:opacity .32s ease; }
+  .dw-step.shown { opacity:1; }
+  .dw-rail { display:flex; flex-direction:column; align-items:center; }
+  .dw-dot { width:30px; height:30px; border-radius:50%; flex:0 0 auto; display:flex; align-items:center; justify-content:center;
+    font-weight:800; font-size:13px; color:#fff; background:var(--sc,var(--muted)); box-shadow:0 2px 9px -1px var(--sc,var(--muted)); }
+  .dw-line { flex:1; width:2px; background:var(--line); margin:3px 0; min-height:16px; }
+  .dw-step:last-child .dw-line { display:none; }
+  .dw-body { padding-bottom:15px; min-width:0; }
+  .dw-edge { font-size:11px; font-weight:700; color:var(--accent); margin:0 0 4px; }
+  .dw-node { font-size:14px; font-weight:650; color:var(--text); }
+  .dw-step.dw-outcome .dw-node { color:var(--sc); }
+  .dw-why { font-size:12px; line-height:1.5; color:var(--muted); margin:4px 0 0; max-width:80ch; }
+  .dw-controls { display:flex; align-items:center; gap:8px; margin-top:8px; flex-wrap:wrap; }
+  .dw-progress { font-size:12px; color:var(--muted); font-variant-numeric:tabular-nums; min-width:74px; text-align:center; }
+  /* While tracing, dim the full graph and spotlight the path nodes (best-effort: core path nodes are visible). */
+  .dtcanvas.tracing .dtnode { opacity:.24; filter:saturate(.5); transition:opacity .2s, filter .2s; }
+  .dtcanvas.tracing .dtnode.dt-trace { opacity:1; filter:none; outline:3px solid var(--accent); outline-offset:3px; }
 </style>
 <div class="page-head">
   <span class="icon-chip lg"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg></span>
   <div class="ph-main">
-    <h1>How it decides</h1>
-    <p class="ph-sub">Every access request runs the same <b>first-match, top-down</b> walk of the rulebase — always aiming at an actionable result, never a hand-off to a human. Explore the full decision tree below, and click a node’s knob to tune the logic (it switches the active profile to <b>Custom</b>). This is the engine’s logic itself — it applies to every Management server.</p>
+    <h1>Decision tree</h1>
+    <p class="ph-sub">Watch how PolicyPilot turns an access request into a decision — the same <b>first-match, top-down</b> walk of the rulebase the engine runs. <b>Pick an outcome</b> below to step through the exact path it takes, then explore the full graph: drag, zoom, expand any node’s <b>＋N</b>, and tune the logic by clicking a node’s knob. It’s the engine’s own logic — identical for every Management server. For the principles behind it, see the <a href="/decision-map" data-open-app="decisionmap">Decision map</a>.</p>
   </div>
 </div>
+
+<div class="card" id="dw">
+  <div class="dw-h">Trace a decision</div>
+  <p class="muted" style="margin:0 0 12px; font-size:12.5px; max-width:80ch;">Pick an outcome and step through the exact path the engine walks to reach it — each step is a real node from the graph below, with the branch it took and why. Use <b>Play</b> to watch it unfold.</p>
+  <div class="dw-chips" id="dw-chips"></div>
+  <div class="dw-stage" id="dw-stage" hidden>
+    <div class="dw-steps" id="dw-steps"></div>
+    <div class="dw-controls">
+      <button type="button" class="copybtn" id="dw-prev">‹ Back</button>
+      <span class="dw-progress" id="dw-progress"></span>
+      <button type="button" class="copybtn" id="dw-next">Next ›</button>
+      <button type="button" class="copybtn" id="dw-play">▶ Play</button>
+      <button type="button" class="copybtn" id="dw-reset" title="Clear the trace">Reset</button>
+    </div>
+  </div>
+</div>
+
 <div class="card">
-  <ul class="aa-rules">
-    <li style="--c:var(--ok);"><b>Reuse first.</b> If a rule already permits the traffic, it’s a no-op — just attach it to the ticket.</li>
-    <li style="--c:var(--accent);"><b>Widen only on an exact match.</b> Extend an existing rule only when it already matches the request in the other two columns — so it never grants access nobody asked for.</li>
-    <li style="--c:var(--warn);"><b>Otherwise create least-privilege.</b> A fresh rule, placed <b>above a blocking deny</b> in the path so the requested access actually takes effect.</li>
-    <li style="--c:var(--text-2);"><b>Match by kind.</b> Each source / destination is compared in its own space — an IP / CIDR by address, or a typed object (domain, access-role, dynamic, updatable, security-zone) by identity — so a domain is matched against a domain object, never confused with an IP.</li>
-    <li style="--c:var(--info);"><b>Note, don’t stop.</b> A rule it <em>can’t fully resolve</em> (an updatable feed, an unresolvable cell, a conditional or inline-layer rule) is flagged “possible match — review later” and the walk continues; the new rule goes <b>below</b> it, so it can’t leap over a possible block.</li>
-    <li style="--c:var(--muted);"><b>Dynamic layers are out of scope.</b> A rule applying a dynamic layer (sk182252) is skipped entirely — its contents are managed out-of-band (Gaia pushes them straight to the gateway), so they’re not handled on the management side.</li>
-    <li style="--c:var(--danger);"><b>Only a broken request stops it.</b> The rare exception — if the request itself can’t be resolved (an empty service, or a typed object that doesn’t exist), it’s flagged for you to fix and retry.</li>
-  </ul>
-  <p class="muted" style="margin:12px 0 0;">Expand any node below for the full decision tree, or download it as Mermaid / draw.io / Graphviz.</p>
+  <div class="dw-h" style="margin-bottom:4px;">The full graph</div>
+  <p class="muted" style="margin:0 0 4px;">Drag to rearrange, pan / zoom to explore, expand any node’s <b>＋N</b> for the deep branches, or download it as Mermaid / draw.io / Graphviz.</p>
   <style>
     .aa-rules{list-style:none; margin:12px 0 0; padding:0; display:grid; gap:8px;}
     .aa-rules li{padding:11px 14px; background:var(--surface-2); border:1px solid var(--line-soft);
@@ -373,6 +409,110 @@
 
     render(true);
     var rt; window.addEventListener('resize', function () { clearTimeout(rt); rt = setTimeout(function () { fit(); }, 140); });
+  })();
+</script>
+<script>
+  /* "Trace a decision" walkthrough — independent of the canvas renderer: it reads the same engine graph
+     (#dt-graph-data), computes the shortest path from the request node to a chosen outcome, and steps it
+     with explanations. Best-effort, it also spotlights those nodes on the full graph (core path nodes are
+     visible by default). Outcome ids that the graph doesn't contain are simply skipped. */
+  (function () {
+    var chips = document.getElementById('dw-chips');
+    if (!chips) return;
+    var GRAPH = null;
+    try { GRAPH = JSON.parse(document.getElementById('dt-graph-data').textContent); } catch (e) {}
+    if (!GRAPH || !GRAPH.nodes) { var dw = document.getElementById('dw'); if (dw) dw.style.display = 'none'; return; }
+    function esc(s) { var d = document.createElement('div'); d.textContent = (s == null ? '' : s); return d.innerHTML; }
+
+    var byId = {}; GRAPH.nodes.forEach(function (n) { byId[n.id] = n; });
+    var adj = {}; GRAPH.edges.forEach(function (e) { (adj[e.src] = adj[e.src] || []).push(e); });
+    function pathTo(target) {                                  // BFS from the request node → shortest path
+      var q = [['req']], seen = { req: 1 };
+      while (q.length) {
+        var p = q.shift(), last = p[p.length - 1];
+        if (last === target) return p;
+        (adj[last] || []).forEach(function (e) { if (!seen[e.dst]) { seen[e.dst] = 1; q.push(p.concat(e.dst)); } });
+      }
+      return null;
+    }
+    function edgeLabel(a, b) { var es = adj[a] || []; for (var i = 0; i < es.length; i++) if (es[i].dst === b) return es[i].label || ''; return ''; }
+    var KC = { start: 'var(--accent)', decision: 'var(--info)', process: 'var(--muted)', noop: 'var(--ok)',
+               widen: '#0aa1c0', create: 'var(--warn)', note: 'var(--info)', review: 'var(--danger)' };
+    function kc(id) { var n = byId[id]; return (n && KC[n.kind]) || 'var(--muted)'; }
+
+    var SCN = [
+      { key: 'noop',   label: 'Already allowed',            target: 'noop',    c: 'var(--ok)',     cs: 'var(--ok-bg)' },
+      { key: 'widen',  label: 'Extend a rule',              target: 'doWiden', c: 'var(--info)',   cs: 'var(--info-bg)' },
+      { key: 'create', label: 'New rule (deny in the way)', target: 'create',  c: 'var(--warn)',   cs: 'var(--warn-bg)' },
+      { key: 'note',   label: 'Can’t fully resolve',        target: 'noteO',   c: 'var(--info)',   cs: 'var(--info-bg)' },
+      { key: 'fix',    label: 'Broken request',             target: 'review',  c: 'var(--danger)', cs: 'var(--danger-bg)' }
+    ].filter(function (s) { return pathTo(s.target); });        // only outcomes that exist in this graph
+
+    var stage = document.getElementById('dw-stage'), stepsEl = document.getElementById('dw-steps'),
+        prog = document.getElementById('dw-progress'), canvas = document.getElementById('aa-flow-canvas');
+    var curPath = null, step = 0, playT = null;
+
+    SCN.forEach(function (s) {
+      var b = document.createElement('button'); b.type = 'button'; b.className = 'dw-chip';
+      b.setAttribute('data-k', s.key); b.style.cssText = '--c:' + s.c + ';--c-soft:' + s.cs + ';';
+      b.innerHTML = '<span class="dot"></span>' + esc(s.label);
+      b.addEventListener('click', function () { selectScenario(s); });
+      chips.appendChild(b);
+    });
+
+    function clearHighlight() {
+      if (!canvas) return;
+      canvas.classList.remove('tracing');
+      var t = canvas.querySelectorAll('.dtnode.dt-trace');
+      for (var i = 0; i < t.length; i++) t[i].classList.remove('dt-trace');
+    }
+    function highlight(upto) {
+      if (!canvas) return;
+      canvas.classList.add('tracing');
+      var lit = {}; for (var i = 0; i <= upto && i < curPath.length; i++) lit[curPath[i]] = 1;
+      var nodes = canvas.querySelectorAll('.dtnode');
+      for (var j = 0; j < nodes.length; j++) nodes[j].classList.toggle('dt-trace', !!lit[nodes[j].getAttribute('data-node')]);
+    }
+    function renderSteps() {
+      stepsEl.innerHTML = '';
+      curPath.forEach(function (id, i) {
+        var n = byId[id] || {}, edge = i > 0 ? edgeLabel(curPath[i - 1], id) : '', isLast = (i === curPath.length - 1);
+        var d = document.createElement('div');
+        d.className = 'dw-step' + (isLast ? ' dw-outcome' : ''); d.style.cssText = '--sc:' + kc(id) + ';';
+        d.innerHTML = '<div class="dw-rail"><span class="dw-dot">' + (i + 1) + '</span><span class="dw-line"></span></div>' +
+          '<div class="dw-body">' + (edge ? '<div class="dw-edge">' + esc(edge) + ' ↓</div>' : '') +
+          '<div class="dw-node">' + esc(n.label || id) + '</div>' +
+          (n.sub ? '<div class="dw-why">' + esc(n.sub) + '</div>' : '') + '</div>';
+        stepsEl.appendChild(d);
+      });
+      showUpTo();
+    }
+    function showUpTo() {
+      var kids = stepsEl.children;
+      for (var i = 0; i < kids.length; i++) kids[i].classList.toggle('shown', i <= step);
+      prog.textContent = 'Step ' + (step + 1) + ' of ' + curPath.length;
+      highlight(step);
+      if (kids[step] && kids[step].scrollIntoView) kids[step].scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
+    function stopPlay() { if (playT) { clearInterval(playT); playT = null; } var pb = document.getElementById('dw-play'); if (pb) pb.textContent = '▶ Play'; }
+    function selectScenario(s) {
+      stopPlay();
+      var cs = chips.children; for (var i = 0; i < cs.length; i++) cs[i].classList.toggle('active', cs[i].getAttribute('data-k') === s.key);
+      curPath = pathTo(s.target) || []; step = 0; stage.hidden = false; renderSteps();
+    }
+    document.getElementById('dw-next').addEventListener('click', function () { if (curPath && step < curPath.length - 1) { step++; showUpTo(); } });
+    document.getElementById('dw-prev').addEventListener('click', function () { if (curPath && step > 0) { step--; showUpTo(); } });
+    document.getElementById('dw-reset').addEventListener('click', function () {
+      stopPlay(); stage.hidden = true; clearHighlight(); curPath = null;
+      var cs = chips.children; for (var i = 0; i < cs.length; i++) cs[i].classList.remove('active');
+    });
+    document.getElementById('dw-play').addEventListener('click', function () {
+      if (!curPath) return;
+      if (playT) { stopPlay(); return; }
+      this.textContent = '⏸ Pause';
+      if (step >= curPath.length - 1) { step = 0; showUpTo(); }
+      playT = setInterval(function () { if (step < curPath.length - 1) { step++; showUpTo(); } else { stopPlay(); } }, 1150);
+    });
   })();
 </script>
 {% endblock %}

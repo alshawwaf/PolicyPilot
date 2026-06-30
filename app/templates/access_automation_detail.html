@@ -171,9 +171,12 @@ Content-Type: application/json
 <div class="card" style="display:flex; align-items:center; justify-content:space-between; gap:14px; flex-wrap:wrap;">
   <div style="min-width:220px;">
     <h2 style="margin:0; font-size:16px;">How it decides</h2>
-    <p class="muted" style="margin:5px 0 0; font-size:12.5px; max-width:70ch;">The full first-match decision tree — and the knobs to tune the logic — now live in their own app, so this page stays focused on making the request.</p>
+    <p class="muted" style="margin:5px 0 0; font-size:12.5px; max-width:70ch;">The reasoning behind every change lives in its own apps, so this page stays focused on making the request: the <b>Decision map</b> (the principles) and the <b>Decision tree</b> (step through how any outcome is reached, and tune the logic).</p>
   </div>
-  <a class="btn secondary" href="/decision-logic" data-open-app="decisionlogic">Open “How it decides” →</a>
+  <div style="display:flex; gap:8px; flex-wrap:wrap;">
+    <a class="btn secondary" href="/decision-map" data-open-app="decisionmap">Decision map →</a>
+    <a class="btn secondary" href="/decision-tree" data-open-app="decisiontree">Decision tree →</a>
+  </div>
 </div>
 
 <script>

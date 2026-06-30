@@ -113,7 +113,7 @@ def aa_detail(sid: int, request: Request, db: Session = Depends(get_db)):
     if user is None:
         return RedirectResponse("/login", status_code=303)
     ms = _owned(db, sid, user)
-    # "How it decides" (the decision tree) is now its own app at /decision-logic.
+    # "How it decides" is now its own apps: /decision-map (principles) + /decision-tree (interactive flow).
     return templates.TemplateResponse(request, "access_automation_detail.html",
                                       {"ms": ms, "has_secret": mgmt_creds.has_secret(db, ms),
                                        "flash": _pop_flash(request)})
@@ -133,15 +133,24 @@ def _aa_option_state() -> dict:
                        "aa_ignore_conditions": o.ignore_conditions}}
 
 
-@router.get("/decision-logic", response_class=HTMLResponse)
-def decision_logic_page(request: Request, db: Session = Depends(get_db)):
-    """"How it decides" — its own app: the engine's first-match decision tree + the click-to-tune knobs.
-    Server-independent (the logic + the global decision options), so it isn't scoped to a Management server;
-    split out of the access-automation page so that page stays focused on making the request."""
+@router.get("/decision-map", response_class=HTMLResponse)
+def decision_map_page(request: Request, db: Session = Depends(get_db)):
+    """"Decision map" — its own app: the engine's reasoning PRINCIPLES (reuse → widen → create, least-
+    privilege, note-don't-stop) as a modern overview. Pure presentation, server-independent."""
+    if get_user_or_none(request, db) is None:
+        return RedirectResponse("/login", status_code=303)
+    return templates.TemplateResponse(request, "decision_map.html", {})
+
+
+@router.get("/decision-tree", response_class=HTMLResponse)
+def decision_tree_page(request: Request, db: Session = Depends(get_db)):
+    """"Decision tree" — its own app: the interactive first-match flow + a "trace a decision" walkthrough
+    that steps the exact path to each outcome, plus the click-to-tune knobs. Server-independent (engine
+    logic + global decision options), so it isn't scoped to a Management server."""
     import json
     if get_user_or_none(request, db) is None:
         return RedirectResponse("/login", status_code=303)
-    return templates.TemplateResponse(request, "decision_logic.html",
+    return templates.TemplateResponse(request, "decision_tree_app.html",
                                       {"decision_graph_json": json.dumps(
                                           decision_tree.to_graph()).replace("<", "\\u003c"),
                                        "aa_options_json": json.dumps(_aa_option_state()).replace("<", "\\u003c")})

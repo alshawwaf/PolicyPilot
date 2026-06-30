@@ -1251,23 +1251,31 @@ def test_access_automation_detail_renders_form_and_webhook():
     assert "dt.value = 'internet'" in html       # syncSvcType auto-selects Internet for an app request
     # rollback panel: a "disabled" rule is a non-terminal state (Re-enable | Delete rule), and re-enable maps
     assert "c.state === 'disabled'" in html and "bodyObj.reenable = true" in html
-    # the decision tree is now its OWN app (/decision-logic); this page only links out to it
-    assert 'data-open-app="decisionlogic"' in html and "How it decides" in html
+    # the decision logic is now its OWN apps (/decision-map + /decision-tree); this page only links out
+    assert 'data-open-app="decisiontree"' in html and 'data-open-app="decisionmap"' in html
     assert 'id="aa-flow-canvas"' not in html        # the canvas no longer lives on this page
 
 
-def test_decision_logic_app_renders_standalone():
-    # "How it decides" is its own app — server-independent (engine logic + global knobs), no credential gate.
+def test_decision_map_app_renders_standalone():
+    # "Decision map" — the engine's principles as a modern overview. Server-independent, no graph data needed.
     req = types.SimpleNamespace(base_url="https://portal.example/")
-    html = _render("decision_logic.html", request=req,
+    html = _render("decision_map.html", request=req)
+    assert "Decision map" in html and "Reuse first" in html and "create least-privilege" in html.lower()
+    assert 'data-open-app="decisiontree"' in html        # links across to the tree
+
+
+def test_decision_tree_app_renders_standalone():
+    # "Decision tree" — the interactive flow + the trace walkthrough. Server-independent (engine logic + knobs).
+    req = types.SimpleNamespace(base_url="https://portal.example/")
+    html = _render("decision_tree_app.html", request=req,
                    decision_graph_json=json.dumps(dt.to_graph()),
                    aa_options_json=json.dumps({"profile": "custom", "values": {}}))
-    assert 'id="aa-flow-canvas"' in html and "How it decides" in html
+    assert 'id="aa-flow-canvas"' in html and "Decision tree" in html
+    assert 'id="dw-chips"' in html and "Trace a decision" in html      # the walkthrough
     # a custom canvas the client renders from the engine's graph JSON, still exportable (.drawio / .mmd / .dot)
     assert "/access-automation/decision-tree/drawio" in html and "decision-tree/mmd" in html
     for leaf in ("No-op", "Widen the rule", "Create least-privilege rule", "Note & keep going"):
         assert leaf in html        # leaf labels live in the embedded decision-graph JSON
-    assert "Review" not in html    # the flow is reuse-or-create — no policy "review" stop
 
 
 # --- group dereferencing: an unresolved group source must REVIEW; a resolved one must not block -----

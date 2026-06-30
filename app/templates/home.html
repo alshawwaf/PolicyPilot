@@ -15,18 +15,26 @@
 
   main.desktop { max-width:none; margin:0; padding:0; height:calc(100vh - 48px); }
   .os-desktop { position:relative; width:100%; height:100%; overflow:hidden;
-    background:
-      radial-gradient(1100px 460px at 78% -8%, rgba(123,63,242,.34), transparent 60%),
-      radial-gradient(900px 420px at 8% 112%, rgba(255,61,154,.26), transparent 55%),
-      radial-gradient(700px 500px at 100% 100%, rgba(34,211,238,.10), transparent 60%),
-      linear-gradient(160deg,#0c1120,#0a0e18); }
-  html[data-theme="light"] .os-desktop { background:
-      radial-gradient(1100px 460px at 78% -8%, rgba(123,63,242,.18), transparent 60%),
-      radial-gradient(900px 420px at 8% 112%, rgba(255,61,154,.14), transparent 55%),
-      linear-gradient(160deg,#eef1f8,#e7ebf4); }
-  .os-desktop::before { content:""; position:absolute; inset:0; pointer-events:none; opacity:.022;   /* subtle film-grain texture */
+    background:linear-gradient(160deg,#0c1120,#0a0e18); }
+  html[data-theme="light"] .os-desktop { background:linear-gradient(160deg,#eef1f8,#e7ebf4); }
+  .os-desktop::before { content:""; position:absolute; inset:0; pointer-events:none; opacity:.022; z-index:1;   /* subtle film-grain texture, above the mesh */
     background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); }
   html[data-theme="light"] .os-desktop::before { opacity:.04; }
+
+  /* ---- animated mesh-gradient wallpaper (Option A): drifting brand blobs behind everything ---- */
+  .os-mesh { position:absolute; inset:0; z-index:0; overflow:hidden; pointer-events:none; }
+  .os-mesh i { position:absolute; display:block; border-radius:50%; filter:blur(42px); will-change:transform; }
+  .os-mesh .m1 { width:620px; height:520px; right:-140px; top:-140px;
+    background:radial-gradient(circle,rgba(123,63,242,.40),transparent 60%); animation:osmesh1 26s ease-in-out infinite; }
+  .os-mesh .m2 { width:560px; height:460px; left:-160px; bottom:-170px;
+    background:radial-gradient(circle,rgba(255,61,154,.30),transparent 60%); animation:osmesh2 32s ease-in-out infinite; }
+  .os-mesh .m3 { width:420px; height:420px; left:38%; bottom:-180px;
+    background:radial-gradient(circle,rgba(34,211,238,.22),transparent 60%); animation:osmesh3 28s ease-in-out infinite; }
+  @keyframes osmesh1 { 0%,100%{transform:translate(0,0) scale(1)} 50%{transform:translate(-44px,42px) scale(1.18)} }
+  @keyframes osmesh2 { 0%,100%{transform:translate(0,0) scale(1.1)} 50%{transform:translate(52px,-32px) scale(1)} }
+  @keyframes osmesh3 { 0%,100%{transform:translate(0,0) scale(1)} 50%{transform:translate(42px,-44px) scale(1.2)} }
+  html[data-theme="light"] .os-mesh i { opacity:.55; }
+  @media (prefers-reduced-motion: reduce){ .os-mesh i { animation:none !important; } }
   .os-hello { position:absolute; top:42px; left:0; right:0; text-align:center; pointer-events:none; }
   .os-hello h2 { font-size:30px; font-weight:700; margin:0; letter-spacing:-.4px;
     background:var(--accent-grad); -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; }
@@ -40,8 +48,53 @@
     color:#fff; box-shadow:0 8px 20px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.25); }
   .os-deskicon .os-tile svg { width:28px; height:28px; }
   .os-deskicon .os-lbl { font-size:11.5px; color:#fff; text-shadow:0 1px 3px rgba(0,0,0,.6); line-height:1.2;
+    width:100%; text-align:center; word-break:break-word;
     display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
   html[data-theme="light"] .os-deskicon .os-lbl { color:#1a2236; text-shadow:none; }
+
+  /* ---- Desktop widgets (toggleable, per-user) ---- */
+  .os-widgets { position:absolute; top:22px; right:20px; width:288px; display:flex; flex-direction:column; gap:12px; z-index:2; }
+  .pw-card { position:relative; background:rgba(18,24,42,.52); border:1px solid rgba(255,255,255,.12); border-radius:16px;
+    backdrop-filter:blur(16px) saturate(150%); -webkit-backdrop-filter:blur(16px) saturate(150%);
+    box-shadow:0 12px 34px -12px rgba(0,0,0,.5); padding:13px 15px; color:#eaf0fa; }
+  .pw-card.clk { cursor:pointer; transition:transform .14s ease, border-color .14s ease; }
+  .pw-card.clk:hover { transform:translateY(-2px); border-color:rgba(123,63,242,.5); }
+  html[data-theme="light"] .pw-card { background:rgba(255,255,255,.7); border-color:rgba(16,24,40,.08); color:#1a2236;
+    box-shadow:0 12px 30px -14px rgba(16,24,40,.22); }
+  .pw-k { font-size:10px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); margin-bottom:8px; display:flex; justify-content:space-between; align-items:baseline; }
+  .pw-big { font-size:30px; font-weight:700; line-height:1; letter-spacing:-.01em; }
+  .pw-sub { font-size:11px; color:var(--muted); margin-top:3px; }
+  .pw-row { display:flex; gap:8px; }
+  .pw-chip { flex:1; text-align:center; border-radius:10px; padding:8px 4px; border:1px solid; }
+  .pw-chip .n { font-size:20px; font-weight:700; line-height:1; }
+  .pw-chip .l { font-size:9.5px; margin-top:3px; opacity:.85; }
+  .pw-chip.reuse { background:rgba(46,207,134,.12); border-color:rgba(46,207,134,.3); color:#7ee6b0; }
+  .pw-chip.widen { background:rgba(34,211,238,.12); border-color:rgba(34,211,238,.3); color:#67e8f9; }
+  .pw-chip.create { background:rgba(168,85,247,.14); border-color:rgba(168,85,247,.3); color:#d0a3ff; }
+  .pw-chip.disable { background:rgba(245,158,11,.14); border-color:rgba(245,158,11,.3); color:#f5b740; }
+  .pw-conn { display:flex; align-items:center; gap:8px; font-size:12.5px; }
+  .pw-conn + .pw-conn { margin-top:7px; }
+  .pw-conn .dot { width:8px; height:8px; border-radius:50%; flex:none; }
+  .pw-conn .dot.up { background:#2ecf86; box-shadow:0 0 8px #2ecf86; }
+  .pw-conn .dot.down { background:#ef5b6f; box-shadow:0 0 8px #ef5b6f; }
+  .pw-conn .age { margin-left:auto; font-size:11px; color:var(--muted); }
+  .pw-stats { display:flex; gap:16px; }
+  .pw-stats .v { font-size:22px; font-weight:700; }
+  .pw-stats .c { font-size:9.5px; color:var(--muted); }
+  .pw-spark { width:100%; height:30px; display:block; overflow:visible; }
+  .pw-tag { display:inline-block; font-size:10px; font-weight:700; padding:2px 8px; border-radius:6px; }
+  .pw-acts { display:flex; flex-wrap:wrap; gap:6px; }
+  .pw-act { font-size:10.5px; padding:5px 10px; border-radius:9px; background:rgba(255,255,255,.08);
+    border:1px solid rgba(255,255,255,.14); color:inherit; cursor:pointer; }
+  .pw-act:hover { background:var(--accent-grad); color:#fff; border-color:transparent; }
+  html[data-theme="light"] .pw-act { background:rgba(16,24,40,.05); border-color:rgba(16,24,40,.1); }
+  .pw-clock .t { font-size:40px; font-weight:300; letter-spacing:-.02em; line-height:1; }
+  .pw-ticker { font-size:11.5px; }
+  .pw-ticker .ln { display:flex; gap:7px; align-items:center; padding:3px 0; }
+  .pw-ticker .ln + .ln { border-top:1px solid var(--line-soft); }
+  .pw-ticker .mth { font-size:9.5px; font-weight:700; opacity:.8; min-width:30px; }
+  .pw-ticker .pth { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-family:var(--font-mono,monospace); opacity:.8; }
+  @media (max-width:1040px){ .os-widgets { display:none; } }   /* the desktop is narrow — drop the widget rail */
 
   /* ---- Dock ---- */
   .os-dock { position:absolute; left:50%; transform:translateX(-50%); bottom:18px; display:flex; gap:13px;
@@ -141,6 +194,8 @@
 </style>
 
 <div class="os-desktop" id="os-desktop">
+  <div class="os-mesh" aria-hidden="true"><i class="m1"></i><i class="m2"></i><i class="m3"></i></div>
+  <div class="os-widgets" id="os-widgets" aria-label="Desktop widgets"></div>
   <div class="os-launch" id="os-launch"><div class="os-launch-grid" id="os-launch-grid"></div>
     <button type="button" class="btn secondary os-launch-x" id="os-launch-x">Done</button></div>
   <div class="os-dock" id="os-dock"></div>
@@ -160,6 +215,7 @@
   if (!Array.isArray(LAYOUT.dock)) LAYOUT.dock = [];
   if (!Array.isArray(LAYOUT.desktop)) LAYOUT.desktop = [];
   if (!LAYOUT.win || typeof LAYOUT.win !== 'object') LAYOUT.win = {};   // per-app remembered window geometry
+  if (!Array.isArray(LAYOUT.widgets)) LAYOUT.widgets = ['decisions', 'activity'];   // enabled desktop widgets
 
   var I = {
     access: '<path d="M16 3h5v5"/><path d="M21 3l-7 7"/><path d="M8 3H3v5"/><path d="M3 3l7 7"/><path d="M3 16v5h5"/><path d="M3 21l7-7"/><path d="M16 21h5v-5"/><path d="M21 21l-7-7"/>',
@@ -531,9 +587,11 @@
     var di = e.target.closest('.os-deskicon[data-key]');
     if (di) { e.preventDefault(); showCtx(e.clientX - r.left, e.clientY - r.top, ctxItems(di.dataset.key, 'desktop')); return; }
     var onBg = e.target === desktop || (hello && (e.target === hello || hello.contains(e.target)));
-    if (onBg && window.PP_ADMIN) {
+    if (onBg) {
       e.preventDefault();
-      showCtx(e.clientX - r.left, e.clientY - r.top, [{ label: 'Set this layout as everyone’s default', ic: I.star, fn: saveDefault }]);
+      var items = widgetMenuItems();                          // everyone: toggle their own desktop widgets
+      if (window.PP_ADMIN) items.push({ sep: true }, { label: 'Set this layout as everyone’s default', ic: I.star, fn: saveDefault });
+      showCtx(e.clientX - r.left, e.clientY - r.top, items);
     }
   });
 
@@ -547,8 +605,157 @@
     else if (e.data.pp === 'openApp' && CATALOG[e.data.key]) openApp(e.data.key);
   });
 
+  /* ---- desktop widgets (toggleable per-user; live data from /desktop/widgets, DB-side only) ---- */
+  var widgetsEl = document.getElementById('os-widgets');
+  var WDATA = {};
+  var WIDGET_ORDER = ['decisions', 'activity', 'last', 'connections', 'coverage', 'errors', 'latency', 'recent', 'clock', 'quick'];
+  var WIDGET_LABEL = { decisions: 'Decisions today', activity: 'API activity', last: 'Last decision',
+    connections: 'Connections', coverage: 'Coverage', errors: 'Error rate', latency: 'Avg latency',
+    recent: 'Recent activity', clock: 'Clock & date', quick: 'Quick actions' };
+
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+  function ago(iso) {
+    if (!iso) return '';
+    var t = Date.parse(iso); if (isNaN(t)) return '';
+    var s = Math.max(0, (Date.now() - t) / 1000);
+    if (s < 60) return 'just now';
+    if (s < 3600) return Math.floor(s / 60) + 'm ago';
+    if (s < 86400) return Math.floor(s / 3600) + 'h ago';
+    return Math.floor(s / 86400) + 'd ago';
+  }
+  function chip(cls, n, label) {
+    return '<div class="pw-chip ' + cls + '"><div class="n">' + (n || 0) + '</div><div class="l">' + label + '</div></div>';
+  }
+  function sparkSvg(arr) {
+    arr = (arr && arr.length) ? arr : [0];
+    var W = 240, H = 30, n = arr.length, max = Math.max.apply(null, arr.concat([1]));
+    var pts = arr.map(function (v, i) {
+      var x = (n <= 1) ? 0 : (i / (n - 1) * W);
+      return x.toFixed(1) + ',' + (H - (v / max) * (H - 4) - 2).toFixed(1);
+    }).join(' ');
+    return '<svg class="pw-spark" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none">' +
+      '<defs><linearGradient id="pwspark" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#7b3ff2"/>' +
+      '<stop offset="1" stop-color="#22d3ee"/></linearGradient></defs>' +
+      '<polyline fill="none" stroke="url(#pwspark)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" points="' + pts + '"/></svg>';
+  }
+  function outcomeTag(o) {
+    var m = { create: ['#d0a3ff', 'rgba(168,85,247,.18)', 'CREATED'], widen: ['#67e8f9', 'rgba(34,211,238,.18)', 'WIDENED'],
+      disable: ['#f5b740', 'rgba(245,158,11,.18)', 'DISABLED'], deny: ['#ef8a99', 'rgba(239,91,111,.18)', 'DENY'] }[o]
+      || ['#cbd5e1', 'rgba(148,163,184,.18)', (o || '—').toUpperCase()];
+    return '<span class="pw-tag" style="color:' + m[0] + ';background:' + m[1] + '">' + m[2] + '</span>';
+  }
+
+  var WIDGETS = {
+    decisions: { open: 'changelog', render: function (d) {
+      var x = (d && d.decisions) || {};
+      return '<div class="pw-k"><span>Decisions today</span></div><div class="pw-row">' +
+        chip('create', x.created, 'Created') + chip('widen', x.widened, 'Widened') + chip('disable', x.disabled, 'Disabled') + '</div>';
+    } },
+    activity: { open: 'activity', render: function (d) {
+      var a = (d && d.activity) || {};
+      return '<div class="pw-k"><span>API activity</span><span style="color:var(--accent);font-weight:600;">' + (a.rate || 0) + ' / min</span></div>' + sparkSvg(a.spark);
+    } },
+    last: { open: 'changelog', render: function (d) {
+      var l = d && d.last;
+      if (!l) return '<div class="pw-k"><span>Last decision</span></div><div class="pw-sub">No changes published yet.</div>';
+      return '<div class="pw-k"><span>Last decision</span></div>' + outcomeTag(l.outcome) +
+        '<div style="font-size:13px;font-weight:600;margin-top:7px;">' + esc(l.layer || l.summary || '—') + '</div>' +
+        '<div class="pw-sub">' + (l.ticket ? esc(l.ticket) + ' · ' : '') + ago(l.at) + '</div>';
+    } },
+    connections: { open: 'management', render: function (d) {
+      var c = (d && d.connections) || [];
+      if (!c.length) return '<div class="pw-k"><span>Connections</span></div><div class="pw-sub">No servers configured.</div>';
+      return '<div class="pw-k"><span>Connections</span></div>' + c.map(function (x) {
+        return '<div class="pw-conn"><span class="dot ' + (x.ok ? 'up' : 'down') + '"></span>' +
+          (x.kind === 'sms' ? 'SMS · ' : 'GW · ') + esc(x.name) + '<span class="age">' + esc(x.note) + '</span></div>';
+      }).join('');
+    } },
+    coverage: { open: 'layers', render: function (d) {
+      var c = (d && d.coverage) || {};
+      function st(v, l) { return '<div><div class="v">' + (v || 0) + '</div><div class="c">' + l + '</div></div>'; }
+      return '<div class="pw-k"><span>Under management</span></div><div class="pw-stats">' +
+        st(c.layers, 'Layers') + st(c.gateways, 'Gateways') + st(c.connections, 'Connections') + '</div>';
+    } },
+    errors: { open: 'activity', render: function (d) {
+      var e = (d && d.errors) || {};
+      return '<div class="pw-k"><span>Error rate · today</span></div><div class="pw-big">' + (e.pct || 0) + '%</div>' +
+        '<div class="pw-sub">' + (e.err || 0) + ' of ' + (e.total || 0) + ' requests</div>';
+    } },
+    latency: { open: 'activity', render: function (d) {
+      var l = (d && d.latency) || {};
+      var pct = Math.max(4, Math.min(100, (l.avg || 0) / 5));
+      return '<div class="pw-k"><span>Avg latency · today</span></div><div class="pw-big">' + (l.avg || 0) +
+        '<span style="font-size:13px;color:var(--muted);font-weight:400;"> ms</span></div>' +
+        '<div style="height:6px;border-radius:3px;margin-top:9px;background:rgba(148,163,184,.18);overflow:hidden;"><div style="height:100%;width:' + pct + '%;background:linear-gradient(90deg,#2ecf86,#22d3ee);"></div></div>';
+    } },
+    recent: { open: 'activity', render: function (d) {
+      var r = (d && d.recent) || [];
+      if (!r.length) return '<div class="pw-k"><span>Recent activity</span></div><div class="pw-sub">Nothing yet.</div>';
+      return '<div class="pw-k"><span>Recent activity</span></div><div class="pw-ticker">' + r.slice(0, 5).map(function (x) {
+        var sc = (x.status >= 500) ? '#ef8a99' : (x.status >= 400 ? '#f5b740' : '#7ee6b0');
+        return '<div class="ln"><span class="mth">' + esc(x.method || '') + '</span><span class="pth">' + esc(x.path || '') +
+          '</span><span style="color:' + sc + ';font-weight:600;font-size:11px;">' + (x.status || '') + '</span></div>';
+      }).join('') + '</div>';
+    } },
+    clock: { render: function () { return '<div class="pw-clock"><div class="t">--:--</div><div class="pw-sub d"></div></div>'; } },
+    quick: { render: function () {
+      return '<div class="pw-k"><span>Quick actions</span></div><div class="pw-acts">' +
+        '<button type="button" class="pw-act" data-open="access">+ Request</button>' +
+        '<button type="button" class="pw-act" data-open="decisionmap">Decision map</button>' +
+        '<button type="button" class="pw-act" data-open="activity">Activity</button></div>';
+    } }
+  };
+
+  function tickClock() {
+    if (!widgetsEl) return;
+    var t = widgetsEl.querySelector('.pw-clock .t'); if (!t) return;
+    var now = new Date();
+    t.textContent = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    var dd = widgetsEl.querySelector('.pw-clock .d');
+    if (dd) dd.textContent = now.toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'long' });
+  }
+  function renderWidgets() {
+    if (!widgetsEl) return;
+    widgetsEl.innerHTML = '';
+    LAYOUT.widgets.forEach(function (id) {
+      var w = WIDGETS[id]; if (!w) return;
+      var card = document.createElement('div');
+      card.className = 'pw-card' + (w.open ? ' clk' : '');
+      if (w.open) card.dataset.open = w.open;
+      card.innerHTML = w.render(WDATA);
+      widgetsEl.appendChild(card);
+    });
+    tickClock();
+  }
+  function toggleWidget(id) {
+    var i = LAYOUT.widgets.indexOf(id);
+    if (i >= 0) LAYOUT.widgets.splice(i, 1); else LAYOUT.widgets.push(id);
+    renderWidgets(); saveLayout();
+  }
+  function widgetMenuItems() {
+    return WIDGET_ORDER.map(function (id) {
+      return { label: WIDGET_LABEL[id], check: LAYOUT.widgets.indexOf(id) >= 0,
+        recheck: function () { return LAYOUT.widgets.indexOf(id) >= 0; }, keepOpen: true,
+        fn: function () { toggleWidget(id); } };
+    });
+  }
+  function pollWidgets() {
+    fetch('/desktop/widgets', { headers: { 'Accept': 'application/json' } })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) { if (d) { WDATA = d; renderWidgets(); } })
+      .catch(function () {});
+  }
+  if (widgetsEl) {
+    widgetsEl.addEventListener('click', function (e) {
+      var a = e.target.closest('[data-open]'); if (!a) return;
+      var k = a.dataset.open; if (CATALOG[k]) openApp(k);
+    });
+  }
+
   if (normalizeDesktop()) saveLayout();   // migrate any tight, older-pitch layout to the roomier grid
-  renderDock(); renderDesktopIcons();
+  renderDock(); renderDesktopIcons(); renderWidgets();
+  pollWidgets(); setInterval(pollWidgets, 20000); setInterval(tickClock, 1000);
 })();
 </script>
 {% endblock %}

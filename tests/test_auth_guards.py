@@ -24,7 +24,7 @@ def test_anonymous_html_page_redirects_to_login(client, path):
 
 # JSON/data endpoints deny anonymous callers too — they answer 401/403/404 (never 200), not an HTML redirect.
 @pytest.mark.parametrize("path", ["/notifications", "/exports", "/management/1/rulebase?name=Network",
-                                  "/api-docs/openapi.json"])
+                                  "/api-docs/openapi.json", "/system/data", "/desktop/widgets"])
 def test_anonymous_data_endpoint_denied(client, path):
     r = client.get(path, follow_redirects=False)
     assert r.status_code != 200, f"{path} served an anonymous caller"

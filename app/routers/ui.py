@@ -313,6 +313,9 @@ def update_profile(
 # Server-side allowlist of app keys (anything else in a saved layout is dropped — no junk/injection).
 DESKTOP_APP_KEYS = {"access", "decisionmap", "decisiontree", "changelog", "webhook", "layers", "management",
                     "gateways", "agents", "apiexplorer", "apidocs", "settings", "activity", "account", "system"}
+# Toggleable desktop widgets (the right-hand rail on the OS Home). Each is backed by real, DB-side data.
+DESKTOP_WIDGET_KEYS = {"decisions", "activity", "last", "connections", "coverage",
+                       "errors", "latency", "recent", "clock", "quick"}
 DEFAULT_DESKTOP_LAYOUT = {"dock": ["access", "layers", "management", "gateways", "agents", "settings",
                                    "activity", "system"],
                           "desktop": []}
@@ -348,7 +351,16 @@ def _sanitize_layout(raw) -> dict:
                           "w": max(300, min(int(v.get("w", 600)), 8000)), "h": max(200, min(int(v.get("h", 400)), 8000))}
             except (TypeError, ValueError):
                 pass
-    return {"dock": dock or list(DEFAULT_DESKTOP_LAYOUT["dock"]), "desktop": desk, "win": win}
+    out = {"dock": dock or list(DEFAULT_DESKTOP_LAYOUT["dock"]), "desktop": desk, "win": win}
+    # Preserve the user's enabled-widgets choice (allowlisted). Absent → the client applies its default;
+    # an explicit empty list means "no widgets" and is kept distinct from absent.
+    if isinstance(raw.get("widgets"), list):
+        widgets = []
+        for w in raw["widgets"][:12]:
+            if w in DESKTOP_WIDGET_KEYS and w not in widgets:
+                widgets.append(w)
+        out["widgets"] = widgets
+    return out
 
 
 def _is_admin(user: User) -> bool:
@@ -452,6 +464,112 @@ def system_health_data(request: Request, db: Session = Depends(get_db)):
     if user is None:
         return Response(status_code=401)
     return JSONResponse(_system_health(db))
+
+
+# --- Desktop widgets (the toggleable Home rail) ------------------------------------------------------
+def _ago(now: dt.datetime, then: dt.datetime | None) -> str:
+    if not then:
+        return ""
+    if then.tzinfo is None:
+        then = then.replace(tzinfo=dt.timezone.utc)
+    s = max(0, int((now - then).total_seconds()))
+    if s < 60:
+        return "just now"
+    if s < 3600:
+        return f"{s // 60}m ago"
+    if s < 86400:
+        return f"{s // 3600}h ago"
+    return f"{s // 86400}d ago"
+
+
+def _widget_data(db: Session) -> dict:
+    """Aggregate everything the desktop widget rail needs — purely DB-side, no live SMS calls.
+    Mirrors the auth + read-only pattern of /system/data."""
+    from ..models import AppliedChange, GatewayLayerSnapshot
+    now = dt.datetime.now(dt.timezone.utc)
+    today = now.replace(hour=0, minute=0, second=0, microsecond=0)
+
+    # Decisions today — published changes grouped by outcome (no-ops publish nothing, so aren't counted).
+    dec = {"create": 0, "widen": 0, "disable": 0}
+    for outcome, n in db.execute(
+            select(AppliedChange.outcome, func.count())
+            .where(AppliedChange.created_at >= today)
+            .group_by(AppliedChange.outcome)).all():
+        if outcome in dec:
+            dec[outcome] = int(n)
+
+    # Last decision (most recent published change).
+    last = db.scalar(select(AppliedChange).order_by(AppliedChange.created_at.desc()).limit(1))
+    last_d = None
+    if last is not None:
+        last_d = {"outcome": last.outcome or "", "ticket": last.ticket_id or "", "layer": last.layer or "",
+                  "summary": last.summary or "", "action": last.action or "apply",
+                  "at": last.created_at.isoformat() if last.created_at else None}
+
+    # API activity pulse — 20 one-minute buckets + events in the last minute.
+    win_start = now - dt.timedelta(minutes=20)
+    spark = [0] * 20
+    rate = 0
+    minute_ago = now - dt.timedelta(minutes=1)
+    for at in db.scalars(select(ActivityLog.at).where(ActivityLog.at >= win_start)).all():
+        if at is None:
+            continue
+        if at.tzinfo is None:
+            at = at.replace(tzinfo=dt.timezone.utc)
+        idx = int((at - win_start).total_seconds() // 60)
+        if 0 <= idx < 20:
+            spark[idx] += 1
+        if at >= minute_ago:
+            rate += 1
+
+    # Error rate + latency, scoped to today.
+    total_today = db.scalar(select(func.count()).select_from(ActivityLog).where(ActivityLog.at >= today)) or 0
+    err_today = db.scalar(select(func.count()).select_from(ActivityLog)
+                          .where(ActivityLog.at >= today, ActivityLog.status >= 400)) or 0
+    avg_today = db.scalar(select(func.avg(ActivityLog.duration_ms)).where(ActivityLog.at >= today)) or 0
+
+    # Connections — SMS servers (configured) + gateways with their last-fetch status. No live login here.
+    conns = []
+    for m in db.scalars(select(ManagementServer).order_by(ManagementServer.id).limit(4)).all():
+        conns.append({"kind": "sms", "name": m.name or m.host, "ok": True, "note": "configured"})
+    for gw, snap in db.execute(
+            select(Gateway, GatewayLayerSnapshot)
+            .join(GatewayLayerSnapshot, GatewayLayerSnapshot.gateway_id == Gateway.id, isouter=True)
+            .order_by(Gateway.id).limit(4)).all():
+        if snap is not None:
+            conns.append({"kind": "gw", "name": gw.name, "ok": bool(snap.ok),
+                          "note": (_ago(now, snap.fetched_at) if snap.ok else "fetch error")})
+        else:
+            conns.append({"kind": "gw", "name": gw.name, "ok": True, "note": "not fetched"})
+
+    coverage_counts = {"layers": db.scalar(select(func.count()).select_from(DynamicLayer)) or 0,
+                       "gateways": db.scalar(select(func.count()).select_from(Gateway)) or 0,
+                       "connections": db.scalar(select(func.count()).select_from(ManagementServer)) or 0}
+
+    recent = [{"method": r.method or "", "path": r.path or "", "status": r.status, "kind": r.kind or "",
+               "at": r.at.isoformat() if r.at else None}
+              for r in db.scalars(select(ActivityLog).order_by(ActivityLog.at.desc()).limit(6)).all()]
+
+    return {
+        "decisions": {"created": dec["create"], "widened": dec["widen"], "disabled": dec["disable"]},
+        "last": last_d,
+        "activity": {"rate": rate, "spark": spark},
+        "errors": {"pct": round(100.0 * err_today / total_today, 1) if total_today else 0.0,
+                   "err": int(err_today), "total": int(total_today)},
+        "latency": {"avg": round(float(avg_today))},
+        "connections": conns,
+        "coverage": coverage_counts,
+        "recent": recent,
+    }
+
+
+@router.get("/desktop/widgets")
+def desktop_widgets_data(request: Request, db: Session = Depends(get_db)):
+    """JSON for the desktop widget rail's live refresh (read-only, DB-side; no live SMS calls)."""
+    user = get_user_or_none(request, db)
+    if user is None:
+        return Response(status_code=401)
+    return JSONResponse(_widget_data(db))
 
 
 @router.get("/", response_class=HTMLResponse)

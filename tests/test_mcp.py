@@ -262,14 +262,17 @@ def test_resolve_server_by_id_name_host_and_helpful_error():
     import types
     from app.services import mcp_tools
     srv = types.SimpleNamespace(id=7, name="HQ-Management", host="10.1.3.40", domain="")
+    # A SECOND server so an unresolved ref is genuinely ambiguous (no single-server fallback) and the
+    # helpful error fires. With one server, an unrecognised non-numeric ref resolves to it instead.
+    srv2 = types.SimpleNamespace(id=8, name="Branch", host="10.9.9.9", domain="")
 
     class _DB:
         def get(self, _model, sid):
-            return srv if sid == 7 else None
+            return {7: srv, 8: srv2}.get(sid)
         def query(self, _model):
             class _Q:
                 def all(_self):
-                    return [srv]
+                    return [srv, srv2]
             return _Q()
 
     db = _DB()
@@ -279,7 +282,7 @@ def test_resolve_server_by_id_name_host_and_helpful_error():
     assert mcp_tools._resolve_server(db, "10.1.3.40") is srv  # host
     assert mcp_tools._resolve_server(db, "HQ") is srv         # unique partial match on name
     try:
-        mcp_tools._resolve_server(db, "nope")
+        mcp_tools._resolve_server(db, "nope")                 # no match + 2 servers -> ambiguous -> error
         assert False, "expected ValueError"
     except ValueError as exc:
         msg = str(exc)
@@ -643,3 +646,39 @@ def test_import_dynamic_layer_creates_portal_copy_of_live(dldb, monkeypatch):
     # the portal now has a layer mirroring the live gateway — so a later add+push won't wipe live rules
     got = mcp_tools.get_dynamic_layer(str(out["layer_id"]))
     assert got["ok"] and got["rules"][0]["name"] == "live_rule"
+
+
+def _server_db(*names):
+    eng = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(eng)
+    db = sessionmaker(bind=eng)()
+    for n in names:
+        db.add(ManagementServer(name=n, host=n.lower() + ".lab", port=443, username="admin", owner_id=1))
+    db.commit()
+    return db
+
+
+def test_resolve_server_single_falls_back_for_placeholder():
+    # The agent invents "localhost" when the user names no server; with exactly one configured there's no
+    # ambiguity, so resolve to it instead of erroring (the "who said localhost?" fix).
+    db = _server_db("SMS")
+    assert mcp_tools._resolve_server(db, "localhost").name == "SMS"
+    assert mcp_tools._resolve_server(db, "").name == "SMS"
+    assert mcp_tools._resolve_server(db, 1).name == "SMS"          # exact id still works
+    db.close()
+
+
+def test_resolve_server_stale_numeric_id_still_errors():
+    # A NON-existent numeric id must NOT silently retarget the single server (stale-id misroute guard).
+    db = _server_db("SMS")
+    with pytest.raises(ValueError):
+        mcp_tools._resolve_server(db, 5)
+    db.close()
+
+
+def test_resolve_server_multiple_servers_still_asks():
+    # With more than one server a placeholder is genuinely ambiguous -> error that lists the choices.
+    db = _server_db("SMS", "SMS2")
+    with pytest.raises(ValueError):
+        mcp_tools._resolve_server(db, "localhost")
+    db.close()

@@ -57,6 +57,15 @@ def _resolve_server(db, server_ref):
         if ms is None:                                  # fall back to a UNIQUE partial match on name/host
             hits = [m for m in rows if ref in (m.name or "").lower() or ref in (m.host or "").lower()]
             ms = hits[0] if len(hits) == 1 else None
+    if ms is None and not numeric:
+        # A NON-numeric ref didn't match — a placeholder/guess the agent invented when the user named no
+        # server ("localhost", "", "default"…), or a name that doesn't exist. If EXACTLY ONE server is
+        # configured there's no ambiguity and no misroute risk, so use it instead of bouncing the user to
+        # confirm. (A numeric ref still requires an exact id match — never silently retarget a stale id to
+        # a different live server; that was the rollback-misroute incident.)
+        only = db.query(ManagementServer).all()
+        if len(only) == 1:
+            ms = only[0]
     if ms is None:
         avail = "; ".join(f"id {m.id} = {m.name} ({m.host})" for m in db.query(ManagementServer).all())
         raise ValueError(f"could not resolve management server “{server_ref}”. "
@@ -183,7 +192,9 @@ def decide_access(server_id: str, source: str, destination: str, layer: str, ser
     space — e.g. does a host have access to the domain ``alshawwaf.ca`` (source_kind stays ip,
     destination_kind=domain, destination='alshawwaf.ca').
 
-    ``server_id`` is the numeric id OR the server name/host from list_management_servers."""
+    ``server_id`` is the numeric id OR the server name/host from list_management_servers. If the user
+    doesn't name a server and only ONE is configured, it's used automatically — pass its id/name if you
+    know it, but don't invent a placeholder like "localhost" or stop to ask when there's only one."""
     db = SessionLocal()
     try:
         ms, secret = _server_secret(db, server_id)
@@ -249,7 +260,9 @@ def apply_access(server_id: str, source: str, destination: str, layer: str, serv
     REPLAYS the first committed result (adds ``idempotent_replay: true``) instead of publishing twice — so an
     agent retry or webhook redelivery can't double-commit. Safe to omit for dry-runs.
 
-    ``server_id`` is the numeric id OR the server name/host from list_management_servers."""
+    ``server_id`` is the numeric id OR the server name/host from list_management_servers. If the user
+    doesn't name a server and only ONE is configured, it's used automatically — pass its id/name if you
+    know it, but don't invent a placeholder like "localhost" or stop to ask when there's only one."""
     if idempotency_key and publish:
         from . import idempotency
         cached = idempotency.replay(idempotency_key)
@@ -307,7 +320,9 @@ def remove_access(server_id: str, source: str, destination: str, layer: str, ser
     an opaque/inline/conditional/multi-rule path (won't guess a destructive change). With publish=false it
     DRY-RUNS (validate then discard); publish=true COMMITS, allowed ONLY when 'mcp_allow_publish' is enabled.
 
-    ``server_id`` is the numeric id OR the server name/host from list_management_servers."""
+    ``server_id`` is the numeric id OR the server name/host from list_management_servers. If the user
+    doesn't name a server and only ONE is configured, it's used automatically — pass its id/name if you
+    know it, but don't invent a placeholder like "localhost" or stop to ask when there's only one."""
     if publish:
         from . import app_settings
         try:

@@ -17,6 +17,7 @@ from app.routers.ui import templates
 def _render(**ctx):
     ctx.setdefault("request", None)
     ctx.setdefault("flash", None)
+    ctx.setdefault("gateways", [])
     return templates.env.get_template("iac_exporter.html").render(**ctx)
 
 
@@ -41,9 +42,17 @@ def test_no_credential_server_marked_and_gaia_password_available():
     assert "no saved credential" in html
 
 
-def test_empty_state_when_no_servers():
-    html = _render(rows=[])
-    assert "No management servers yet" in html and "/management/new" in html
+def test_empty_state_when_no_servers_or_gateways():
+    html = _render(rows=[], gateways=[])
+    assert "Nothing to export yet" in html and "/management/new" in html and "/gateways/new" in html
+
+
+def test_gateway_appears_as_gaia_only_export_target():
+    gw = types.SimpleNamespace(id=7, name="GW", host="g.example", port=443)
+    html = _render(rows=[], gateways=[{"gw": gw, "has_secret": True}])
+    assert 'data-kind="gateway"' in html and 'data-id="7"' in html and "GW" in html
+    # the gateway Gaia export endpoint is wired in the inline script (kind-aware base path + /gaia-export/run)
+    assert "'/gateways/'" in html and "/gaia-export/run" in html
 
 
 def test_route_redirects_when_logged_out(monkeypatch):

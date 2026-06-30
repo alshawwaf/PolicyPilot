@@ -7,7 +7,7 @@
   <span class="icon-chip lg"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></span>
   <div class="ph-main">
     <h1>Gateways{% if rows %} <span class="ph-count">{{ rows|length }}</span>{% endif %}</h1>
-    <p class="ph-sub">Saved gateway connection profiles. The password is optional — store it AES-256-encrypted for reuse, or leave it blank to enter each time you apply.</p>
+    <p class="ph-sub">Saved gateway connection profiles — view their dynamic layers and manage credentials. Export a gateway's Gaia OS config in the <a href="/iac-export">IaC Exporter</a>. Passwords are AES-256-encrypted, or entered per apply.</p>
   </div>
   <div class="ph-actions">
     <a class="btn" href="/gateways/new" data-modal-form="/gateways/new" data-modal-title="New gateway">+ New gateway</a>

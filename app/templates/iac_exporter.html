@@ -18,6 +18,7 @@
   .iax-srv .iax-ic { width:30px; height:30px; border-radius:8px; background:var(--accent-grad);
     display:flex; align-items:center; justify-content:center; flex:none; box-shadow:0 2px 8px rgba(123,63,242,.22); }
   .iax-srv .iax-ic svg { width:16px; height:16px; color:#fff; }
+  .iax-srv .iax-ic.gw { background:var(--accent-grad-2); box-shadow:0 2px 8px rgba(59,130,246,.22); }
   .iax-srv .iax-tx { min-width:0; }
   .iax-srv .iax-nm { font-size:13.5px; font-weight:650; line-height:1.25; white-space:nowrap;
     overflow:hidden; text-overflow:ellipsis; }
@@ -37,6 +38,7 @@
   .iax-hd code { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:12px; color:var(--muted); }
   .iax-seg { display:inline-flex; background:var(--input-bg); border:1px solid var(--line);
     border-radius:10px; padding:3px; gap:2px; margin:16px 0; }
+  .iax-seg[hidden] { display:none; }   /* author display:inline-flex would otherwise beat the UA [hidden] rule */
   .iax-seg button { border:0; background:transparent; color:var(--muted); font-size:13px; font-weight:600;
     padding:7px 16px; border-radius:7px; cursor:pointer; transition:color .12s, background .12s; }
   .iax-seg button.active { color:#fff; background:var(--accent-grad); }
@@ -69,16 +71,17 @@
   </div>
 </div>
 
-{% if not rows %}
+{% if not rows and not gateways %}
 <div class="card">
-  <p class="muted" style="margin:0;">No management servers yet. <a href="/management/new" data-modal-form="/management/new" data-modal-title="Add management server">Add a Management Server</a> (host + a least-privilege API account), then come back to export its policy or Gaia config as code.</p>
+  <p class="muted" style="margin:0;">Nothing to export yet. Add a <a href="/management/new" data-modal-form="/management/new" data-modal-title="Add management server">Management Server</a> or a <a href="/gateways/new" data-modal-form="/gateways/new" data-modal-title="Add gateway">Gateway</a> (host + a least-privilege account), then come back to export its policy or Gaia config as code.</p>
 </div>
 {% else %}
 <div class="iax" id="iax">
   <aside class="iax-rail">
+    {% if rows %}
     <div class="iax-rail-h">Management servers</div>
     {% for r in rows %}
-    <button type="button" class="iax-srv" data-id="{{ r.ms.id }}" data-name="{{ r.ms.name }}"
+    <button type="button" class="iax-srv" data-kind="server" data-id="{{ r.ms.id }}" data-name="{{ r.ms.name }}"
             data-host="{{ r.ms.host }}:{{ r.ms.port }}" data-secret="{{ '1' if r.has_secret else '0' }}">
       <span class="iax-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 5v14c0 1.66-4 3-9 3s-9-1.34-9-3V5"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/></svg></span>
       <span class="iax-tx">
@@ -87,6 +90,20 @@
       </span>
     </button>
     {% endfor %}
+    {% endif %}
+    {% if gateways %}
+    <div class="iax-rail-h"{% if rows %} style="margin-top:12px;"{% endif %}>Gateways</div>
+    {% for g in gateways %}
+    <button type="button" class="iax-srv" data-kind="gateway" data-id="{{ g.gw.id }}" data-name="{{ g.gw.name }}"
+            data-host="{{ g.gw.host }}:{{ g.gw.port }}" data-secret="{{ '1' if g.has_secret else '0' }}">
+      <span class="iax-ic gw"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></span>
+      <span class="iax-tx">
+        <span class="iax-nm">{{ g.gw.name }}</span>
+        <span class="iax-sub {{ 'ok' if g.has_secret else '' }}">{{ 'credential saved' if g.has_secret else 'no credential' }}</span>
+      </span>
+    </button>
+    {% endfor %}
+    {% endif %}
     <a class="iax-add" href="/management/new" data-modal-form="/management/new" data-modal-title="Add management server">
       <span class="iax-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></span>
       Add server
@@ -94,7 +111,7 @@
   </aside>
 
   <section class="iax-pane">
-    <div class="iax-empty" id="iax-empty">Pick a management server to export.</div>
+    <div class="iax-empty" id="iax-empty">Pick a server or gateway to export.</div>
 
     <div id="iax-panel" hidden>
       <div class="iax-hd">
@@ -103,10 +120,11 @@
         <span id="iax-cred"></span>
       </div>
 
-      <div class="iax-seg" role="tablist">
+      <div class="iax-seg" role="tablist" id="iax-seg">
         <button type="button" id="iax-tab-policy" class="active" data-mode="policy">Policy layer</button>
         <button type="button" id="iax-tab-gaia" data-mode="gaia">Gaia OS config</button>
       </div>
+      <p class="iax-note" id="iax-gwnote" hidden style="margin:16px 0;">Gateways export their <b>Gaia OS config</b> only — the access policy lives on the Management Server.</p>
 
       <div id="iax-mode-policy">
         <div class="iax-ctl" id="iax-policy-ctl">
@@ -149,6 +167,7 @@
     var titleEl = document.getElementById('iax-title'), hostEl = document.getElementById('iax-host'),
         credEl = document.getElementById('iax-cred');
     var tabPolicy = document.getElementById('iax-tab-policy'), tabGaia = document.getElementById('iax-tab-gaia');
+    var seg = document.getElementById('iax-seg'), gwnote = document.getElementById('iax-gwnote');
     var modePolicy = document.getElementById('iax-mode-policy'), modeGaia = document.getElementById('iax-mode-gaia');
     var layerSel = document.getElementById('iax-layer'), genPolicy = document.getElementById('iax-gen-policy');
     var policyCtl = document.getElementById('iax-policy-ctl'), policyNoCred = document.getElementById('iax-policy-nocred'),
@@ -180,18 +199,23 @@
     function select(btn) {
       root.querySelectorAll('.iax-srv').forEach(function (b) { b.classList.remove('active'); });
       btn.classList.add('active');
-      cur = { id: btn.getAttribute('data-id'), name: btn.getAttribute('data-name'),
-              host: btn.getAttribute('data-host'), secret: btn.getAttribute('data-secret') === '1' };
+      cur = { id: btn.getAttribute('data-id'), kind: btn.getAttribute('data-kind') || 'server',
+              name: btn.getAttribute('data-name'), host: btn.getAttribute('data-host'),
+              secret: btn.getAttribute('data-secret') === '1' };
+      var gw = cur.kind === 'gateway';
       empty.hidden = true; panel.hidden = false;
       titleEl.textContent = cur.name; hostEl.textContent = cur.host;
-      credEl.innerHTML = cur.secret ? '<span class="pill ok">credential saved</span>'
-                                    : '<span class="pill faint">no credential</span>';
-      // policy controls depend on a saved secret; gaia accepts a runtime password
-      policyCtl.hidden = !cur.secret; policyNoCred.hidden = cur.secret;
-      if (!cur.secret) policyEdit.setAttribute('data-modal-form', '/management/' + cur.id + '/edit');
-      if (!cur.secret) policyEdit.setAttribute('href', '/management/' + cur.id + '/edit');
-      gaiaPw.placeholder = cur.secret ? 'Password (blank = use saved)' : 'Gaia/OS password';
+      credEl.innerHTML = (gw ? '<span class="pill" style="margin-right:6px;">Gateway</span>' : '') +
+        (cur.secret ? '<span class="pill ok">credential saved</span>' : '<span class="pill faint">no credential</span>');
+      gaiaPw.placeholder = cur.secret ? 'Password (blank = use saved)' : (gw ? 'Gateway password' : 'Gaia/OS password');
       gaiaPw.value = '';
+      // Gateways export Gaia config ONLY (the access policy lives on the SMS) -> hide the Policy/Gaia toggle.
+      seg.hidden = gw; gwnote.hidden = !gw;
+      if (gw) { setMode('gaia'); return; }
+      // Management server: policy controls depend on a saved secret; gaia accepts a runtime password.
+      policyCtl.hidden = !cur.secret; policyNoCred.hidden = cur.secret;
+      if (!cur.secret) { policyEdit.setAttribute('data-modal-form', '/management/' + cur.id + '/edit');
+        policyEdit.setAttribute('href', '/management/' + cur.id + '/edit'); }
       setMode('policy');
       loadLayers();
     }
@@ -278,7 +302,8 @@
       busy(genGaia, true); clearOut();
       status.innerHTML = '<span class="muted">Reading the live Gaia config over <code>gaia_api</code> — this can take a few seconds…</span>';
       var body = new URLSearchParams(); if (gaiaPw.value) body.set('password', gaiaPw.value);
-      fetch('/management/' + cur.id + '/gaia-export/run', { method: 'POST', body: body })
+      var url = (cur.kind === 'gateway' ? '/gateways/' : '/management/') + cur.id + '/gaia-export/run';
+      fetch(url, { method: 'POST', body: body })
         .then(function (r) { return r.json(); })
         .then(function (j) {
           busy(genGaia, false);

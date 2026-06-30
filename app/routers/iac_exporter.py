@@ -12,9 +12,9 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..db import get_db
-from ..models import ManagementServer
+from ..models import Gateway, ManagementServer
 from ..security import get_user_or_none
-from ..services import mgmt_creds
+from ..services import gateway_creds, mgmt_creds
 from .ui import _pop_flash, templates
 
 router = APIRouter(include_in_schema=False)
@@ -22,7 +22,7 @@ router = APIRouter(include_in_schema=False)
 
 @router.get("/iac-export", response_class=HTMLResponse)
 def iac_exporter(request: Request, db: Session = Depends(get_db)):
-    """Landing: pick a management server to export its policy or Gaia OS config as IaC."""
+    """Landing: pick a Management Server (policy + Gaia) or a Gateway (Gaia only) to export as IaC."""
     user = get_user_or_none(request, db)
     if user is None:
         return RedirectResponse("/login", status_code=303)
@@ -30,6 +30,10 @@ def iac_exporter(request: Request, db: Session = Depends(get_db)):
         select(ManagementServer).where(ManagementServer.owner_id == user.id)
         .order_by(ManagementServer.created_at.desc())
     ).all()
+    gateways = db.scalars(
+        select(Gateway).where(Gateway.owner_id == user.id).order_by(Gateway.created_at.desc())
+    ).all()
     rows = [{"ms": m, "has_secret": mgmt_creds.has_secret(db, m)} for m in servers]
+    gw_rows = [{"gw": g, "has_secret": gateway_creds.has_password(db, g)} for g in gateways]
     return templates.TemplateResponse(request, "iac_exporter.html",
-                                      {"rows": rows, "flash": _pop_flash(request)})
+                                      {"rows": rows, "gateways": gw_rows, "flash": _pop_flash(request)})

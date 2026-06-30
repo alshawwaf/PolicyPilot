@@ -3,8 +3,19 @@
 {% block title %}{{ gw.name }}{% endblock %}
 {% block content %}
 <style>
-  /* macOS System-Settings grouped rows: an inset card with hairline-divided rows,
-     label on the left, value on the right (matches the Settings .grp/.gr feel). */
+  /* Compact summary strip — at-a-glance gateway status (health / TLS / layers / password). */
+  .gw-sum { display:grid; grid-template-columns:repeat(auto-fit,minmax(168px,1fr)); gap:12px; margin:4px 0 18px; }
+  .gw-tile { background:var(--surface-2); border:1px solid var(--line); border-radius:13px; padding:13px 15px;
+    display:flex; align-items:center; gap:12px; }
+  .gw-tile .gw-ic { width:34px; height:34px; border-radius:9px; background:var(--surface-3); flex:none;
+    display:flex; align-items:center; justify-content:center; color:var(--muted); }
+  .gw-tile .gw-ic svg { width:17px; height:17px; }
+  .gw-tile.ok .gw-ic { background:var(--ok-bg); color:var(--ok); }
+  .gw-tile.bad .gw-ic { background:var(--danger-bg); color:var(--danger); }
+  .gw-tile .gw-l { font-size:10.5px; font-weight:700; letter-spacing:.5px; text-transform:uppercase; color:var(--faint); }
+  .gw-tile .gw-v { font-size:14px; font-weight:650; color:var(--text); margin-top:2px; line-height:1.2; }
+  .gw-tile .gw-v small { display:block; font-size:11px; font-weight:500; color:var(--muted); margin-top:2px; }
+  /* macOS System-Settings grouped rows for the connection profile. */
   .conn-grp { background:var(--surface-2); border:1px solid var(--line-soft); border-radius:var(--r-lg);
     overflow:hidden; margin:6px 0 2px; }
   .conn-item { display:flex; align-items:center; gap:14px; padding:13px 16px; border-top:1px solid var(--line-soft); }
@@ -17,14 +28,33 @@
   <span class="icon-chip lg"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></span>
   <div class="ph-main">
     <h1>{{ gw.name }} <span class="pill">gateway</span></h1>
-    <p class="ph-sub">Saved gateway connection profile.</p>
+    <p class="ph-sub">Gateway connection profile and its dynamic layers. Export its Gaia OS config in the <a href="/iac-export">IaC Exporter</a>.</p>
   </div>
   <div class="ph-actions">
-    <a class="btn secondary" href="/gateways/{{ gw.id }}/gaia-export">Export Gaia config →</a>
+    <a class="btn secondary" href="/gateways">← Gateways</a>
     <a class="btn secondary" href="/gateways/{{ gw.id }}/edit" data-modal-form="/gateways/{{ gw.id }}/edit" data-modal-title="Edit gateway">Edit</a>
     <form method="post" action="/gateways/{{ gw.id }}/delete">
       <button class="danger" type="submit" data-confirm="Delete gateway “{{ gw.name }}”?">Delete</button>
     </form>
+  </div>
+</div>
+
+<div class="gw-sum">
+  <div class="gw-tile {{ 'ok' if snapshot and snapshot.ok else ('bad' if snapshot else '') }}">
+    <span class="gw-ic">{% if snapshot and snapshot.ok %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>{% elif snapshot %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>{% else %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>{% endif %}</span>
+    <div><div class="gw-l">Health</div><div class="gw-v">{% if snapshot and snapshot.ok %}Reachable{% elif snapshot %}Fetch error{% else %}Never fetched{% endif %}{% if snapshot %}<small><time class="ts" data-ts="{{ snapshot.fetched_at.isoformat() }}"></time></small>{% endif %}</div></div>
+  </div>
+  <div class="gw-tile">
+    <span class="gw-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span>
+    <div><div class="gw-l">TLS</div><div class="gw-v">{% if gw.cert_pem %}Pinned{% elif gw.auto_trust %}Auto-trust{% else %}System{% endif %}</div></div>
+  </div>
+  <div class="gw-tile">
+    <span class="gw-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg></span>
+    <div><div class="gw-l">Dynamic layers</div><div class="gw-v">{{ snapshot.layers|length if snapshot and snapshot.layers else 0 }}</div></div>
+  </div>
+  <div class="gw-tile">
+    <span class="gw-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><circle cx="12" cy="16" r="1"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span>
+    <div><div class="gw-l">Password</div><div class="gw-v">{% if has_password %}Saved{% else %}Per apply{% endif %}</div></div>
   </div>
 </div>
 
@@ -40,7 +70,7 @@
     <div class="conn-item"><span class="conn-l">Password</span>
       <span class="conn-v">{% if has_password %}<span class="pill ok">saved (encrypted)</span>{% else %}<span class="pill faint">entered per apply</span>{% endif %}</span></div>
   </div>
-  <p class="muted" style="margin:13px 0 0;">Edit these on the <a href="/gateways/{{ gw.id }}/edit">gateway profile</a>.{% if not has_password %} The password is entered per fetch/apply; save one on the profile to skip retyping.{% endif %}</p>
+  <p class="muted" style="margin:13px 0 0;">Edit these on the <a href="/gateways/{{ gw.id }}/edit" data-modal-form="/gateways/{{ gw.id }}/edit" data-modal-title="Edit gateway">gateway profile</a>.{% if not has_password %} The password is entered per fetch/apply; save one on the profile to skip retyping.{% endif %}</p>
 </div>
 
 <div class="card">

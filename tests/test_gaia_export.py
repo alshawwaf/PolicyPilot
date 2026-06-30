@@ -121,3 +121,31 @@ def test_gaia_extra_interface_types():
     assert {"set-vlan-interface", "set-bond-interface", "set-bridge-interface",
             "set-loopback-interface"} <= set(cmds)
     assert "cp_gaia_bond_interface:" in art["ansible"]
+
+
+def test_gaia_extra_singletons_spec_driven_with_unsupported_notes():
+    """Additional singleton sections are pulled generically and rendered from the coverage spec: a target
+    that can represent the section emits a resource/module; one that can't gets an inline 'not supported'
+    note (and it's still in the web_api tab). Verifies SNMP (tf+ansible), LLDP + router-id (tf only)."""
+    import json as _json
+    cfg = {
+        "hostname": {"name": "fw"},
+        "extras": {
+            "snmp": {"obj": "snmp", "data": {"enabled": True, "contact": "ops@x", "location": "rack 3"}},
+            "lldp": {"obj": "lldp", "data": {"enabled": True}},                 # ansible: not in collection
+            "router_id": {"obj": "router-id", "data": {"router-id": "10.0.0.1"}},  # ansible: not in collection
+        },
+    }
+    art = gaia_export.generate(cfg)
+    tf, ans = art["terraform"], art["ansible"]
+    # Terraform supports all three → real resources, field types rendered correctly
+    assert 'resource "checkpoint_gaia_snmp" "this"' in tf and 'contact = "ops@x"' in tf and "enabled = true" in tf
+    assert 'resource "checkpoint_gaia_lldp" "this"' in tf and 'resource "checkpoint_gaia_router_id" "this"' in tf
+    # Ansible has the snmp module but NOTES the two it can't represent
+    assert "cp_gaia_snmp:" in ans
+    assert "lldp: not in the check_point.gaia collection" in ans
+    assert "router id: not in the check_point.gaia collection" in ans
+    # web_api carries everything; stats lists the new sections
+    cmds = [o["command"] for o in _json.loads(art["web_api"])]
+    assert {"set-snmp", "set-lldp", "set-router-id"} <= set(cmds)
+    assert {"snmp", "lldp", "router-id"} <= set(art["stats"]["sections"])

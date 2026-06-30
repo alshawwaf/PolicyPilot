@@ -17,6 +17,7 @@ env, Terraform from a variable. Pure ``generate(cfg)`` is unit-tested without a 
 from __future__ import annotations
 
 import json
+import os
 import re
 import ssl
 import time
@@ -25,6 +26,42 @@ import httpx
 
 GAIA_VERSION = "v1.9"   # matches apply_runner's Gaia API version
 _SECTIONS = ("hostname", "dns", "ntp", "time", "interfaces", "routes", "proxy")
+
+# Additional SINGLETON Gaia OS sections, pulled generically and rendered from the bundled R82.10 coverage
+# catalogue's per-field Terraform/Ansible map — so a target that can't represent a section gets an inline
+# "not supported" note instead of being silently dropped. (section key, show-command, coverage object name)
+_EXTRA_SINGLETONS = (
+    ("snmp", "show-snmp", "snmp"),
+    ("syslog", "show-syslog", "syslog"),
+    ("message_of_the_day", "show-message-of-the-day", "message-of-the-day"),
+    ("banner", "show-banner", "banner"),
+    ("password_policy", "show-password-policy", "password-policy"),
+    ("ssh_server_settings", "show-ssh-server-settings", "ssh-server-settings"),
+    ("lldp", "show-lldp", "lldp"),
+    ("router_id", "show-router-id", "router-id"),
+)
+_SPEC_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "coverage_data", "gaia-v1.9.json")
+_SPEC_CACHE: dict | None = None
+
+
+def _gaia_spec() -> dict:
+    """Bundled R82.10 Gaia coverage catalogue keyed by object name (first wins). Each object carries its
+    Terraform resource / Ansible module (or None) + a per-field tf/ansible map — the source of truth for
+    what each target can represent. Best-effort: returns {} if the file is absent (generation never fails)."""
+    global _SPEC_CACHE
+    if _SPEC_CACHE is None:
+        try:
+            with open(_SPEC_PATH, encoding="utf-8") as fh:
+                data = json.load(fh)
+            m: dict = {}
+            for o in data.get("objects", []):
+                nm = o.get("name")
+                if nm and nm not in m:
+                    m[nm] = o
+            _SPEC_CACHE = m
+        except Exception:  # noqa: BLE001
+            _SPEC_CACHE = {}
+    return _SPEC_CACHE
 
 
 # --- pull over the Gaia REST API -------------------------------------------------------------
@@ -103,6 +140,18 @@ def pull_gaia(host: str, port: int, user: str, secret: str, cert_pem: str | None
                 cfg["loopback_interfaces"] = show("show-loopback-interfaces", {"limit": 500}).get("objects", [])
                 cfg["routes"] = show("show-static-routes", {"limit": 500}).get("objects", [])
                 cfg["proxy"] = show("show-proxy")
+                # Additional singleton sections — each guarded, so a command this appliance/version doesn't
+                # expose simply skips (never aborts the export). Errors come back as {code|message|errors}.
+                extras: dict = {}
+                for key, cmd, obj in _EXTRA_SINGLETONS:
+                    try:
+                        r = show(cmd)
+                    except Exception:  # noqa: BLE001
+                        continue
+                    if (isinstance(r, dict) and r
+                            and not (r.get("code") or r.get("message") or r.get("errors") or r.get("error"))):
+                        extras[key] = {"obj": obj, "data": r}
+                cfg["extras"] = extras
             finally:
                 try:
                     c.post(f"{base}/logout", headers=headers)
@@ -302,6 +351,80 @@ def _iface_clish(cfg: dict) -> list[str]:
     return out
 
 
+# --- generic spec-driven render for the EXTRA singleton sections ------------------------------
+def _tf_lit(v):
+    if isinstance(v, bool):
+        return "true" if v else "false"
+    if isinstance(v, (int, float)):
+        return str(v)
+    if isinstance(v, str):
+        return _q(v)
+    return None        # skip list/dict shapes in the generic singleton path
+
+
+def _extra_fields(obj: str) -> list:
+    """Exportable scalar fields for a singleton coverage object: returned by the API, not request-only."""
+    return [f for f in ((_gaia_spec().get(obj) or {}).get("fields") or [])
+            if f.get("api") and not f.get("request_only")]
+
+
+def _extra_tf(cfg: dict) -> list[str]:
+    out: list[str] = []
+    for ex in (cfg.get("extras") or {}).values():
+        obj, data = ex["obj"], ex["data"]
+        spec = _gaia_spec().get(obj) or {}
+        title = obj.replace("-", " ")
+        res = spec.get("terraform")
+        if not res:
+            out += [f"# {title}: not represented by the Terraform Gaia provider — see the web_api tab.", ""]
+            continue
+        lines = [f'resource "{res}" "this" {{']
+        for f in _extra_fields(obj):
+            if not f.get("tf") or f["name"] not in data:
+                continue
+            lit = _tf_lit(data.get(f["name"]))
+            if lit is not None:
+                lines.append(f'  {f.get("tf_name") or f["name"]} = {lit}')
+        out += ([*lines, "}", ""] if len(lines) > 1 else [f"# {title}: no exportable values found.", ""])
+    return out
+
+
+def _extra_ansible(cfg: dict) -> list[str]:
+    out: list[str] = []
+    for ex in (cfg.get("extras") or {}).values():
+        obj, data = ex["obj"], ex["data"]
+        spec = _gaia_spec().get(obj) or {}
+        title = obj.replace("-", " ")
+        mod = spec.get("ansible")
+        if not mod:
+            out += [f"    # {title}: not in the check_point.gaia collection — see the web_api tab."]
+            continue
+        body = []
+        for f in _extra_fields(obj):
+            if not f.get("ansible") or f["name"] not in data:
+                continue
+            lit = _tf_lit(data.get(f["name"]))
+            if lit is not None:
+                body.append(f'        {f.get("ansible_name") or f["name"]}: {lit}')
+        if body:
+            out += [f"    - name: {title.capitalize()}", f"      {mod}:", *body]
+    return out
+
+
+def _extra_clish(cfg: dict) -> list[str]:
+    extras = cfg.get("extras") or {}
+    if not extras:
+        return []
+    out = ["", "# Additional sections (set via clish — live values are on the web_api tab):"]
+    out += [f"#   {ex['obj']}" for ex in extras.values()]
+    return out
+
+
+def _extra_web_api(cfg: dict) -> list[dict]:
+    return [{"command": "set-" + ex["obj"], "body": ex["data"]}
+            for ex in (cfg.get("extras") or {}).values()]
+
+
 # --- Terraform (checkpoint_gaia_*, context = "gaia_api") --------------------------------------
 
 def _tf(cfg: dict) -> str:
@@ -409,6 +532,9 @@ def _tf(cfg: dict) -> str:
             blk.append(f'  port = {proxy.get("port")}')
         L += [*blk, "}", ""]
 
+    ex_tf = _extra_tf(cfg)
+    if ex_tf:
+        L += ["# ---- Additional Gaia OS sections ----", "", *ex_tf]
     return "\n".join(L).rstrip() + "\n"
 
 
@@ -537,6 +663,7 @@ def _ansible(cfg: dict) -> str:
             lines.append(f'port: {proxy.get("port")}')
         task("Proxy", "cp_gaia_proxy", lines)
 
+    L += _extra_ansible(cfg)        # additional singleton sections (or a note where the collection lacks one)
     return "\n".join(L).rstrip() + "\n"
 
 
@@ -610,6 +737,7 @@ def _clish(cfg: dict) -> str:
         port = f' port {proxy.get("port")}' if str(proxy.get("port", "")).isdigit() else ""
         L.append(f'set proxy address {proxy.get("address")}{port}')
 
+    L += _extra_clish(cfg)
     L += ["", "save config"]
     return "\n".join(L).rstrip() + "\n"
 
@@ -666,6 +794,7 @@ def _web_api(cfg: dict) -> str:
         if str(proxy.get("port", "")).isdigit():
             body["port"] = proxy["port"]
         ops.append({"command": "set-proxy", "body": body})
+    ops += _extra_web_api(cfg)      # additional singleton sections (raw — the full "everything possible")
     return json.dumps(ops, indent=2)
 
 
@@ -676,6 +805,7 @@ def generate(cfg: dict) -> dict:
     sections = [s for s in _SECTIONS
                 if (cfg.get(s) and (cfg[s] if s in ("interfaces", "routes") else
                                     any(_present(v) for v in (cfg[s] or {}).values())))]
+    sections = sections + [ex["obj"] for ex in (cfg.get("extras") or {}).values()]   # the additional singletons
     stats = {"sections": sections, "interfaces": len(ifaces) + _iface_count(cfg), "routes": len(routes),
              "ntp_servers": len((cfg.get("ntp") or {}).get("servers") or [])}
     return {"terraform": _tf(cfg), "ansible": _ansible(cfg), "clish": _clish(cfg),

@@ -57,6 +57,17 @@
     border:1px solid var(--line); border-left:3px solid #6a2fd6; border-radius:11px; padding:14px 16px;
     font-size:12.5px; line-height:1.62; white-space:pre; margin:0;
     font-family:ui-monospace,SFMono-Regular,Menlo,monospace; }
+  /* Generation progress modal — replaces the inline spinner while pulling + rendering. */
+  .iax-prog { position:fixed; inset:0; z-index:1000; display:flex; align-items:center; justify-content:center;
+    background:var(--overlay); }
+  .iax-prog[hidden] { display:none; }
+  .iax-prog-card { width:min(440px, calc(100vw - 32px)); background:var(--surface);
+    border:1px solid var(--line-strong); border-radius:16px; padding:22px 24px; box-shadow:var(--shadow-lg); }
+  .iax-prog-head { font-size:15px; font-weight:700; color:var(--text); margin:0 0 14px; }
+  .iax-prog-track { height:8px; border-radius:999px; background:var(--surface-3); overflow:hidden; }
+  .iax-prog-fill { height:100%; width:0; border-radius:999px; background:var(--accent-grad);
+    transition:width .45s ease; }
+  .iax-prog-cap { margin:12px 0 0; font-size:12.5px; color:var(--muted); }
   @media (max-width:760px) {
     .iax { grid-template-columns:1fr; }
     .iax-rail { flex-direction:row; overflow-x:auto; border-right:0; border-bottom:1px solid var(--line); }
@@ -146,7 +157,7 @@
           <span class="iax-note" id="iax-gaia-uses" style="font-size:12.5px;">Uses the saved credentials.</span>
         </div>
         <p class="iax-note" id="iax-gaia-nocred" hidden>No Gaia credentials saved for this target. <a id="iax-gaia-edit" href="#" data-modal-form="" data-modal-title="Edit">Add them on its profile</a> to export the Gaia config.</p>
-        <p class="iax-note" id="iax-gaia-hint" style="margin-top:12px;">Pulls hostname, DNS, NTP, timezone, interfaces, static routes and proxy over the <code>gaia_api</code>.</p>
+        <p class="iax-note" id="iax-gaia-hint" style="margin-top:12px;">Pulls everything the <code>gaia_api</code> exposes — hostname, DNS, NTP, time, interfaces, routes, proxy, SNMP, syslog, banner, MOTD, SSH, password policy and more. Where a target (e.g. Terraform or Ansible) can't represent a section, it's noted inline and still available in the web_api tab.</p>
       </div>
 
       <div class="iax-status" id="iax-status"></div>
@@ -163,6 +174,14 @@
       </div>
     </div>
   </section>
+
+  <div class="iax-prog" id="iax-prog" hidden role="status" aria-live="polite">
+    <div class="iax-prog-card">
+      <div class="iax-prog-head" id="iax-prog-title">Generating…</div>
+      <div class="iax-prog-track"><div class="iax-prog-fill" id="iax-prog-fill"></div></div>
+      <div class="iax-prog-cap" id="iax-prog-cap">Connecting…</div>
+    </div>
+  </div>
 </div>
 {% endif %}
 
@@ -296,39 +315,59 @@
       out.hidden = false; renderTabs();
     }
 
-    function busy(btn, on, label) {
-      btn.disabled = on;
-      if (on) { btn.dataset.t = btn.dataset.t || btn.textContent; btn.innerHTML = '<span class="spin" style="margin-right:7px; vertical-align:-2px;"></span>' + (label || 'Pulling…'); }
-      else { btn.textContent = btn.dataset.t || 'Generate IaC'; }
+    // Progress modal — a determinate-looking bar that advances through stages while the (single, blocking)
+    // pull+generate runs, then snaps to 100% on completion. Replaces the button spinner.
+    var prog = document.getElementById('iax-prog'), progFill = document.getElementById('iax-prog-fill'),
+        progTitle = document.getElementById('iax-prog-title'), progCap = document.getElementById('iax-prog-cap');
+    var progTimer = null;
+    function progStart(title, stages) {
+      if (progTimer) { clearInterval(progTimer); progTimer = null; }
+      progTitle.textContent = title; progCap.textContent = stages[0];
+      progFill.style.transition = 'none'; progFill.style.width = '0%';
+      void progFill.offsetWidth; progFill.style.transition = '';   // reset the bar without animating back
+      prog.hidden = false;
+      var pct = 6, i = 0;
+      progFill.style.width = pct + '%';
+      progTimer = setInterval(function () {
+        pct = Math.min(92, pct + Math.random() * 11 + 4);          // ease toward ~92% while we wait
+        progFill.style.width = pct + '%';
+        var step = Math.floor(pct / (92 / stages.length));
+        if (step > i && step < stages.length) { i = step; progCap.textContent = stages[i]; }
+      }, 480);
+    }
+    function progDone(ok) {
+      if (progTimer) { clearInterval(progTimer); progTimer = null; }
+      progFill.style.width = '100%'; progCap.textContent = ok ? 'Done.' : 'Failed.';
+      setTimeout(function () { prog.hidden = true; }, ok ? 320 : 650);
     }
 
     genPolicy.addEventListener('click', function () {
       var layer = layerSel.value; if (!layer || !cur) return;
-      busy(genPolicy, true); clearOut();
-      status.innerHTML = '<span class="muted">Pulling “' + esc(layer) + '” + objects over web_api…</span>';
+      clearOut(); status.innerHTML = '';
+      progStart('Exporting “' + layer + '”',
+        ['Connecting over web_api…', 'Pulling the rulebase + objects…', 'Generating Terraform / Ansible / mgmt_cli…']);
       fetch('/management/' + cur.id + '/export?name=' + encodeURIComponent(layer), { method: 'POST' })
         .then(function (r) { return r.json(); })
         .then(function (j) {
-          busy(genPolicy, false);
-          if (j.error) { status.innerHTML = '<span class="err">' + esc(j.error) + '</span>'; return; }
-          status.innerHTML = '<span class="ok">✓ Generated.</span>'; render('policy', j);
+          if (j.error) { progDone(false); status.innerHTML = '<span class="err">' + esc(j.error) + '</span>'; return; }
+          progDone(true); status.innerHTML = '<span class="ok">✓ Generated.</span>'; render('policy', j);
         })
-        .catch(function () { busy(genPolicy, false); status.innerHTML = '<span class="err">Export failed.</span>'; });
+        .catch(function () { progDone(false); status.innerHTML = '<span class="err">Export failed.</span>'; });
     });
 
     genGaia.addEventListener('click', function () {
       if (!cur) return;
-      busy(genGaia, true); clearOut();
-      status.innerHTML = '<span class="muted">Reading the live Gaia config over <code>gaia_api</code> — this can take a few seconds…</span>';
+      clearOut(); status.innerHTML = '';
+      progStart('Exporting ' + cur.name + ' — Gaia config',
+        ['Connecting over gaia_api…', 'Reading the live Gaia config…', 'Generating Terraform / Ansible / clish…']);
       var url = (cur.kind === 'gateway' ? '/gateways/' : '/management/') + cur.id + '/gaia-export/run';
       fetch(url, { method: 'POST', body: new URLSearchParams() })   // saved creds — no password field
         .then(function (r) { return r.json(); })
         .then(function (j) {
-          busy(genGaia, false);
-          if (j.error) { status.innerHTML = '<span class="err">' + esc(j.error) + '</span>'; return; }
-          status.innerHTML = '<span class="ok">✓ Generated.</span>'; render('gaia', j);
+          if (j.error) { progDone(false); status.innerHTML = '<span class="err">' + esc(j.error) + '</span>'; return; }
+          progDone(true); status.innerHTML = '<span class="ok">✓ Generated.</span>'; render('gaia', j);
         })
-        .catch(function () { busy(genGaia, false); status.innerHTML = '<span class="err">Export failed.</span>'; });
+        .catch(function () { progDone(false); status.innerHTML = '<span class="err">Export failed.</span>'; });
     });
 
     copyBtn.addEventListener('click', function () {

@@ -43,7 +43,7 @@
   .os-dock { position:absolute; left:50%; transform:translateX(-50%); bottom:18px; display:flex; gap:13px;
     padding:11px 15px; border-radius:20px; background:rgba(22,28,48,.5); backdrop-filter:blur(18px);
     -webkit-backdrop-filter:blur(18px); border:1px solid rgba(255,255,255,.12);
-    box-shadow:0 16px 50px rgba(0,0,0,.45); z-index:50; }
+    box-shadow:0 16px 50px rgba(0,0,0,.45); z-index:90000; }   /* above all windows — the dock is always visible (macOS) */
   html[data-theme="light"] .os-dock { background:rgba(255,255,255,.62); border-color:rgba(0,0,0,.06); box-shadow:0 16px 40px rgba(16,24,40,.18); }
   .os-dock .os-sep { width:1px; align-self:stretch; margin:4px 1px; background:rgba(255,255,255,.16); }
   .os-dik { position:relative; width:50px; height:50px; border-radius:14px; display:flex; align-items:center;
@@ -278,7 +278,7 @@
       e.stopPropagation();
       if (w.dataset.max) { w.style.left = w.dataset.pl; w.style.top = w.dataset.pt; w.style.width = w.dataset.pw; w.style.height = w.dataset.ph; delete w.dataset.max; }
       else { w.dataset.pl = w.style.left; w.dataset.pt = w.style.top; w.dataset.pw = w.style.width; w.dataset.ph = w.style.height;
-        w.style.left = '8px'; w.style.top = '8px'; w.style.width = (desktop.clientWidth - 16) + 'px'; w.style.height = (desktop.clientHeight - 16) + 'px'; w.dataset.max = '1'; }
+        w.style.left = '8px'; w.style.top = '8px'; w.style.width = (desktop.clientWidth - 16) + 'px'; w.style.height = (desktop.clientHeight - 8 - 92) + 'px'; w.dataset.max = '1'; }   // leave room for the dock
     });
   }
 

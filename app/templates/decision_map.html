@@ -2,126 +2,304 @@
 {% block title %}Decision map{% endblock %}
 {% block content %}
 <style>
-  /* Decision map — the engine's reasoning as a modern, OS-style overview: a priority ladder + principle
-     cards. Pure presentation (no server data); follows the portal's tokens + dark/light automatically. */
-  .dm-lead { color:var(--text-2); font-size:13.5px; line-height:1.6; max-width:78ch; margin:0 0 18px; }
+  /* Decision map — the engine's reasoning PRINCIPLES, rendered premium: a flowing gradient priority path
+     (reuse → widen → create) over lit-glass principle cards, colour-coded per outcome to MATCH the
+     Decision tree (reuse=green, widen=teal/cyan, create=amber, note=blue, fix=red). Pure presentation
+     (no server data); uses only the portal's tokens so light / dark are handled automatically. */
+
+  .dm-wrap { --dm-stagger:0ms; }
+  .dm-sr { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden;
+    clip:rect(0,0,0,0); white-space:nowrap; border:0; }
+
+  /* per-outcome palette — kept in one place so the hero, ladder and cards stay in lock-step with the tree */
+  .o-reuse  { --c:var(--ok);     --c-bg:var(--ok-bg);     --c-line:var(--ok-line); }
+  .o-widen  { --c:#22c3dd;       --c-bg:rgba(34,195,221,.16); --c-line:rgba(34,195,221,.36); }
+  .o-create { --c:var(--warn);   --c-bg:var(--warn-bg);   --c-line:rgba(251,191,36,.34); }
+  .o-note   { --c:var(--info);   --c-bg:var(--info-bg);   --c-line:rgba(56,189,248,.34); }
+  .o-fix    { --c:var(--danger); --c-bg:var(--danger-bg); --c-line:var(--danger-line); }
+  .o-skip   { --c:var(--muted);  --c-bg:var(--surface-3); --c-line:var(--line); }
+  .o-match  { --c:var(--accent); --c-bg:var(--accent-soft); --c-line:var(--accent-soft); }
+  /* light-mode: the teal/amber/blue tints flip to darker, legible shades (base.html has no teal/-line tokens) */
+  html[data-theme="light"] .o-widen  { --c:#0e8aa0; --c-bg:rgba(14,138,160,.13); --c-line:rgba(14,138,160,.40); }
+  html[data-theme="light"] .o-create { --c-line:rgba(183,121,31,.40); }
+  html[data-theme="light"] .o-note   { --c-line:rgba(2,132,199,.40); }
+  html[data-theme="light"] .dm-flow  { background:linear-gradient(90deg, var(--ok) 0%, #0e8aa0 50%, var(--warn) 100%); }
+
+  .dm-lead { color:var(--text-2); font-size:13.5px; line-height:1.62; max-width:80ch; margin:7px 0 0; }
   .dm-lead b { color:var(--text); }
+  .dm-lead a { color:var(--accent); text-decoration:none; border-bottom:1px solid var(--accent-soft); }
+  .dm-lead a:hover { border-bottom-color:var(--accent); }
 
-  .dm-h { font-size:12px; font-weight:800; letter-spacing:.5px; text-transform:uppercase; color:var(--faint);
-    margin:22px 0 12px; }
+  /* ---------- HERO: the priority path as a flowing gradient pipeline ---------- */
+  .dm-hero { position:relative; overflow:hidden; border-radius:var(--r-lg); padding:26px 26px 24px;
+    border:1px solid var(--line);
+    background:
+      radial-gradient(620px 300px at 88% -40%, var(--accent-soft), transparent 70%),
+      linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,0) 30%),
+      linear-gradient(165deg, var(--surface-2), var(--surface));
+    box-shadow:0 18px 44px -22px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.07); }
+  /* a soft drifting glow so the hero reads alive, not flat */
+  .dm-hero::before { content:""; position:absolute; inset:-40% -10% auto auto; width:340px; height:340px;
+    background:radial-gradient(circle, var(--accent-soft), transparent 65%); filter:blur(8px);
+    opacity:.7; pointer-events:none; animation:dm-drift 14s ease-in-out infinite; }
+  @keyframes dm-drift { 0%,100%{ transform:translate(0,0) scale(1); } 50%{ transform:translate(-26px,22px) scale(1.12); } }
 
-  /* The priority ladder — the order the engine TRIES things. Three glass tiers with a flow arrow. */
-  .dm-ladder { display:grid; gap:12px; }
-  .dm-tier { position:relative; display:flex; align-items:center; gap:16px; padding:16px 18px;
-    background:linear-gradient(135deg, var(--c-soft), transparent 70%), var(--surface-2);
-    border:1px solid var(--line); border-left:4px solid var(--c); border-radius:var(--r-lg);
-    box-shadow:var(--shadow-sm); transition:transform .15s, box-shadow .15s; }
-  .dm-tier:hover { transform:translateY(-2px); box-shadow:var(--shadow-md, 0 10px 26px -10px rgba(0,0,0,.5)); }
-  .dm-tier .dm-rank { flex:0 0 auto; width:40px; height:40px; border-radius:12px; display:flex;
-    align-items:center; justify-content:center; font-weight:800; font-size:16px; color:#fff;
-    background:var(--c); box-shadow:0 4px 12px -2px var(--c); }
-  .dm-tier .dm-when { flex:0 0 92px; font-size:11px; font-weight:800; letter-spacing:.4px;
-    text-transform:uppercase; color:var(--c); }
-  .dm-tier h3 { margin:0 0 3px; font-size:15px; color:var(--text); }
-  .dm-tier p { margin:0; font-size:12.5px; line-height:1.5; color:var(--muted); }
-  .dm-tier .dm-pill { margin-left:auto; flex:0 0 auto; align-self:flex-start; font-size:11px; font-weight:700;
-    padding:3px 10px; border-radius:999px; background:var(--c-soft); color:var(--c); white-space:nowrap; }
-  .dm-arrow { display:flex; justify-content:center; color:var(--faint); margin:-4px 0; }
-  .dm-arrow svg { width:18px; height:18px; }
+  .dm-hero-tag { display:inline-flex; align-items:center; gap:7px; font-size:11px; font-weight:800;
+    letter-spacing:.5px; text-transform:uppercase; color:var(--accent);
+    background:var(--accent-soft); padding:5px 11px; border-radius:999px; border:1px solid var(--accent-soft); }
+  .dm-hero-tag svg { width:13px; height:13px; }
+  .dm-hero h2 { margin:13px 0 4px; font-size:19px; font-weight:760; color:var(--text); letter-spacing:-.01em; }
+  .dm-hero .dm-sub { margin:0 0 20px; color:var(--muted); font-size:13px; line-height:1.55; max-width:70ch; }
 
-  /* Principle cards — the full rulebook, color-coded by outcome. */
-  .dm-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(290px, 1fr)); gap:12px; }
-  .dm-card { padding:15px 16px; background:var(--surface-2); border:1px solid var(--line-soft);
-    border-top:3px solid var(--c); border-radius:14px; box-shadow:var(--shadow-sm);
-    transition:transform .15s, border-color .15s; }
-  .dm-card:hover { transform:translateY(-2px); border-color:var(--c); }
-  .dm-card .dm-ico { width:34px; height:34px; border-radius:10px; display:flex; align-items:center;
-    justify-content:center; background:var(--c-soft); color:var(--c); margin-bottom:10px; }
-  .dm-card .dm-ico svg { width:19px; height:19px; }
-  .dm-card h4 { margin:0 0 5px; font-size:14px; color:var(--text); }
-  .dm-card p { margin:0; font-size:12.5px; line-height:1.55; color:var(--muted); }
-  .dm-card p b { color:var(--text); } .dm-card p em { font-style:normal; color:var(--text-2); }
+  /* the pipeline: three stages joined by an animated gradient flow line */
+  .dm-pipe { position:relative; display:grid; grid-template-columns:repeat(3, 1fr); gap:14px; }
+  @media (max-width:720px){ .dm-pipe { grid-template-columns:1fr; } }
+  /* the energy line behind the stages (desktop only — it tracks the 3-up row) */
+  .dm-flow { position:absolute; left:8%; right:8%; top:30px; height:4px; border-radius:999px; z-index:0;
+    background:linear-gradient(90deg, var(--ok) 0%, #22c3dd 50%, var(--warn) 100%); opacity:.55; }
+  .dm-flow::after { content:""; position:absolute; inset:0; border-radius:999px;
+    background:linear-gradient(90deg, transparent, rgba(255,255,255,.85), transparent);
+    background-size:42% 100%; background-repeat:no-repeat;
+    animation:dm-trace 3.4s linear infinite; }
+  @keyframes dm-trace { 0%{ background-position:-50% 0; } 100%{ background-position:150% 0; } }
+  @media (max-width:720px){ .dm-flow { display:none; } }
 
-  .dm-foot { margin-top:22px; display:flex; align-items:center; gap:12px; flex-wrap:wrap;
-    padding:14px 16px; background:var(--surface-2); border:1px solid var(--line); border-radius:14px; }
-  .dm-foot .grow { flex:1; min-width:160px; color:var(--text-2); font-size:12.5px; }
+  .dm-stage { position:relative; z-index:1; padding:16px 16px 15px; border-radius:var(--r-lg);
+    border:1px solid var(--c-line);
+    background:
+      linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,0) 42%),
+      linear-gradient(160deg, var(--c-bg), var(--surface-2) 78%);
+    box-shadow:0 10px 26px -14px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.10);
+    transition:transform .16s ease, box-shadow .16s ease;
+    opacity:0; transform:translateY(10px); animation:dm-rise .5s ease forwards; animation-delay:var(--d,0ms); }
+  .dm-stage:hover { transform:translateY(-3px); box-shadow:0 18px 38px -16px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,255,255,.14); }
+  @keyframes dm-rise { to { opacity:1; transform:translateY(0); } }
+  .dm-stage .dm-orb { width:46px; height:46px; border-radius:14px; display:flex; align-items:center;
+    justify-content:center; color:#fff; margin-bottom:11px; position:relative;
+    background:linear-gradient(150deg, var(--c), color-mix(in srgb, var(--c) 64%, #05070d));
+    box-shadow:0 6px 18px -4px var(--c), inset 0 1px 0 rgba(255,255,255,.35); }
+  .dm-stage .dm-orb svg { width:23px; height:23px; }
+  .dm-stage .dm-rank { position:absolute; top:-7px; right:-7px; width:21px; height:21px; border-radius:50%;
+    background:var(--surface); color:var(--c); border:1.5px solid var(--c-line); font-size:11px; font-weight:800;
+    display:flex; align-items:center; justify-content:center; box-shadow:var(--shadow-sm); }
+  .dm-stage .dm-when { font-size:10.5px; font-weight:800; letter-spacing:.5px; text-transform:uppercase; color:var(--c); }
+  .dm-stage h3 { margin:3px 0 5px; font-size:16px; color:var(--text); letter-spacing:-.01em; }
+  .dm-stage p { margin:0 0 12px; font-size:12.5px; line-height:1.52; color:var(--muted); }
+  .dm-stage p b { color:var(--text); }
+  .dm-stage .dm-pill { display:inline-flex; align-items:center; gap:6px; font-size:11px; font-weight:700;
+    padding:4px 11px; border-radius:999px; background:var(--c-bg); color:var(--c); border:1px solid var(--c-line); }
+  .dm-stage .dm-pill .dot { width:6px; height:6px; border-radius:50%; background:var(--c); }
+
+  /* ---------- section heading ---------- */
+  .dm-h { display:flex; align-items:center; gap:10px; font-size:12px; font-weight:800; letter-spacing:.5px;
+    text-transform:uppercase; color:var(--faint); margin:26px 0 13px; }
+  .dm-h::after { content:""; flex:1; height:1px; background:linear-gradient(90deg, var(--line), transparent); }
+
+  /* ---------- principle cards — lit-glass, per-outcome accent ---------- */
+  .dm-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(300px, 1fr)); gap:14px; }
+  .dm-card { position:relative; overflow:hidden; padding:17px 18px; border-radius:var(--r-lg);
+    border:1px solid var(--line);
+    background:
+      linear-gradient(180deg, rgba(255,255,255,.07), rgba(255,255,255,0) 38%),
+      linear-gradient(165deg, var(--surface-2), var(--surface));
+    box-shadow:0 8px 22px -14px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.06);
+    transition:transform .16s ease, box-shadow .16s ease, border-color .16s ease;
+    opacity:0; transform:translateY(10px); animation:dm-rise .5s ease forwards; animation-delay:var(--d,0ms); }
+  .dm-card:hover { transform:translateY(-3px); border-color:var(--c-line);
+    box-shadow:0 18px 38px -16px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,255,255,.1); }
+  /* a hairline gradient bar across the top in the outcome colour */
+  .dm-card::before { content:""; position:absolute; left:0; right:0; top:0; height:3px;
+    background:linear-gradient(90deg, var(--c), transparent 85%); opacity:.9; }
+  /* a faint corner glow that lifts on hover */
+  .dm-card::after { content:""; position:absolute; right:-30px; top:-30px; width:120px; height:120px;
+    background:radial-gradient(circle, var(--c-bg), transparent 70%); opacity:.5; pointer-events:none;
+    transition:opacity .2s ease; }
+  .dm-card:hover::after { opacity:1; }
+  .dm-card .dm-row { display:flex; align-items:center; gap:11px; margin-bottom:9px; }
+  .dm-card .dm-ico { width:38px; height:38px; border-radius:12px; flex:0 0 auto; display:flex;
+    align-items:center; justify-content:center; color:var(--c); background:var(--c-bg);
+    border:1px solid var(--c-line); box-shadow:inset 0 1px 0 rgba(255,255,255,.12); }
+  .dm-card .dm-ico svg { width:20px; height:20px; }
+  .dm-card .dm-badge { margin-left:auto; font-size:10px; font-weight:800; letter-spacing:.4px;
+    text-transform:uppercase; color:var(--c); background:var(--c-bg); border:1px solid var(--c-line);
+    padding:3px 9px; border-radius:999px; }
+  .dm-card h4 { margin:0; font-size:14.5px; color:var(--text); letter-spacing:-.01em; line-height:1.25; }
+  .dm-card p { margin:0; font-size:12.5px; line-height:1.55; color:var(--muted); position:relative; z-index:1; }
+  .dm-card p b { color:var(--text); }
+  .dm-card p em { font-style:normal; color:var(--text-2); }
+
+  /* ---------- footer / cross-links ---------- */
+  .dm-foot { margin-top:24px; display:flex; align-items:center; gap:14px; flex-wrap:wrap;
+    padding:16px 18px; border-radius:var(--r-lg); border:1px solid var(--line);
+    background:linear-gradient(160deg, var(--accent-soft), var(--surface-2) 70%);
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.06); }
+  .dm-foot .dm-foot-ico { width:40px; height:40px; border-radius:12px; flex:0 0 auto; display:flex;
+    align-items:center; justify-content:center; color:#fff; background:var(--accent-grad);
+    box-shadow:0 6px 16px -5px var(--accent-soft); }
+  .dm-foot .grow { flex:1; min-width:180px; }
+  .dm-foot .grow strong { display:block; color:var(--text); font-size:13.5px; }
+  .dm-foot .grow span { color:var(--muted); font-size:12.5px; }
+  .dm-foot-links { display:flex; gap:8px; flex-wrap:wrap; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .dm-hero::before, .dm-flow::after { animation:none; }
+    .dm-stage, .dm-card { animation:none; opacity:1; transform:none; }
+    .dm-stage:hover, .dm-card:hover { transform:none; }
+  }
 </style>
 
-<div class="page-head">
-  <span class="icon-chip lg"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></span>
-  <div class="ph-main">
-    <h1>Decision map</h1>
-    <p class="dm-lead">The principles PolicyPilot follows to turn an access request into the <b>minimal correct
-      change</b> — always aiming at an actionable result, never a hand-off to a human. It runs the same
-      <b>first-match, top-down</b> walk of the rulebase every time. To watch the flow node-by-node, open the
-      <a href="/decision-tree" data-open-app="decisiontree">Decision tree</a>.</p>
+<div class="dm-wrap">
+  <div class="page-head">
+    <span class="icon-chip lg"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></span>
+    <div class="ph-main">
+      <h1>Decision map</h1>
+      <p class="dm-lead">The principles PolicyPilot follows to turn an access request into the <b>minimal correct
+        change</b> — always aiming at an actionable result, never a hand-off to a human. It runs the same
+        <b>first-match, top-down</b> walk of the rulebase every time. To watch the flow node-by-node, open the
+        <a href="/decision-tree" data-open-app="decisiontree">Decision tree</a>.</p>
+    </div>
   </div>
-</div>
 
-<div class="card">
-  <div class="dm-h">The priority order — what it tries, in order</div>
-  <div class="dm-ladder">
-    <div class="dm-tier" style="--c:var(--ok); --c-soft:var(--ok-bg);">
-      <span class="dm-rank">1</span><span class="dm-when">First</span>
-      <div><h3>Reuse</h3><p>If a rule already permits the traffic, it’s a <b>no-op</b> — just attach it to the ticket. No change to live policy.</p></div>
-      <span class="dm-pill">no change</span>
-    </div>
-    <div class="dm-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg></div>
-    <div class="dm-tier" style="--c:var(--info); --c-soft:var(--info-bg);">
-      <span class="dm-rank">2</span><span class="dm-when">Then</span>
-      <div><h3>Widen</h3><p>Extend an existing rule <b>only on an exact match</b> — when it already matches the request in the other two columns. So it never grants access nobody asked for.</p></div>
-      <span class="dm-pill">smallest edit</span>
-    </div>
-    <div class="dm-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg></div>
-    <div class="dm-tier" style="--c:var(--warn); --c-soft:var(--warn-bg);">
-      <span class="dm-rank">3</span><span class="dm-when">Otherwise</span>
-      <div><h3>Create least-privilege</h3><p>A fresh, narrow rule — placed <b>above a blocking deny</b> in the path so the requested access actually takes effect.</p></div>
-      <span class="dm-pill">new rule</span>
+  <p class="dm-sr">Decision map: PolicyPilot resolves an access request with a strict priority order. First it
+    tries to reuse an existing permit (a no-op). Otherwise it widens an existing rule, but only on an exact
+    match in the other two columns. Otherwise it creates a least-privilege rule placed above any blocking deny.
+    Sources and destinations are matched by kind. Rules it cannot fully resolve are noted, not stopped, and the
+    new rule is placed below them. Rules applying a dynamic layer are out of scope. The only thing that stops
+    the engine is a broken request. See the Decision tree to step through the exact path for any outcome.</p>
+
+  <div class="dm-hero">
+    <span class="dm-hero-tag"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>Priority order</span>
+    <h2>What it tries, in order</h2>
+    <p class="dm-sub">A request flows left to right through the same three stages every time. The engine stops at
+      the first one that fits — the smallest change that satisfies the request always wins.</p>
+
+    <div class="dm-pipe">
+      <div class="dm-flow" aria-hidden="true"></div>
+
+      <div class="dm-stage o-reuse" style="--d:0ms;">
+        <div class="dm-orb"><span class="dm-rank">1</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-6.2-8.6"/><polyline points="22 4 12 14.01 9 11.01"/></svg></div>
+        <div class="dm-when">First</div>
+        <h3>Reuse</h3>
+        <p>If a rule already permits the traffic, it's a <b>no-op</b> — just attach it to the ticket. No change to live policy.</p>
+        <span class="dm-pill"><span class="dot"></span>No change</span>
+      </div>
+
+      <div class="dm-stage o-widen" style="--d:90ms;">
+        <div class="dm-orb"><span class="dm-rank">2</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg></div>
+        <div class="dm-when">Then</div>
+        <h3>Widen</h3>
+        <p>Extend an existing rule <b>only on an exact match</b> — when it already matches the request in the other two columns. So it never grants access nobody asked for.</p>
+        <span class="dm-pill"><span class="dot"></span>Smallest edit</span>
+      </div>
+
+      <div class="dm-stage o-create" style="--d:180ms;">
+        <div class="dm-orb"><span class="dm-rank">3</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></div>
+        <div class="dm-when">Otherwise</div>
+        <h3>Create least-privilege</h3>
+        <p>A fresh, narrow rule — placed <b>above a blocking deny</b> in the path so the requested access actually takes effect.</p>
+        <span class="dm-pill"><span class="dot"></span>New rule</span>
+      </div>
     </div>
   </div>
 
   <div class="dm-h">The rules in full</div>
   <div class="dm-grid">
-    <div class="dm-card" style="--c:var(--ok); --c-soft:var(--ok-bg);">
-      <span class="dm-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-6.2-8.6"/><polyline points="22 4 12 14.01 9 11.01"/></svg></span>
-      <h4>Reuse first</h4>
-      <p>If a rule already permits the traffic, it’s a <b>no-op</b> — just attach it to the ticket.</p>
+    <div class="dm-card o-reuse" style="--d:0ms;">
+      <div class="dm-row">
+        <span class="dm-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-6.2-8.6"/><polyline points="22 4 12 14.01 9 11.01"/></svg></span>
+        <h4>Reuse first</h4>
+        <span class="dm-badge">No-op</span>
+      </div>
+      <p>If a rule already permits the traffic, it's a <b>no-op</b> — just attach it to the ticket.</p>
     </div>
-    <div class="dm-card" style="--c:var(--info); --c-soft:var(--info-bg);">
-      <span class="dm-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg></span>
-      <h4>Widen only on an exact match</h4>
+
+    <div class="dm-card o-widen" style="--d:60ms;">
+      <div class="dm-row">
+        <span class="dm-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg></span>
+        <h4>Widen only on an exact match</h4>
+        <span class="dm-badge">Widen</span>
+      </div>
       <p>Extend an existing rule only when it already matches the request in the other two columns — so it never grants access nobody asked for.</p>
     </div>
-    <div class="dm-card" style="--c:var(--warn); --c-soft:var(--warn-bg);">
-      <span class="dm-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></span>
-      <h4>Otherwise create least-privilege</h4>
+
+    <div class="dm-card o-create" style="--d:120ms;">
+      <div class="dm-row">
+        <span class="dm-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></span>
+        <h4>Otherwise create least-privilege</h4>
+        <span class="dm-badge">Create</span>
+      </div>
       <p>A fresh rule, placed <b>above a blocking deny</b> in the path so the requested access actually takes effect.</p>
     </div>
-    <div class="dm-card" style="--c:var(--text-2); --c-soft:var(--surface-3);">
-      <span class="dm-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></span>
-      <h4>Match by kind</h4>
+
+    <div class="dm-card o-match" style="--d:180ms;">
+      <div class="dm-row">
+        <span class="dm-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></span>
+        <h4>Match by kind</h4>
+        <span class="dm-badge">Resolve</span>
+      </div>
       <p>Each source / destination is compared in its own space — an IP / CIDR by address, or a typed object (domain, access-role, dynamic, updatable, security-zone) by identity — so a domain is matched against a domain object, never confused with an IP.</p>
     </div>
-    <div class="dm-card" style="--c:var(--info); --c-soft:var(--info-bg);">
-      <span class="dm-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span>
-      <h4>Note, don’t stop</h4>
-      <p>A rule it <em>can’t fully resolve</em> (an updatable feed, an unresolvable cell, a conditional or inline-layer rule) is flagged <b>“possible match — review later”</b> and the walk continues; the new rule goes <b>below</b> it, so it can’t leap over a possible block.</p>
+
+    <div class="dm-card o-note" style="--d:240ms;">
+      <div class="dm-row">
+        <span class="dm-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span>
+        <h4>Note, don't stop</h4>
+        <span class="dm-badge">Note</span>
+      </div>
+      <p>A rule it <em>can't fully resolve</em> (an updatable feed, an unresolvable cell, a conditional or inline-layer rule) is flagged <b>&ldquo;possible match — review later&rdquo;</b> and the walk continues; the new rule goes <b>below</b> it, so it can't leap over a possible block.</p>
     </div>
-    <div class="dm-card" style="--c:var(--muted); --c-soft:var(--surface-3);">
-      <span class="dm-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3h18v18H3z"/><path d="M3 9h18M9 21V9"/></svg></span>
-      <h4>Dynamic layers are out of scope</h4>
-      <p>A rule applying a dynamic layer (sk182252) is skipped entirely — its contents are managed out-of-band (Gaia pushes them straight to the gateway), so they’re not handled on the management side.</p>
+
+    <div class="dm-card o-skip" style="--d:300ms;">
+      <div class="dm-row">
+        <span class="dm-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3h18v18H3z"/><path d="M3 9h18M9 21V9"/></svg></span>
+        <h4>Dynamic layers are out of scope</h4>
+        <span class="dm-badge">Skip</span>
+      </div>
+      <p>A rule applying a dynamic layer (sk182252) is skipped entirely — its contents are managed out-of-band (Gaia pushes them straight to the gateway), so they're not handled on the management side.</p>
     </div>
-    <div class="dm-card" style="--c:var(--danger); --c-soft:var(--danger-bg);">
-      <span class="dm-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg></span>
-      <h4>Only a broken request stops it</h4>
-      <p>The rare exception — if the request itself can’t be resolved (an empty service, or a typed object that doesn’t exist), it’s flagged for you to <b>fix and retry</b>.</p>
+
+    <div class="dm-card o-fix" style="--d:360ms;">
+      <div class="dm-row">
+        <span class="dm-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg></span>
+        <h4>Only a broken request stops it</h4>
+        <span class="dm-badge">Fix</span>
+      </div>
+      <p>The rare exception — if the request itself can't be resolved (an empty service, or a typed object that doesn't exist), it's flagged for you to <b>fix and retry</b>.</p>
     </div>
   </div>
 
   <div class="dm-foot">
-    <span class="grow">Want to see exactly how a specific outcome is reached? Step through the live flow node-by-node.</span>
-    <a class="btn secondary" href="/decision-tree" data-open-app="decisiontree">Open the Decision tree →</a>
+    <span class="dm-foot-ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg></span>
+    <span class="grow">
+      <strong>See it run on a real request</strong>
+      <span>Step through the exact path the engine walks to each outcome — node-by-node, with the branch it took and why.</span>
+    </span>
+    <span class="dm-foot-links">
+      <a class="btn" href="/decision-tree" data-open-app="decisiontree">Open the Decision tree →</a>
+      <a class="btn secondary" href="/change-log" data-open-app="changelog">View the change log</a>
+    </span>
   </div>
 </div>
+
+<script>
+  /* Pure-presentation enhancement: re-arm the entrance animations whenever this iframe app is re-shown in the
+     desktop shell (it may be brought back from the background without a reload), and skip them entirely if the
+     user prefers reduced motion. No server data is involved. */
+  (function () {
+    var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (reduce) return;
+    var els = document.querySelectorAll('.dm-stage, .dm-card');
+    function replay() {
+      for (var i = 0; i < els.length; i++) {
+        var el = els[i];
+        el.style.animation = 'none';
+        void el.offsetWidth;            // force reflow so the animation can restart
+        el.style.animation = '';
+      }
+    }
+    document.addEventListener('visibilitychange', function () {
+      if (document.visibilityState === 'visible') replay();
+    });
+  })();
+</script>
 {% endblock %}

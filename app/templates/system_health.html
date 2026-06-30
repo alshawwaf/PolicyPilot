@@ -2,102 +2,458 @@
 {% block title %}System{% endblock %}
 {% block content %}
 <style>
-  #sysh .cap { font-size:11px; letter-spacing:.5px; text-transform:uppercase; color:var(--faint); font-weight:700; margin:22px 2px 9px; }
-  #sysh .sh-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(168px,1fr)); gap:12px; }
-  #sysh .sh-stat { background:var(--surface); border:1px solid var(--line); border-radius:13px; padding:14px 16px; }
-  #sysh .sh-stat .l { font-size:11.5px; color:var(--muted); }
-  #sysh .sh-stat .v { font-size:24px; font-weight:650; margin-top:5px; }
-  #sysh .sh-stat .v.sm { font-size:15px; }
-  #sysh .sh-status { display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:12px; }
-  #sysh .sh-big { background:var(--surface); border:1px solid var(--line); border-radius:14px; padding:16px 18px; display:flex; align-items:center; gap:13px; }
-  #sysh .sh-big .dot { width:11px; height:11px; border-radius:50%; flex:none; }
-  #sysh .dot.ok { background:#28c840; box-shadow:0 0 10px rgba(40,200,64,.6); }
-  #sysh .dot.bad { background:#ff5f57; box-shadow:0 0 10px rgba(255,95,87,.6); }
-  #sysh .dot.warn { background:#febc2e; }
-  #sysh .sh-big .l { font-size:11.5px; color:var(--muted); }
-  #sysh .sh-big .v { font-size:17px; font-weight:650; margin-top:1px; }
-  #sysh .live { display:inline-flex; align-items:center; gap:6px; font-size:12px; color:var(--ok,#5dcaa5); margin-left:8px; }
-  #sysh .live .ld { width:7px; height:7px; border-radius:50%; background:var(--ok,#5dcaa5); animation:shp 1.6s ease-in-out infinite; }
-  @keyframes shp { 0%,100%{opacity:.4} 50%{opacity:1} }
-  #sysh .sh-checks { background:var(--surface); border:1px solid var(--line); border-radius:14px; overflow:hidden; }
-  #sysh .sh-chk { display:flex; align-items:center; gap:12px; padding:11px 16px; border-top:1px solid var(--line-soft); font-size:13px; }
+  /* ===================== System — live health dashboard =====================
+     Premium lit-glass surfaces, gradient accents, SVG ring/gauge meters, a live
+     accumulating sparkline, count-up numbers. Theme-aware (CSS vars only); no
+     position:fixed so it sits inside a desktop iframe window. Motion is guarded
+     by prefers-reduced-motion. */
+  #sysh { --glass-sheen:linear-gradient(180deg, rgba(255,255,255,.07), rgba(255,255,255,0) 42%); }
+  html[data-theme="light"] #sysh { --glass-sheen:linear-gradient(180deg, rgba(255,255,255,.9), rgba(255,255,255,0) 46%); }
+
+  #sysh .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden;
+    clip:rect(0,0,0,0); white-space:nowrap; border:0; }
+
+  #sysh .cap { display:flex; align-items:center; gap:10px; font-size:11px; letter-spacing:.6px;
+    text-transform:uppercase; color:var(--faint); font-weight:800; margin:26px 2px 12px; }
+  #sysh .cap::after { content:""; flex:1; height:1px; background:linear-gradient(90deg,var(--line),transparent); }
+
+  /* ── Live pulse indicator (heartbeat motif) ── */
+  #sysh .live { display:inline-flex; align-items:center; gap:7px; font-size:12px; font-weight:650;
+    color:var(--ok); margin-left:10px; padding:3px 10px 3px 8px; border-radius:var(--r-pill);
+    background:var(--ok-bg); border:1px solid var(--ok-line); vertical-align:middle; }
+  #sysh .live .ld { position:relative; width:8px; height:8px; border-radius:50%; background:var(--ok); flex:none; }
+  #sysh .live .ld::after { content:""; position:absolute; inset:0; border-radius:50%; background:var(--ok);
+    animation:sh-ping 1.8s cubic-bezier(.2,.7,.3,1) infinite; }
+
+  /* ── Lit-glass card base ── */
+  #sysh .glass { position:relative; background:var(--surface); border:1px solid var(--line);
+    border-radius:var(--r-lg); box-shadow:0 6px 22px rgba(0,0,0,.20), inset 0 1px 0 rgba(255,255,255,.05);
+    overflow:hidden; transition:transform .18s ease, box-shadow .18s ease, border-color .18s ease; }
+  html[data-theme="light"] #sysh .glass { box-shadow:0 4px 16px rgba(16,24,40,.07); }
+  #sysh .glass::before { content:""; position:absolute; inset:0; background:var(--glass-sheen); pointer-events:none; }
+  #sysh .glass:hover { transform:translateY(-3px); box-shadow:0 14px 36px rgba(0,0,0,.30), inset 0 1px 0 rgba(255,255,255,.06); border-color:var(--line-strong); }
+  html[data-theme="light"] #sysh .glass:hover { box-shadow:0 10px 28px rgba(16,24,40,.12); }
+
+  /* ── Hero status strip ── */
+  #sysh .sh-status { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:14px; }
+  #sysh .sh-big { display:flex; align-items:center; gap:14px; padding:17px 19px; }
+  #sysh .sh-big .badge { position:relative; width:40px; height:40px; border-radius:12px; flex:none;
+    display:flex; align-items:center; justify-content:center; background:var(--surface-3);
+    border:1px solid var(--line); }
+  #sysh .sh-big .badge svg { width:20px; height:20px; }
+  #sysh .sh-big .meta { min-width:0; }
+  #sysh .sh-big .l { font-size:11px; font-weight:700; letter-spacing:.4px; text-transform:uppercase; color:var(--faint); }
+  #sysh .sh-big .v { font-size:17px; font-weight:700; margin-top:3px; letter-spacing:-.2px;
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  #sysh .sh-big .dot { position:relative; width:9px; height:9px; border-radius:50%; flex:none; margin-left:auto; }
+  #sysh .dot.ok { background:var(--ok); box-shadow:0 0 0 4px var(--ok-bg); }
+  #sysh .dot.warn { background:var(--warn); box-shadow:0 0 0 4px var(--warn-bg); }
+  #sysh .dot.bad { background:var(--danger); box-shadow:0 0 0 4px var(--danger-bg); }
+  #sysh .dot.ok::after, #sysh .dot.bad::after { content:""; position:absolute; inset:0; border-radius:50%;
+    animation:sh-ping 2.4s ease-out infinite; }
+  #sysh .dot.ok::after { background:var(--ok); }
+  #sysh .dot.bad::after { background:var(--danger); }
+  /* coloured accent rail on the left edge of each hero card */
+  #sysh .sh-big::after { content:""; position:absolute; left:0; top:14px; bottom:14px; width:3px; border-radius:3px; }
+  #sysh .sh-big.s-ok::after { background:var(--ok); }
+  #sysh .sh-big.s-warn::after { background:var(--warn); }
+  #sysh .sh-big.s-bad::after { background:var(--danger); }
+  #sysh .sh-big.s-accent::after { background:var(--accent-grad); }
+  #sysh .sh-big.s-ok .badge { color:var(--ok); }
+  #sysh .sh-big.s-warn .badge { color:var(--warn); }
+  #sysh .sh-big.s-bad .badge { color:var(--danger); }
+  #sysh .sh-big.s-accent .badge { color:var(--accent); }
+
+  /* ── Generic tile grid (process / inventory / activity) ── */
+  #sysh .sh-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(176px,1fr)); gap:14px; }
+  #sysh .sh-stat { padding:15px 17px; }
+  #sysh .sh-stat .l { font-size:11px; font-weight:700; letter-spacing:.3px; text-transform:uppercase; color:var(--faint); }
+  #sysh .sh-stat .v { font-size:26px; font-weight:760; margin-top:7px; letter-spacing:-.6px; line-height:1.05;
+    font-variant-numeric:tabular-nums; }
+  #sysh .sh-stat .v.grad { background:var(--accent-grad); -webkit-background-clip:text; background-clip:text;
+    -webkit-text-fill-color:transparent; color:transparent; }
+  #sysh .sh-stat .v.sm { font-size:15.5px; font-weight:680; letter-spacing:-.1px; }
+  #sysh .sh-stat .sub { font-size:11.5px; color:var(--muted); margin-top:5px; }
+
+  /* ── Meter cards (ring + gauge) ── */
+  #sysh .meters { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:14px; }
+  #sysh .meter { display:flex; align-items:center; gap:16px; padding:17px 19px; }
+  #sysh .meter .ringwrap { position:relative; width:92px; height:92px; flex:none; }
+  #sysh .meter svg { display:block; transform:rotate(-90deg); }
+  #sysh .meter .track { stroke:var(--line); }
+  #sysh .meter .arc { stroke:url(#sh-grad); stroke-linecap:round; transition:stroke-dashoffset .9s cubic-bezier(.2,.7,.3,1); }
+  #sysh .meter .arc.warn { stroke:var(--warn); }
+  #sysh .meter .arc.bad { stroke:var(--danger); }
+  #sysh .meter .arc.ok { stroke:var(--ok); }
+  #sysh .meter .ringnum { position:absolute; inset:0; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; }
+  #sysh .meter .ringnum b { font-size:21px; font-weight:780; letter-spacing:-.5px; font-variant-numeric:tabular-nums; }
+  #sysh .meter .ringnum span { font-size:9.5px; font-weight:700; letter-spacing:.5px; text-transform:uppercase; color:var(--faint); }
+  #sysh .meter .mlabel { min-width:0; }
+  #sysh .meter .mlabel .l { font-size:11px; font-weight:700; letter-spacing:.3px; text-transform:uppercase; color:var(--faint); }
+  #sysh .meter .mlabel .mv { font-size:18px; font-weight:740; margin-top:4px; letter-spacing:-.3px; font-variant-numeric:tabular-nums; }
+  #sysh .meter .mlabel .ms { font-size:11.5px; color:var(--muted); margin-top:3px; }
+
+  /* ── Live sparkline (heartbeat) card ── */
+  #sysh .spark-card { padding:18px 20px 14px; }
+  #sysh .spark-head { display:flex; align-items:flex-start; gap:14px; flex-wrap:wrap; }
+  #sysh .spark-head .l { font-size:11px; font-weight:800; letter-spacing:.5px; text-transform:uppercase; color:var(--faint); }
+  #sysh .spark-head .big { font-size:32px; font-weight:800; letter-spacing:-1px; margin-top:3px; line-height:1;
+    font-variant-numeric:tabular-nums; background:var(--accent-grad); -webkit-background-clip:text;
+    background-clip:text; -webkit-text-fill-color:transparent; color:transparent; }
+  #sysh .spark-head .unit { font-size:13px; font-weight:650; color:var(--muted); margin-left:4px;
+    -webkit-text-fill-color:initial; }
+  #sysh .spark-legend { margin-left:auto; display:flex; gap:16px; align-items:center; }
+  #sysh .spark-legend .li { text-align:right; }
+  #sysh .spark-legend .li .n { font-size:16px; font-weight:740; font-variant-numeric:tabular-nums; }
+  #sysh .spark-legend .li .k { font-size:10.5px; font-weight:600; color:var(--faint); text-transform:uppercase; letter-spacing:.4px; }
+  #sysh .spark-svg { width:100%; height:84px; margin-top:12px; display:block; overflow:visible; }
+  #sysh .spark-line { fill:none; stroke:url(#sh-grad); stroke-width:2.4; stroke-linecap:round; stroke-linejoin:round; }
+  #sysh .spark-fill { fill:url(#sh-fill); }
+  #sysh .spark-head-dot { fill:var(--accent); }
+  #sysh .spark-empty { font-size:12px; color:var(--muted); margin-top:14px; }
+
+  /* ── Conformance self-check ── */
+  #sysh .sh-checks { padding:4px 4px; }
+  #sysh .sh-chk { display:flex; align-items:center; gap:13px; padding:12px 15px; border-radius:11px;
+    border-top:1px solid var(--line-soft); font-size:13px; transition:background .12s; }
   #sysh .sh-chk:first-child { border-top:0; }
-  #sysh .sh-chk .nm { font-weight:600; }
+  #sysh .sh-chk:hover { background:var(--hover); }
+  #sysh .sh-chk .nm { font-weight:650; }
   #sysh .sh-chk .dt { color:var(--muted); font-size:12px; margin-left:auto; text-align:right; }
-  #sysh .sh-chk .ic { width:18px; height:18px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:11px; flex:none; }
-  #sysh .ic.ok { background:rgba(40,200,64,.18); color:#28c840; } #sysh .ic.bad { background:rgba(255,95,87,.18); color:#ff5f57; }
+  #sysh .sh-chk .ic { width:20px; height:20px; border-radius:50%; display:flex; align-items:center;
+    justify-content:center; font-size:11px; font-weight:800; flex:none; }
+  #sysh .ic.ok { background:var(--ok-bg); color:var(--ok); border:1px solid var(--ok-line); }
+  #sysh .ic.bad { background:var(--danger-bg); color:var(--danger); border:1px solid var(--danger-line); }
+
+  /* entrance */
+  #sysh .rise { opacity:0; transform:translateY(10px); animation:sh-rise .5s cubic-bezier(.2,.7,.3,1) forwards; }
+
+  @keyframes sh-ping { 0% { transform:scale(1); opacity:.5; } 70%,100% { transform:scale(2.6); opacity:0; } }
+  @keyframes sh-rise { to { opacity:1; transform:none; } }
+
+  @media (prefers-reduced-motion: reduce) {
+    #sysh .rise { animation:none; opacity:1; transform:none; }
+    #sysh .glass:hover { transform:none; }
+    #sysh .dot.ok::after, #sysh .dot.bad::after, #sysh .live .ld::after { animation:none; }
+    #sysh .meter .arc { transition:none; }
+  }
 </style>
+
 <div id="sysh">
+<!-- shared gradient defs for every meter/sparkline (rendered once, hidden) -->
+<svg width="0" height="0" aria-hidden="true" style="position:absolute"><defs>
+  <linearGradient id="sh-grad" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="var(--accent)"/><stop offset="1" stop-color="#7c3aed"/>
+  </linearGradient>
+  <linearGradient id="sh-fill" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="var(--accent)" stop-opacity=".26"/>
+    <stop offset="1" stop-color="var(--accent)" stop-opacity="0"/>
+  </linearGradient>
+</defs></svg>
+
 <div class="page-head">
   <span class="icon-chip lg" style="background:linear-gradient(135deg,#10b981,#22d3ee)"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></span>
   <div class="ph-main"><h1>System</h1>
-    <p class="ph-sub">Live health of the PolicyPilot service — process, database, activity, and the agent surface.<span class="live"><span class="ld"></span>live · 5s</span></p></div>
+    <p class="ph-sub">Live health of the PolicyPilot service — process, database, activity, and the agent surface.<span class="live" id="live-pill"><span class="ld"></span>live · 5s</span></p></div>
 </div>
 
-<div class="sh-status">
-  <div class="sh-big"><span class="dot {{ 'ok' if health.db_ok else 'bad' }}" id="d-db"></span><div><div class="l">Service / database</div><div class="v" id="v-db">{{ 'Operational' if health.db_ok else 'Database down' }}</div></div></div>
-  <div class="sh-big"><span class="dot {{ 'ok' if health.conformance.ok else 'warn' }}" id="d-conf"></span><div><div class="l">Agent surface</div><div class="v">{{ 'Healthy · ' ~ health.conformance.tools ~ ' tools' if health.conformance.ok else 'Needs attention' }}</div></div></div>
-  <div class="sh-big"><span class="dot ok"></span><div><div class="l">Operating mode</div><div class="v" id="v-mode">{{ health.mode }}</div></div></div>
-  <div class="sh-big"><span class="dot ok"></span><div><div class="l">Uptime</div><div class="v" id="v-uptime">{{ health.uptime }}</div></div></div>
+<h2 class="sr-only" id="sysh-summary" aria-live="polite">
+  Service {{ 'operational' if health.db_ok else 'database down' }}. Agent surface
+  {{ 'healthy with ' ~ health.conformance.tools ~ ' tools' if health.conformance.ok else 'needs attention' }}.
+  Operating mode {{ health.mode }}. Uptime {{ health.uptime }}.
+</h2>
+
+<div class="sh-status" role="list" aria-label="Service status">
+  <div class="glass sh-big rise {{ 's-ok' if health.db_ok else 's-bad' }}" id="card-db" role="listitem" style="animation-delay:0s">
+    <span class="badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></svg></span>
+    <div class="meta"><div class="l">Service / database</div><div class="v" id="v-db">{{ 'Operational' if health.db_ok else 'Database down' }}</div></div>
+    <span class="dot {{ 'ok' if health.db_ok else 'bad' }}" id="d-db" aria-hidden="true"></span>
+  </div>
+  <div class="glass sh-big rise {{ 's-ok' if health.conformance.ok else 's-warn' }}" role="listitem" style="animation-delay:.06s">
+    <span class="badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 4 6v6c0 5 3.4 8.5 8 10 4.6-1.5 8-5 8-10V6z"/><path d="m9 12 2 2 4-4"/></svg></span>
+    <div class="meta"><div class="l">Agent surface</div><div class="v">{{ 'Healthy · ' ~ health.conformance.tools ~ ' tools' if health.conformance.ok else 'Needs attention' }}</div></div>
+    <span class="dot {{ 'ok' if health.conformance.ok else 'warn' }}" aria-hidden="true"></span>
+  </div>
+  <div class="glass sh-big rise s-accent" role="listitem" style="animation-delay:.12s">
+    <span class="badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.6-1.1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H10a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V10a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></span>
+    <div class="meta"><div class="l">Operating mode</div><div class="v" id="v-mode">{{ health.mode }}</div></div>
+    <span class="dot ok" aria-hidden="true"></span>
+  </div>
+  <div class="glass sh-big rise s-ok" role="listitem" style="animation-delay:.18s">
+    <span class="badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span>
+    <div class="meta"><div class="l">Uptime</div><div class="v" id="v-uptime">{{ health.uptime }}</div></div>
+    <span class="dot ok" aria-hidden="true"></span>
+  </div>
 </div>
 
 <div class="cap">Process</div>
-<div class="sh-grid">
-  <div class="sh-stat"><div class="l">Load average (1·5·15m)</div><div class="v" id="v-load">{{ (health.load|join(' · ')) if health.load else '—' }}</div></div>
-  <div class="sh-stat"><div class="l">Memory · peak RSS (MB)</div><div class="v" id="v-mem">{{ health.mem_mb if health.mem_mb is not none else '—' }}</div></div>
-  <div class="sh-stat"><div class="l">CPUs</div><div class="v">{{ health.cpus or '—' }}</div></div>
-  <div class="sh-stat"><div class="l">Runtime</div><div class="v sm">Python {{ health.python }} · {{ health.os }}</div></div>
-  <div class="sh-stat"><div class="l">Version</div><div class="v sm">{{ health.version }}</div></div>
-  <div class="sh-stat"><div class="l">Agent rate limit / min</div><div class="v">{{ health.rate if health.rate else 'none' }}</div></div>
+<div class="meters">
+  <!-- Memory ring (peak RSS) -->
+  <div class="glass meter rise" style="animation-delay:.04s" aria-label="Memory peak RSS">
+    <div class="ringwrap">
+      <svg width="92" height="92" viewBox="0 0 92 92">
+        <circle class="track" cx="46" cy="46" r="40" fill="none" stroke-width="9"/>
+        <circle class="arc" id="ring-mem" cx="46" cy="46" r="40" fill="none" stroke-width="9"
+                stroke-dasharray="251.3" stroke-dashoffset="251.3"/>
+      </svg>
+      <div class="ringnum"><b id="ring-mem-num">—</b><span>MB</span></div>
+    </div>
+    <div class="mlabel"><div class="l">Memory · peak RSS</div>
+      <div class="mv" id="v-mem">{{ health.mem_mb if health.mem_mb is not none else '—' }}</div>
+      <div class="ms">Resident set, process lifetime</div></div>
+  </div>
+  <!-- CPU / load gauge (1m load vs cpu count) -->
+  <div class="glass meter rise" style="animation-delay:.10s" aria-label="CPU load average">
+    <div class="ringwrap">
+      <svg width="92" height="92" viewBox="0 0 92 92">
+        <circle class="track" cx="46" cy="46" r="40" fill="none" stroke-width="9"/>
+        <circle class="arc" id="ring-load" cx="46" cy="46" r="40" fill="none" stroke-width="9"
+                stroke-dasharray="251.3" stroke-dashoffset="251.3"/>
+      </svg>
+      <div class="ringnum"><b id="ring-load-num">—</b><span>1m</span></div>
+    </div>
+    <div class="mlabel"><div class="l">CPU load (1·5·15m)</div>
+      <div class="mv" id="v-load">{{ (health.load|join(' · ')) if health.load else '—' }}</div>
+      <div class="ms">{{ health.cpus or '—' }} logical CPUs</div></div>
+  </div>
+  <div class="glass sh-stat rise" style="animation-delay:.16s">
+    <div class="l">Runtime</div><div class="v sm">Python {{ health.python }}</div><div class="sub">{{ health.os }} · {{ health.cpus or '—' }} CPUs</div></div>
+  <div class="glass sh-stat rise" style="animation-delay:.22s">
+    <div class="l">Version</div><div class="v sm">{{ health.version }}</div><div class="sub">Agent rate limit · {{ health.rate if health.rate else 'none' }}{{ '/min' if health.rate else '' }}</div></div>
 </div>
 
 <div class="cap">Inventory</div>
 <div class="sh-grid">
-  <div class="sh-stat"><div class="l">Connections (SMS)</div><div class="v" id="v-c-connections">{{ health.counts.connections }}</div></div>
-  <div class="sh-stat"><div class="l">Gateways</div><div class="v" id="v-c-gateways">{{ health.counts.gateways }}</div></div>
-  <div class="sh-stat"><div class="l">Dynamic layers</div><div class="v" id="v-c-layers">{{ health.counts.layers }}</div></div>
-  <div class="sh-stat"><div class="l">API keys</div><div class="v" id="v-c-api_keys">{{ health.counts.api_keys }}</div></div>
-  <div class="sh-stat"><div class="l">Users</div><div class="v" id="v-c-users">{{ health.counts.users }}</div></div>
+  <div class="glass sh-stat rise" style="animation-delay:.04s"><div class="l">Connections (SMS)</div><div class="v grad cup" id="v-c-connections" data-val="{{ health.counts.connections }}">{{ health.counts.connections }}</div></div>
+  <div class="glass sh-stat rise" style="animation-delay:.08s"><div class="l">Gateways</div><div class="v grad cup" id="v-c-gateways" data-val="{{ health.counts.gateways }}">{{ health.counts.gateways }}</div></div>
+  <div class="glass sh-stat rise" style="animation-delay:.12s"><div class="l">Dynamic layers</div><div class="v grad cup" id="v-c-layers" data-val="{{ health.counts.layers }}">{{ health.counts.layers }}</div></div>
+  <div class="glass sh-stat rise" style="animation-delay:.16s"><div class="l">API keys</div><div class="v grad cup" id="v-c-api_keys" data-val="{{ health.counts.api_keys }}">{{ health.counts.api_keys }}</div></div>
+  <div class="glass sh-stat rise" style="animation-delay:.20s"><div class="l">Users</div><div class="v grad cup" id="v-c-users" data-val="{{ health.counts.users }}">{{ health.counts.users }}</div></div>
 </div>
 
 <div class="cap">Activity</div>
-<div class="sh-grid">
-  <div class="sh-stat"><div class="l">Total events</div><div class="v" id="v-a-total">{{ health.activity.total }}</div></div>
-  <div class="sh-stat"><div class="l">Errors ≥400 (rate)</div><div class="v" id="v-a-errors">{{ health.activity.errors }} · {{ health.activity.error_pct }}%</div></div>
-  <div class="sh-stat"><div class="l">Avg latency (ms)</div><div class="v" id="v-a-avg">{{ health.activity.avg_ms }}</div></div>
-  <div class="sh-stat"><div class="l">Last hour</div><div class="v" id="v-a-hour">{{ health.activity.last_hour }}</div></div>
+<div class="meters">
+  <!-- Error-rate ring -->
+  <div class="glass meter rise" style="animation-delay:.04s" aria-label="Error rate">
+    <div class="ringwrap">
+      <svg width="92" height="92" viewBox="0 0 92 92">
+        <circle class="track" cx="46" cy="46" r="40" fill="none" stroke-width="9"/>
+        <circle class="arc ok" id="ring-err" cx="46" cy="46" r="40" fill="none" stroke-width="9"
+                stroke-dasharray="251.3" stroke-dashoffset="251.3"/>
+      </svg>
+      <div class="ringnum"><b id="ring-err-num">{{ health.activity.error_pct }}%</b><span>errors</span></div>
+    </div>
+    <div class="mlabel"><div class="l">Errors ≥ 400</div>
+      <div class="mv" id="v-a-errors">{{ health.activity.errors }} · {{ health.activity.error_pct }}%</div>
+      <div class="ms" id="v-a-total-sub">of {{ health.activity.total }} events</div></div>
+  </div>
+  <!-- Live sparkline (events/min, accumulates over polls) -->
+  <div class="glass spark-card rise" style="animation-delay:.10s; grid-column:span 2; min-width:300px"
+       aria-label="Live activity sparkline">
+    <div class="spark-head">
+      <div><div class="l">Live activity</div>
+        <div class="big"><span id="v-spark-rate">—</span><span class="unit">events/min</span></div></div>
+      <div class="spark-legend">
+        <div class="li"><div class="n cup" id="v-a-hour" data-val="{{ health.activity.last_hour }}">{{ health.activity.last_hour }}</div><div class="k">last hour</div></div>
+        <div class="li"><div class="n cup" id="v-a-avg" data-val="{{ health.activity.avg_ms }}" data-suffix="ms">{{ health.activity.avg_ms }}<span style="font-size:11px;font-weight:600;color:var(--faint)">ms</span></div><div class="k">avg latency</div></div>
+        <div class="li"><div class="n cup" id="v-a-total" data-val="{{ health.activity.total }}">{{ health.activity.total }}</div><div class="k">total</div></div>
+      </div>
+    </div>
+    <svg class="spark-svg" id="spark-svg" viewBox="0 0 600 84" preserveAspectRatio="none" aria-hidden="true">
+      <path class="spark-fill" id="spark-fill" d=""/>
+      <path class="spark-line" id="spark-path" d=""/>
+      <circle class="spark-head-dot" id="spark-dot" r="3.2" cx="0" cy="84" opacity="0"/>
+    </svg>
+    <div class="spark-empty" id="spark-empty">Accumulating samples — the line builds as it polls every 5 seconds.</div>
+  </div>
 </div>
 
 <div class="cap">Agent surface — conformance (read-only self-check)</div>
-<div class="sh-checks">
+<div class="glass sh-checks rise" style="animation-delay:.04s" role="list" aria-label="Conformance checks">
   {% for c in health.conformance.checks %}
-  <div class="sh-chk"><span class="ic {{ 'ok' if c.ok else 'bad' }}">{{ '✓' if c.ok else '✕' }}</span>
-    <span class="nm">{{ c.name.replace('_', ' ')|capitalize }}</span><span class="dt">{{ c.detail }}</span></div>
+  <div class="sh-chk" role="listitem"><span class="ic {{ 'ok' if c.ok else 'bad' }}" aria-hidden="true">{{ '✓' if c.ok else '✕' }}</span>
+    <span class="nm">{{ c.name.replace('_', ' ')|capitalize }}</span><span class="dt">{{ c.detail }}</span>
+    <span class="sr-only">{{ 'passed' if c.ok else 'failed' }}</span></div>
   {% else %}
-  <div class="sh-chk"><span class="dt">No checks reported.</span></div>
+  <div class="sh-chk" role="listitem"><span class="dt">No checks reported.</span></div>
   {% endfor %}
 </div>
 </div>
 
 <script>
 (function () {
+  var reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var CIRC = 2 * Math.PI * 40;  /* ring circumference for r=40 */
+
   function set(id, v) { var e = document.getElementById(id); if (e && v !== undefined && v !== null) e.textContent = v; }
+
+  /* Animated count-up: tween an element's textContent from its current value to `to`. */
+  function countUp(el, to, suffix) {
+    if (!el) return;
+    to = Number(to); if (isNaN(to)) return;
+    var from = Number(el.getAttribute('data-cur'));
+    if (isNaN(from)) from = to;       /* first paint: snap to server value, no tween */
+    if (from === to) { el.setAttribute('data-cur', to); return; }
+    if (reduceMotion) { el.textContent = to + (suffix || ''); el.setAttribute('data-cur', to); return; }
+    var start = performance.now(), dur = 650;
+    function frame(now) {
+      var t = Math.min(1, (now - start) / dur);
+      var eased = 1 - Math.pow(1 - t, 3);
+      var val = Math.round(from + (to - from) * eased);
+      el.textContent = val + (suffix || '');
+      if (t < 1) requestAnimationFrame(frame); else el.setAttribute('data-cur', to);
+    }
+    requestAnimationFrame(frame);
+  }
+  function applyCountUps() {
+    document.querySelectorAll('#sysh .cup').forEach(function (el) {
+      countUp(el, el.getAttribute('data-val'), el.getAttribute('data-suffix') || '');
+    });
+  }
+
+  /* Set a ring meter: fraction 0..1, plus an optional severity class for the arc colour. */
+  function setRing(id, frac, sev) {
+    var arc = document.getElementById(id); if (!arc) return;
+    frac = Math.max(0, Math.min(1, frac || 0));
+    arc.style.strokeDashoffset = (CIRC * (1 - frac)).toFixed(1);
+    arc.classList.remove('ok', 'warn', 'bad');
+    if (sev) arc.classList.add(sev);
+  }
+
+  /* ── Live sparkline state ── */
+  var samples = [];                 /* {t, val} accumulated each poll */
+  var MAX = 60;                     /* keep ~5 min of 5s samples */
+  var prevHour = null, prevTime = null;
+  var svgW = 600, svgH = 84, pad = 4;
+
+  function pushSample(val) {
+    samples.push(val);
+    if (samples.length > MAX) samples.shift();
+  }
+  function drawSpark() {
+    var path = document.getElementById('spark-path'),
+        fill = document.getElementById('spark-fill'),
+        dot = document.getElementById('spark-dot'),
+        empty = document.getElementById('spark-empty');
+    if (!path) return;
+    if (samples.length < 2) return;  /* keep the "accumulating" hint until we have a segment */
+    if (empty) empty.style.display = 'none';
+    var max = Math.max.apply(null, samples), min = Math.min.apply(null, samples);
+    if (max === min) { max = min + 1; }   /* avoid a divide-by-zero flat-line collapse */
+    var n = samples.length;
+    var stepX = (svgW - pad * 2) / Math.max(1, MAX - 1);
+    var x0 = svgW - pad - (n - 1) * stepX;  /* right-anchored: newest sample at the right edge */
+    var pts = samples.map(function (v, i) {
+      var x = x0 + i * stepX;
+      var y = svgH - pad - ((v - min) / (max - min)) * (svgH - pad * 2);
+      return [x, y];
+    });
+    var d = pts.map(function (p, i) { return (i ? 'L' : 'M') + p[0].toFixed(1) + ' ' + p[1].toFixed(1); }).join(' ');
+    path.setAttribute('d', d);
+    var last = pts[pts.length - 1], first = pts[0];
+    fill.setAttribute('d', d + ' L' + last[0].toFixed(1) + ' ' + svgH + ' L' + first[0].toFixed(1) + ' ' + svgH + ' Z');
+    if (dot) { dot.setAttribute('cx', last[0].toFixed(1)); dot.setAttribute('cy', last[1].toFixed(1)); dot.setAttribute('opacity', '1'); }
+  }
+
+  function render(h, firstPaint) {
+    /* hero status (preserve the visible 'Operational' / 'Database down' strings) */
+    var d = document.getElementById('d-db'); if (d) d.className = 'dot ' + (h.db_ok ? 'ok' : 'bad');
+    var card = document.getElementById('card-db');
+    if (card) { card.classList.remove('s-ok', 's-bad'); card.classList.add(h.db_ok ? 's-ok' : 's-bad'); }
+    set('v-db', h.db_ok ? 'Operational' : 'Database down');
+    set('v-mode', h.mode); set('v-uptime', h.uptime);
+    /* keep the screen-reader summary current so a db/mode flip is re-announced (aria-live) */
+    var sum = document.getElementById('sysh-summary');
+    if (sum) sum.textContent = 'Service ' + (h.db_ok ? 'operational' : 'database down') +
+      '. Operating mode ' + h.mode + '. Uptime ' + h.uptime + '.';
+
+    /* process: load + memory text and rings */
+    set('v-load', h.load ? h.load.join(' · ') : '—');
+    if (h.load && h.load.length) {
+      var cpus = h.cpus || 1;
+      set('ring-load-num', h.load[0].toFixed(2));
+      var loadFrac = h.load[0] / cpus;
+      setRing('ring-load', loadFrac, loadFrac > 1 ? 'bad' : loadFrac > 0.7 ? 'warn' : 'ok');
+    } else { set('ring-load-num', '—'); }
+
+    if (h.mem_mb === null || h.mem_mb === undefined) {
+      set('v-mem', '—'); set('ring-mem-num', '—');
+    } else {
+      set('v-mem', h.mem_mb);
+      set('ring-mem-num', Math.round(h.mem_mb));
+      /* RSS has no hard ceiling — show it against a soft 1 GB reference so the ring reads as "fill". */
+      setRing('ring-mem', h.mem_mb / 1024, null);
+    }
+
+    /* inventory: count-up via data-val */
+    ['connections', 'gateways', 'layers', 'api_keys', 'users'].forEach(function (k) {
+      var el = document.getElementById('v-c-' + k); if (el && h.counts) el.setAttribute('data-val', h.counts[k]);
+    });
+
+    /* activity numbers + error ring */
+    if (h.activity) {
+      var a = h.activity;
+      document.getElementById('v-a-total').setAttribute('data-val', a.total);
+      document.getElementById('v-a-hour').setAttribute('data-val', a.last_hour);
+      document.getElementById('v-a-avg').setAttribute('data-val', a.avg_ms);
+      set('v-a-errors', a.errors + ' · ' + a.error_pct + '%');
+      set('v-a-total-sub', 'of ' + a.total + ' events');
+      set('ring-err-num', a.error_pct + '%');
+      var ep = Number(a.error_pct) || 0;
+      setRing('ring-err', ep / 100, ep >= 10 ? 'bad' : ep >= 2 ? 'warn' : 'ok');
+
+      /* derive events/min for the sparkline. Prefer the rate of change of total events between
+         polls (true live throughput); fall back to last_hour/60 on the first sample. */
+      var now = Date.now(), perMin;
+      if (prevTime !== null && prevHour !== null) {
+        var dtMin = (now - prevTime) / 60000;
+        var delta = a.total - prevHour;
+        perMin = (dtMin > 0 && delta >= 0) ? (delta / dtMin) : 0;
+      } else {
+        perMin = a.last_hour / 60;
+      }
+      prevTime = now; prevHour = a.total;
+      var shown = Math.round(perMin * 10) / 10;
+      set('v-spark-rate', shown);
+      pushSample(perMin);
+      drawSpark();
+    }
+
+    applyCountUps();
+  }
+
   function poll() {
     fetch('/system/data', { headers: { 'Accept': 'application/json' } })
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (h) {
-        if (!h) return;
-        var d = document.getElementById('d-db'); if (d) d.className = 'dot ' + (h.db_ok ? 'ok' : 'bad');
-        set('v-db', h.db_ok ? 'Operational' : 'Database down');
-        set('v-mode', h.mode); set('v-uptime', h.uptime);
-        set('v-load', h.load ? h.load.join(' · ') : '—');
-        set('v-mem', h.mem_mb === null || h.mem_mb === undefined ? '—' : h.mem_mb);
-        ['connections', 'gateways', 'layers', 'api_keys', 'users'].forEach(function (k) { set('v-c-' + k, h.counts[k]); });
-        set('v-a-total', h.activity.total);
-        set('v-a-errors', h.activity.errors + ' · ' + h.activity.error_pct + '%');
-        set('v-a-avg', h.activity.avg_ms); set('v-a-hour', h.activity.last_hour);
-      }).catch(function () {});
+        var pill = document.getElementById('live-pill');
+        if (!h) { if (pill) pill.style.opacity = '.45'; return; }
+        if (pill) pill.style.opacity = '1';
+        render(h, false);
+      })
+      .catch(function () { var pill = document.getElementById('live-pill'); if (pill) pill.style.opacity = '.45'; });
   }
+
+  /* Seed rings + first sample from the server-rendered values, then start polling. */
+  render({
+    db_ok: {{ 'true' if health.db_ok else 'false' }},
+    mode: {{ health.mode|tojson }},
+    uptime: {{ health.uptime|tojson }},
+    load: {{ (health.load|tojson) if health.load else 'null' }},
+    mem_mb: {{ health.mem_mb if health.mem_mb is not none else 'null' }},
+    cpus: {{ health.cpus or 'null' }},
+    counts: {
+      connections: {{ health.counts.connections }}, gateways: {{ health.counts.gateways }},
+      layers: {{ health.counts.layers }}, api_keys: {{ health.counts.api_keys }}, users: {{ health.counts.users }}
+    },
+    activity: {
+      total: {{ health.activity.total }}, errors: {{ health.activity.errors }},
+      error_pct: {{ health.activity.error_pct }}, avg_ms: {{ health.activity.avg_ms }},
+      last_hour: {{ health.activity.last_hour }}
+    }
+  }, true);
+
   setInterval(poll, 5000);
 })();
 </script>

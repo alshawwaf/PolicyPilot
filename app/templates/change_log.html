@@ -1,0 +1,208 @@
+{% extends "base.html" %}
+{% block title %}Change log{% endblock %}
+{% block content %}
+<style>
+  .cl-bar { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:14px; }
+  .cl-bar .grow { flex:1; }
+  .cl-pick { display:grid; grid-template-columns:repeat(auto-fill, minmax(240px, 1fr)); gap:12px; }
+  .cl-srv { display:flex; align-items:center; gap:12px; padding:14px 16px; text-decoration:none;
+    background:var(--surface-2); border:1px solid var(--line); border-radius:14px; box-shadow:var(--shadow-sm);
+    transition:transform .15s, border-color .15s; }
+  .cl-srv:hover { transform:translateY(-2px); border-color:var(--accent); }
+  .cl-srv .ic { width:38px; height:38px; flex:0 0 auto; border-radius:11px; display:flex; align-items:center;
+    justify-content:center; color:#fff; background:var(--accent-grad); }
+  .cl-srv .ic svg { width:20px; height:20px; }
+  .cl-srv b { color:var(--text); font-size:14px; } .cl-srv .h { color:var(--muted); font-size:12px; font-family:ui-monospace,monospace; }
+  .cl-head { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; flex-wrap:wrap; margin:0 0 12px; }
+  .cl-head h2 { font-size:16px; margin:0; }
+  .cl-head .sub { color:var(--muted); font-size:12.5px; line-height:1.55; margin:5px 0 0; max-width:80ch; }
+</style>
+
+<div class="page-head">
+  <span class="icon-chip lg"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/><polyline points="12 8 12 13 15 15"/></svg></span>
+  <div class="ph-main">
+    <h1>Change log</h1>
+    <p class="ph-sub">Every change <b>published</b> to a Management server — from Access automation, an agent, or the ticketing webhook — recorded with its exact inverse, ready to <b>roll back</b>. {% if server %}Showing <b>{{ server.name }}</b>.{% else %}Pick a server to see its trail.{% endif %}</p>
+  </div>
+</div>
+
+{% if servers|length == 0 %}
+<div class="card"><p class="muted">No Management servers yet. Add one in <a href="/management" data-open-app="management">Connections</a> — changes you publish will then show up here.</p></div>
+{% elif not server %}
+<div class="card">
+  <div class="cl-head"><div><h2>Pick a server</h2><p class="sub">Each server keeps its own change log.</p></div></div>
+  <div class="cl-pick">
+    {% for s in servers %}
+    <a class="cl-srv" href="/changes?server={{ s.id }}">
+      <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="6" rx="1"/><rect x="2" y="9" width="20" height="6" rx="1"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="12" x2="6.01" y2="12"/></svg></span>
+      <span><b>{{ s.name }}</b><br><span class="h">{{ s.host }}:{{ s.port }}</span></span>
+    </a>
+    {% endfor %}
+  </div>
+</div>
+{% else %}
+<div class="card" id="aa-history" data-id="{{ server.id }}">
+  <div class="cl-head">
+    <div>
+      <h2>{{ server.name }} <span class="muted" style="font-weight:400; font-size:12.5px;">· {{ server.host }}:{{ server.port }}</span></h2>
+      <p class="sub">Roll one back to undo just that change by first-match — PolicyPilot deletes the rule it added, re-enables the rule it disabled, or removes the object it widened in (never a full revision rollback). A revoke that <b>disabled</b> a rule can also be <b>finalized by deleting</b> it. <b>✕</b> drops an entry from this list; <b>Clear resolved</b> tidies the done ones — neither touches live policy.</p>
+    </div>
+    <div style="flex:0 0 auto; display:flex; gap:8px; align-items:center;">
+      {% if servers|length > 1 %}
+      <select id="cl-server" title="Switch server" style="min-width:150px;">
+        {% for s in servers %}<option value="{{ s.id }}" {{ 'selected' if s.id == server.id else '' }}>{{ s.name }}</option>{% endfor %}
+      </select>
+      {% endif %}
+      <button type="button" class="copybtn" id="aah-clear">Clear resolved</button>
+      <button type="button" class="copybtn" id="aah-refresh">Refresh</button>
+    </div>
+  </div>
+  <div id="aah-body" style="margin-top:6px;"><p class="muted">Loading recent changes…</p></div>
+</div>
+
+<script>
+  // Switch the active server (only present with >1 server) — reload this app scoped to that server.
+  (function () {
+    var sel = document.getElementById('cl-server');
+    if (sel) sel.addEventListener('change', function () { location.href = '/changes?server=' + encodeURIComponent(sel.value); });
+  })();
+  // Recent changes / rollback panel — moved verbatim from the Access automation page (its own app now).
+  (function () {
+    var root = document.getElementById('aa-history');
+    if (!root) return;
+    var id = root.getAttribute('data-id');
+    var bodyEl = document.getElementById('aah-body');
+    function esc(s) { var d = document.createElement('div'); d.textContent = (s == null ? '' : s); return d.innerHTML; }
+    function when(iso) {
+      if (!iso) return '—';
+      var d = new Date(iso); if (isNaN(d)) return esc(iso);
+      return d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    }
+    var OUTCOME = { create: 'created a rule', widen: 'widened a rule', disable: 'disabled a rule',
+                    deny: 'inserted a Drop' };
+
+    function resolvedLabel(c) {
+      var who = c.reverted_by ? ' · ' + esc(c.reverted_by) : '';
+      if (c.resolution === 'deleted') return '<span class="muted">🗑 rule deleted ' + when(c.reverted_at) + who + '</span>';
+      return '<span class="muted">↩ rolled back ' + when(c.reverted_at) + who + '</span>';
+    }
+
+    function rowHtml(c) {
+      var status, errLine = c.revert_error ? '<div class="muted" style="font-size:12px; color:var(--danger); margin-top:4px;">last attempt: ' + esc(c.revert_error) + '</div>' : '';
+      if (c.state === 'resolved') {
+        status = resolvedLabel(c);
+      } else if (c.state === 'disabled') {
+        status = '<span class="muted" style="font-size:12px; display:block; margin-bottom:3px;">⏻ rule disabled</span>' +
+          '<button type="button" class="btn secondary" data-revert="' + c.id + '" data-kind="disabled">Resolve</button>' + errLine;
+      } else if (c.state === 'active' && c.revertable) {
+        var kind = (c.outcome === 'create' || c.outcome === 'deny') ? 'adds' : 'plain';
+        status = '<button type="button" class="btn secondary" data-revert="' + c.id + '" data-kind="' + kind + '">Roll back</button>' + errLine;
+      } else {
+        status = '<span class="muted">—</span>';
+      }
+      var tag = '<span class="muted" style="font-size:12px;">' + esc(c.action) + ' · ' + esc(OUTCOME[c.outcome] || c.outcome) + '</span>';
+      var meta = esc(c.by || '') + (c.ticket_id ? ' · ' + esc(c.ticket_id) : '');
+      var rm = '<button type="button" class="copybtn" data-remove="' + c.id + '" title="Remove from this list (does not touch policy)" style="opacity:.55; padding:2px 7px;">✕</button>';
+      return '<tr data-row="' + c.id + '">' +
+        '<td class="muted" style="white-space:nowrap;">' + when(c.at) + '</td>' +
+        '<td><b>' + esc(c.summary) + '</b><br>' + tag + '</td>' +
+        '<td class="muted" style="font-size:12px;">' + meta + '</td>' +
+        '<td style="text-align:right;">' + status + '</td>' +
+        '<td style="text-align:right; width:1%;">' + rm + '</td></tr>';
+    }
+
+    function render(changes) {
+      if (!changes || !changes.length) {
+        bodyEl.innerHTML = '<p class="muted">No published changes yet. Apply &amp; publish a request (or have the agent do it) and it will appear here, ready to roll back.</p>';
+        return;
+      }
+      bodyEl.innerHTML = '<table class="acttable"><thead><tr><th>When</th><th>Change</th><th>By</th><th></th><th></th></tr></thead><tbody>' +
+        changes.map(rowHtml).join('') + '</tbody></table>';
+    }
+
+    function load() {
+      bodyEl.innerHTML = '<p class="muted">Loading recent changes…</p>';
+      fetch('/access-automation/' + id + '/changes', { credentials: 'same-origin' })
+        .then(function (r) { return r.json(); })
+        .then(function (j) { render(j.changes || []); })
+        .catch(function () { bodyEl.innerHTML = '<div class="err">Could not load recent changes.</div>'; });
+    }
+
+    function resolve(cid, bodyObj, errCell) {
+      fetch('/access-automation/' + id + '/changes/' + cid + '/revert', {
+        method: 'POST', credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(bodyObj)
+      }).then(function (r) { return r.json(); }).then(function (j) {
+        if (j.ok && j.reverted) { load(); }
+        else { errCell.innerHTML = '<span class="muted" style="color:var(--danger);">' + esc(j.error || 'Failed.') + '</span> <button type="button" class="copybtn" data-revno="1">Close</button>'; }
+      }).catch(function () { errCell.innerHTML = '<span class="muted" style="color:var(--danger);">Request failed.</span> <button type="button" class="copybtn" data-revno="1">Close</button>'; });
+    }
+
+    bodyEl.addEventListener('click', function (e) {
+      var t = e.target;
+      var rb = t.closest ? t.closest('[data-revert]') : null;
+      if (rb) {
+        var cell = rb.parentNode, rid = rb.getAttribute('data-revert'), kind = rb.getAttribute('data-kind');
+        if (kind === 'adds') {
+          cell.innerHTML = '<div class="muted" style="margin-bottom:4px;">Undo by:</div>' +
+            '<button type="button" class="btn" data-revyes="' + rid + '" data-mode="disable" title="Keep the rule but turn it off (reversible)">Disable rule</button> ' +
+            '<button type="button" class="btn" style="background:var(--danger);border-color:var(--danger);color:#fff;" data-revyes="' + rid + '" data-mode="delete">Delete rule</button> ' +
+            '<button type="button" class="copybtn" data-revno="1">Cancel</button>';
+        } else if (kind === 'disabled') {
+          cell.innerHTML = '<div class="muted" style="margin-bottom:4px;">Resolve by:</div>' +
+            '<button type="button" class="btn" data-revyes="' + rid + '" data-mode="reenable" title="Undo the revoke — turn the rule back on">Re-enable</button> ' +
+            '<button type="button" class="btn" style="background:var(--danger);border-color:var(--danger);color:#fff;" data-revyes="' + rid + '" data-mode="delete-disabled" title="Finalize — permanently delete the disabled rule">Delete rule</button> ' +
+            '<button type="button" class="copybtn" data-revno="1">Cancel</button>';
+        } else {
+          cell.innerHTML = '<span class="muted" style="margin-right:6px;">Undo this change?</span>' +
+            '<button type="button" class="btn" style="background:var(--danger);border-color:var(--danger);color:#fff;" data-revyes="' + rid + '">Confirm</button> ' +
+            '<button type="button" class="copybtn" data-revno="1">Cancel</button>';
+        }
+        return;
+      }
+      var rm = t.closest ? t.closest('[data-remove]') : null;
+      if (rm) {
+        rm.parentNode.innerHTML = '<span class="muted" style="font-size:12px;">Remove?</span> ' +
+          '<button type="button" class="copybtn" data-rmyes="' + rm.getAttribute('data-remove') + '">Yes</button> ' +
+          '<button type="button" class="copybtn" data-revno="1">No</button>';
+        return;
+      }
+      var rmy = t.closest ? t.closest('[data-rmyes]') : null;
+      if (rmy) {
+        rmy.disabled = true; rmy.textContent = '…';
+        fetch('/access-automation/' + id + '/changes/' + rmy.getAttribute('data-rmyes') + '/delete',
+              { method: 'POST', credentials: 'same-origin' }).then(load).catch(load);
+        return;
+      }
+      if (t.closest && t.closest('[data-revno]')) { load(); return; }
+      var yes = t.closest ? t.closest('[data-revyes]') : null;
+      if (yes) {
+        var cid = yes.getAttribute('data-revyes'), mode = yes.getAttribute('data-mode') || '';
+        var bodyObj = { publish: true };
+        if (mode === 'disable') bodyObj.disable = true;
+        else if (mode === 'delete-disabled') bodyObj.delete_rule = true;
+        else if (mode === 'reenable') bodyObj.reenable = true;
+        var label = { disable: 'Disabling…', 'delete-disabled': 'Deleting rule…', reenable: 'Re-enabling…',
+                      delete: 'Deleting…' }[mode] || 'Rolling back…';
+        var cell = yes.parentNode;
+        cell.querySelectorAll('[data-revyes],[data-revno]').forEach(function (b) { b.disabled = true; });
+        yes.textContent = label;
+        resolve(cid, bodyObj, cell);
+      }
+    });
+
+    function clearResolved() {
+      var btn = document.getElementById('aah-clear'), orig = btn.textContent;
+      btn.disabled = true; btn.textContent = 'Clearing…';
+      fetch('/access-automation/' + id + '/changes/clear-resolved', { method: 'POST', credentials: 'same-origin' })
+        .then(function () { btn.disabled = false; btn.textContent = orig; load(); })
+        .catch(function () { btn.disabled = false; btn.textContent = orig; load(); });
+    }
+
+    document.getElementById('aah-refresh').addEventListener('click', load);
+    document.getElementById('aah-clear').addEventListener('click', clearResolved);
+    load();
+  })();
+</script>
+{% endif %}
+{% endblock %}

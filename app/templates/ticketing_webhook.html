@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}Ticketing webhook{% endblock %}
+{% block content %}
+<style>
+  .tw-curl { background:var(--input-bg); color:var(--text); border:1px solid var(--line); border-left:3px solid var(--accent);
+    border-radius:11px; padding:15px 16px; font-size:12.5px; line-height:1.6; white-space:pre; overflow:auto; margin:0;
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace; }
+  .tw-paths { display:grid; grid-template-columns:repeat(auto-fill, minmax(220px, 1fr)); gap:12px; margin-top:6px; }
+  .tw-path { display:flex; gap:11px; padding:13px 15px; background:var(--surface-2); border:1px solid var(--line-soft);
+    border-radius:13px; text-decoration:none; }
+  .tw-path:hover { border-color:var(--accent); }
+  .tw-path .ic { width:30px; height:30px; flex:0 0 auto; border-radius:9px; display:flex; align-items:center; justify-content:center;
+    color:var(--accent); background:var(--accent-soft); }
+  .tw-path b { color:var(--text); font-size:13px; } .tw-path span { color:var(--muted); font-size:12px; line-height:1.45; }
+  .tw-h { font-size:12px; font-weight:800; letter-spacing:.5px; text-transform:uppercase; color:var(--faint); margin:22px 0 10px; }
+</style>
+
+<div class="page-head">
+  <span class="icon-chip lg"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></span>
+  <div class="ph-main">
+    <h1>Ticketing webhook</h1>
+    <p class="ph-sub">Wire any ITSM — <b>ServiceNow, Jira, Remedy, Freshservice</b>, or a custom portal — straight to PolicyPilot: POST a ticket as JSON and it decides (and, with <code>"apply": true</code>, applies + publishes) end-to-end. One of three ways to drive PolicyPilot, alongside agents (MCP) and the REST API.</p>
+  </div>
+</div>
+
+<div class="card">
+  <p class="muted" style="margin:0 0 12px; max-width:84ch;">Point any system that can POST JSON at the endpoint below. Set <code>PILOT_WEBHOOK_TOKEN</code> (Settings → integrations) and send it as the <code>X-PolicyPilot-Token</code> header — the webhook is <b>disabled until that token is set</b>, so it never runs unauthenticated. Field names are flexible (common <code>u_*</code> / <code>number</code> / Jira <code>key</code> aliases are accepted). The result is returned synchronously; to push it back, add an optional <code>"callback_url"</code> (we POST the result there) or configure the built-in ServiceNow write-back (<code>PILOT_SERVICENOW_*</code>).</p>
+
+  <div class="tw-h" style="margin-top:4px;">Example request</div>
+  <pre id="tw-curl" class="tw-curl">POST {{ request.base_url }}access-automation/webhook
+X-PolicyPilot-Token: &lt;your token&gt;
+Content-Type: application/json
+
+{
+  "ticket_id": "INC0012345",
+  "server_id": {{ example_server_id }},
+  "layer": "&lt;layer name&gt;",
+  "source": "192.168.9.9",
+  "destination": "172.16.5.10",
+  "protocol": "tcp",
+  "port": "443",
+  "apply": false,
+  "callback_url": "https://itsm.example/api/result"
+}</pre>
+  <button type="button" class="copybtn" data-copy-from="#tw-curl" style="margin-top:10px;">Copy</button>
+
+  <div class="tw-h">The other integration paths</div>
+  <div class="tw-paths">
+    <a class="tw-path" href="/mcp-guide" data-open-app="agents">
+      <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="12" cy="5" r="2"/><path d="M12 7v4M8 16h.01M16 16h.01"/></svg></span>
+      <span><b>MCP — for agents</b><br><span>Let an LLM agent (n8n, Claude, …) drive PolicyPilot as tools.</span></span>
+    </a>
+    <a class="tw-path" href="/api-docs" data-open-app="apidocs">
+      <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg></span>
+      <span><b>REST API</b><br><span>Drive it from any HTTP client — the <code>/dbapi/v1</code> JSON API.</span></span>
+    </a>
+  </div>
+</div>
+{% endblock %}

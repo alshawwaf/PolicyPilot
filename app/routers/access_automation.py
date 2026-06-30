@@ -133,6 +133,36 @@ def _aa_option_state() -> dict:
                        "aa_ignore_conditions": o.ignore_conditions}}
 
 
+@router.get("/changes", response_class=HTMLResponse)
+def change_log_page(request: Request, server: int = 0, db: Session = Depends(get_db)):
+    """"Change log" — its own app: the published-change audit trail + rollback, split out of the Access
+    automation page. Server-scoped, so it has its own cold launcher — a server picker. ?server=<id> (or a
+    single owned server) selects one; the rollback actions reuse the existing /access-automation/{id}/changes
+    endpoints."""
+    user = get_user_or_none(request, db)
+    if user is None:
+        return RedirectResponse("/login", status_code=303)
+    servers = db.scalars(select(ManagementServer).where(ManagementServer.owner_id == user.id)
+                         .order_by(ManagementServer.name)).all()
+    sel = next((s for s in servers if s.id == server), None) if server else None
+    if sel is None and len(servers) == 1:
+        sel = servers[0]
+    return templates.TemplateResponse(request, "change_log.html", {"servers": servers, "server": sel})
+
+
+@router.get("/ticketing-webhook", response_class=HTMLResponse)
+def ticketing_webhook_page(request: Request, db: Session = Depends(get_db)):
+    """"Ticketing webhook" — its own app: the reference for wiring any ITSM to the webhook, split out of the
+    Access automation page. Server-independent (the /access-automation/webhook endpoint is global)."""
+    user = get_user_or_none(request, db)
+    if user is None:
+        return RedirectResponse("/login", status_code=303)
+    first = db.scalar(select(ManagementServer).where(ManagementServer.owner_id == user.id)
+                      .order_by(ManagementServer.id))
+    return templates.TemplateResponse(request, "ticketing_webhook.html",
+                                      {"example_server_id": first.id if first else 1})
+
+
 @router.get("/decision-map", response_class=HTMLResponse)
 def decision_map_page(request: Request, db: Session = Depends(get_db)):
     """"Decision map" — its own app: the engine's reasoning PRINCIPLES (reuse → widen → create, least-

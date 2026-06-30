@@ -1237,23 +1237,45 @@ def test_access_automation_list_renders():
     assert "Access automation" in html and 'href="/access-automation/1"' in html
 
 
-def test_access_automation_detail_renders_form_and_webhook():
+def test_access_automation_detail_is_just_the_request_form():
+    # The page is now ONLY the request (describe → preview → apply). The rollback panel, the webhook
+    # reference, and the decision tree have each moved to their own app; this page just links out.
     ms = types.SimpleNamespace(id=7, name="SMS-B", host="10.0.0.2", port=443, domain="dom1")
     req = types.SimpleNamespace(base_url="https://portal.example/")
-    html = _render("access_automation_detail.html", ms=ms, has_secret=True, flash=None, request=req,
-                   decision_graph_json=json.dumps(dt.to_graph()))
+    html = _render("access_automation_detail.html", ms=ms, has_secret=True, flash=None, request=req)
     assert "Preview decision" in html and "aa-source" in html
-    assert "/access-automation/webhook" in html and "X-PolicyPilot-Token" in html
-    assert "callback_url" in html and "any ITSM" in html
     # Internet object: a destination-only kind (App Control / URL Filtering), with the JS that couples it
     # to an Application service (pick an app -> destination defaults to Internet).
     assert 'value="internet"' in html and "Internet (to the internet / DMZ)" in html
     assert "dt.value = 'internet'" in html       # syncSvcType auto-selects Internet for an app request
-    # rollback panel: a "disabled" rule is a non-terminal state (Re-enable | Delete rule), and re-enable maps
-    assert "c.state === 'disabled'" in html and "bodyObj.reenable = true" in html
-    # the decision logic is now its OWN apps (/decision-map + /decision-tree); this page only links out
-    assert 'data-open-app="decisiontree"' in html and 'data-open-app="decisionmap"' in html
-    assert 'id="aa-flow-canvas"' not in html        # the canvas no longer lives on this page
+    # the other concerns are GONE from this page — moved to their own apps, reachable via the footer links
+    assert 'id="aa-flow-canvas"' not in html and 'id="aa-history"' not in html
+    assert "<summary>Ticketing webhook" not in html and "Recent changes / rollback" not in html
+    for k in ("decisionmap", "decisiontree", "changelog", "webhook"):
+        assert 'data-open-app="' + k + '"' in html        # footer links to the split-off apps
+
+
+def test_change_log_app_renders_picker_and_panel():
+    req = types.SimpleNamespace(base_url="https://portal.example/")
+    s1 = types.SimpleNamespace(id=7, name="SMS-B", host="10.0.0.2", port=443)
+    s2 = types.SimpleNamespace(id=8, name="SMS-C", host="10.0.0.3", port=443)
+    # cold launch, multiple servers → a picker
+    pick = _render("change_log.html", request=req, servers=[s1, s2], server=None)
+    assert "Pick a server" in pick and "/changes?server=7" in pick and "/changes?server=8" in pick
+    assert 'id="aa-history"' not in pick           # no panel until a server is chosen
+    # a server selected → the rollback panel bound to it (the moved IIFE + its endpoints)
+    panel = _render("change_log.html", request=req, servers=[s1, s2], server=s1)
+    assert 'id="aa-history" data-id="7"' in panel and 'id="aah-body"' in panel
+    assert "c.state === 'disabled'" in panel and "bodyObj.reenable = true" in panel
+    assert "/access-automation/' + id + '/changes" in panel
+
+
+def test_ticketing_webhook_app_renders_reference():
+    req = types.SimpleNamespace(base_url="https://portal.example/")
+    html = _render("ticketing_webhook.html", request=req, example_server_id=7)
+    assert "Ticketing webhook" in html and "/access-automation/webhook" in html
+    assert "X-PolicyPilot-Token" in html and "callback_url" in html
+    assert '"server_id": 7' in html        # the example uses a real owned server id when available
 
 
 def test_decision_map_app_renders_standalone():

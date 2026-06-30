@@ -37,7 +37,7 @@
 <div class="card" id="aa" data-id="{{ ms.id }}" data-host="{{ ms.host }}">
   <div class="aa-cardhead">
     <div>
-      <h2><span class="aa-step">1</span> Describe the access</h2>
+      <h2>Describe the access</h2>
       <p class="aa-sub">Pick a layer, then state the request as <code>source → destination : service</code>. Optionally attach a ticket id for the audit trail.</p>
     </div>
   </div>
@@ -130,54 +130,9 @@
   <div id="aa-result" style="margin-top:16px;"></div>
 </div>
 
-<div class="card" id="aa-history" data-id="{{ ms.id }}">
-  <div class="aa-cardhead">
-    <div>
-      <h2><span class="aa-step">2</span> Recent changes &amp; rollback</h2>
-      <p class="aa-sub">Every change <b>published</b> to this server — from this form, the agent, or the webhook — is recorded with its exact inverse. Roll one back to undo just that change by first-match: PolicyPilot deletes the rule it added, re-enables the rule it disabled, or removes the object it widened in — never a full-database revision rollback. A revoke that <b>disabled</b> a rule can also be <b>finalized by deleting</b> that rule. If a rule was removed out-of-band, the rollback completes anyway. Dry-runs aren’t listed; objects a change created are left in place. Use <b>✕</b> to drop an entry from this list, or <b>Clear resolved</b> to tidy the done ones — neither touches live policy.</p>
-    </div>
-    <div style="flex:0 0 auto; display:flex; gap:8px;">
-      <button type="button" class="copybtn" id="aah-clear">Clear resolved</button>
-      <button type="button" class="copybtn" id="aah-refresh">Refresh</button>
-    </div>
-  </div>
-  <div id="aah-body" style="margin-top:12px;"><p class="muted">Loading recent changes…</p></div>
-</div>
-
-<div class="card">
-  <details>
-    <summary>Ticketing webhook (any ITSM — end-to-end automation)</summary>
-    <p class="muted" style="margin-top:10px;">Point any system that can POST JSON at the endpoint below — ServiceNow, Jira, Remedy, Freshservice, or a custom portal. Set <code>PILOT_WEBHOOK_TOKEN</code> and send it as <code>X-PolicyPilot-Token</code>; the webhook is disabled until that token is set. Field names are flexible (common <code>u_*</code> / <code>number</code> / Jira <code>key</code> aliases are accepted). With <code>"apply": true</code> it applies + publishes. The result is returned synchronously; to push it back, add an optional <code>"callback_url"</code> (we POST the result there) or configure the built-in ServiceNow write-back (<code>PILOT_SERVICENOW_*</code>).</p>
-    <pre id="aa-curl">POST {{ request.base_url }}access-automation/webhook
-X-PolicyPilot-Token: &lt;your token&gt;
-Content-Type: application/json
-
-{
-  "ticket_id": "INC0012345",
-  "server_id": {{ ms.id }},
-  "layer": "&lt;layer name&gt;",
-  "source": "192.168.9.9",
-  "destination": "172.16.5.10",
-  "protocol": "tcp",
-  "port": "443",
-  "apply": false,
-  "callback_url": "https://itsm.example/api/result"
-}</pre>
-    <button type="button" class="copybtn" data-copy-from="#aa-curl">Copy</button>
-  </details>
-</div>
 {% endif %}
 
-<div class="card" style="display:flex; align-items:center; justify-content:space-between; gap:14px; flex-wrap:wrap;">
-  <div style="min-width:220px;">
-    <h2 style="margin:0; font-size:16px;">How it decides</h2>
-    <p class="muted" style="margin:5px 0 0; font-size:12.5px; max-width:70ch;">The reasoning behind every change lives in its own apps, so this page stays focused on making the request: the <b>Decision map</b> (the principles) and the <b>Decision tree</b> (step through how any outcome is reached, and tune the logic).</p>
-  </div>
-  <div style="display:flex; gap:8px; flex-wrap:wrap;">
-    <a class="btn secondary" href="/decision-map" data-open-app="decisionmap">Decision map →</a>
-    <a class="btn secondary" href="/decision-tree" data-open-app="decisiontree">Decision tree →</a>
-  </div>
-</div>
+<p class="muted" style="text-align:center; margin:20px 0 0; font-size:12.5px;">Related apps: <a href="/decision-map" data-open-app="decisionmap">Decision map</a> · <a href="/decision-tree" data-open-app="decisiontree">Decision tree</a> · <a href="/changes" data-open-app="changelog">Change log</a> · <a href="/ticketing-webhook" data-open-app="webhook">Ticketing webhook</a></p>
 
 <script>
   (function () {
@@ -540,150 +495,6 @@ Content-Type: application/json
   })();
 </script>
 
-<script>
-  // Recent changes / rollback panel — its own IIFE (independent of the request form above).
-  (function () {
-    var root = document.getElementById('aa-history');
-    if (!root) return;
-    var id = root.getAttribute('data-id');
-    var bodyEl = document.getElementById('aah-body');
-    function esc(s) { var d = document.createElement('div'); d.textContent = (s == null ? '' : s); return d.innerHTML; }
-    function when(iso) {
-      if (!iso) return '—';
-      var d = new Date(iso); if (isNaN(d)) return esc(iso);
-      return d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-    }
-    var OUTCOME = { create: 'created a rule', widen: 'widened a rule', disable: 'disabled a rule',
-                    deny: 'inserted a Drop' };
 
-    function resolvedLabel(c) {
-      var who = c.reverted_by ? ' · ' + esc(c.reverted_by) : '';
-      if (c.resolution === 'deleted') return '<span class="muted">🗑 rule deleted ' + when(c.reverted_at) + who + '</span>';
-      return '<span class="muted">↩ rolled back ' + when(c.reverted_at) + who + '</span>';
-    }
-
-    function rowHtml(c) {
-      var status, errLine = c.revert_error ? '<div class="muted" style="font-size:12px; color:var(--danger); margin-top:4px;">last attempt: ' + esc(c.revert_error) + '</div>' : '';
-      if (c.state === 'resolved') {
-        status = resolvedLabel(c);
-      } else if (c.state === 'disabled') {
-        // the rule is OFF but still present -> Resolve expands to Re-enable (undo) | Delete rule (finalize)
-        status = '<span class="muted" style="font-size:12px; display:block; margin-bottom:3px;">⏻ rule disabled</span>' +
-          '<button type="button" class="btn secondary" data-revert="' + c.id + '" data-kind="disabled">Resolve</button>' + errLine;
-      } else if (c.state === 'active' && c.revertable) {
-        // kind drives the inline choice: an added rule (create/deny) -> disable|delete; a widen -> single confirm.
-        var kind = (c.outcome === 'create' || c.outcome === 'deny') ? 'adds' : 'plain';
-        status = '<button type="button" class="btn secondary" data-revert="' + c.id + '" data-kind="' + kind + '">Roll back</button>' + errLine;
-      } else {
-        status = '<span class="muted">—</span>';
-      }
-      var tag = '<span class="muted" style="font-size:12px;">' + esc(c.action) + ' · ' + esc(OUTCOME[c.outcome] || c.outcome) + '</span>';
-      var meta = esc(c.by || '') + (c.ticket_id ? ' · ' + esc(c.ticket_id) : '');
-      var rm = '<button type="button" class="copybtn" data-remove="' + c.id + '" title="Remove from this list (does not touch policy)" style="opacity:.55; padding:2px 7px;">✕</button>';
-      return '<tr data-row="' + c.id + '">' +
-        '<td class="muted" style="white-space:nowrap;">' + when(c.at) + '</td>' +
-        '<td><b>' + esc(c.summary) + '</b><br>' + tag + '</td>' +
-        '<td class="muted" style="font-size:12px;">' + meta + '</td>' +
-        '<td style="text-align:right;">' + status + '</td>' +
-        '<td style="text-align:right; width:1%;">' + rm + '</td></tr>';
-    }
-
-    function render(changes) {
-      if (!changes || !changes.length) {
-        bodyEl.innerHTML = '<p class="muted">No published changes yet. Apply &amp; publish a request (or have the agent do it) and it will appear here, ready to roll back.</p>';
-        return;
-      }
-      bodyEl.innerHTML = '<table class="acttable"><thead><tr><th>When</th><th>Change</th><th>By</th><th></th><th></th></tr></thead><tbody>' +
-        changes.map(rowHtml).join('') + '</tbody></table>';
-    }
-
-    function load() {
-      bodyEl.innerHTML = '<p class="muted">Loading recent changes…</p>';
-      fetch('/access-automation/' + id + '/changes', { credentials: 'same-origin' })
-        .then(function (r) { return r.json(); })
-        .then(function (j) { render(j.changes || []); })
-        .catch(function () { bodyEl.innerHTML = '<div class="err">Could not load recent changes.</div>'; });
-    }
-
-    // POST a resolve action ({publish, disable?, delete_rule?}); reload on success, else show the error inline.
-    function resolve(cid, bodyObj, errCell) {
-      fetch('/access-automation/' + id + '/changes/' + cid + '/revert', {
-        method: 'POST', credentials: 'same-origin',
-        headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(bodyObj)
-      }).then(function (r) { return r.json(); }).then(function (j) {
-        if (j.ok && j.reverted) { load(); }
-        else { errCell.innerHTML = '<span class="muted" style="color:var(--danger);">' + esc(j.error || 'Failed.') + '</span> <button type="button" class="copybtn" data-revno="1">Close</button>'; }
-      }).catch(function () { errCell.innerHTML = '<span class="muted" style="color:var(--danger);">Request failed.</span> <button type="button" class="copybtn" data-revno="1">Close</button>'; });
-    }
-
-    bodyEl.addEventListener('click', function (e) {
-      var t = e.target;
-      // Roll back -> expand to the inline choice that fits the entry's kind (no browser dialog).
-      var rb = t.closest ? t.closest('[data-revert]') : null;
-      if (rb) {
-        var cell = rb.parentNode, rid = rb.getAttribute('data-revert'), kind = rb.getAttribute('data-kind');
-        if (kind === 'adds') {            // a created rule / inserted Drop -> disable it OR delete it
-          cell.innerHTML = '<div class="muted" style="margin-bottom:4px;">Undo by:</div>' +
-            '<button type="button" class="btn" data-revyes="' + rid + '" data-mode="disable" title="Keep the rule but turn it off (reversible)">Disable rule</button> ' +
-            '<button type="button" class="btn" style="background:var(--danger);border-color:var(--danger);color:#fff;" data-revyes="' + rid + '" data-mode="delete">Delete rule</button> ' +
-            '<button type="button" class="copybtn" data-revno="1">Cancel</button>';
-        } else if (kind === 'disabled') { // a revoke that DISABLED a rule -> re-enable (undo) OR delete it (finalize)
-          cell.innerHTML = '<div class="muted" style="margin-bottom:4px;">Resolve by:</div>' +
-            '<button type="button" class="btn" data-revyes="' + rid + '" data-mode="reenable" title="Undo the revoke — turn the rule back on">Re-enable</button> ' +
-            '<button type="button" class="btn" style="background:var(--danger);border-color:var(--danger);color:#fff;" data-revyes="' + rid + '" data-mode="delete-disabled" title="Finalize — permanently delete the disabled rule">Delete rule</button> ' +
-            '<button type="button" class="copybtn" data-revno="1">Cancel</button>';
-        } else {                          // a widen -> single confirm (remove the widened object from the cell)
-          cell.innerHTML = '<span class="muted" style="margin-right:6px;">Undo this change?</span>' +
-            '<button type="button" class="btn" style="background:var(--danger);border-color:var(--danger);color:#fff;" data-revyes="' + rid + '">Confirm</button> ' +
-            '<button type="button" class="copybtn" data-revno="1">Cancel</button>';
-        }
-        return;
-      }
-      // ✕ -> confirm removing this audit entry (bookkeeping only; no policy change).
-      var rm = t.closest ? t.closest('[data-remove]') : null;
-      if (rm) {
-        rm.parentNode.innerHTML = '<span class="muted" style="font-size:12px;">Remove?</span> ' +
-          '<button type="button" class="copybtn" data-rmyes="' + rm.getAttribute('data-remove') + '">Yes</button> ' +
-          '<button type="button" class="copybtn" data-revno="1">No</button>';
-        return;
-      }
-      var rmy = t.closest ? t.closest('[data-rmyes]') : null;
-      if (rmy) {
-        rmy.disabled = true; rmy.textContent = '…';
-        fetch('/access-automation/' + id + '/changes/' + rmy.getAttribute('data-rmyes') + '/delete',
-              { method: 'POST', credentials: 'same-origin' }).then(load).catch(load);
-        return;
-      }
-      if (t.closest && t.closest('[data-revno]')) { load(); return; }   // Cancel / No / Close -> reset the row
-      // Confirm a resolve action.
-      var yes = t.closest ? t.closest('[data-revyes]') : null;
-      if (yes) {
-        var cid = yes.getAttribute('data-revyes'), mode = yes.getAttribute('data-mode') || '';
-        var bodyObj = { publish: true };
-        if (mode === 'disable') bodyObj.disable = true;
-        else if (mode === 'delete-disabled') bodyObj.delete_rule = true;
-        else if (mode === 'reenable') bodyObj.reenable = true;
-        var label = { disable: 'Disabling…', 'delete-disabled': 'Deleting rule…', reenable: 'Re-enabling…',
-                      delete: 'Deleting…' }[mode] || 'Rolling back…';
-        var cell = yes.parentNode;
-        cell.querySelectorAll('[data-revyes],[data-revno]').forEach(function (b) { b.disabled = true; });
-        yes.textContent = label;
-        resolve(cid, bodyObj, cell);
-      }
-    });
-
-    function clearResolved() {
-      var btn = document.getElementById('aah-clear'), orig = btn.textContent;
-      btn.disabled = true; btn.textContent = 'Clearing…';
-      fetch('/access-automation/' + id + '/changes/clear-resolved', { method: 'POST', credentials: 'same-origin' })
-        .then(function () { btn.disabled = false; btn.textContent = orig; load(); })
-        .catch(function () { btn.disabled = false; btn.textContent = orig; load(); });
-    }
-
-    document.getElementById('aah-refresh').addEventListener('click', load);
-    document.getElementById('aah-clear').addEventListener('click', clearResolved);
-    load();
-  })();
-</script>
 
 {% endblock %}

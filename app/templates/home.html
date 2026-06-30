@@ -171,13 +171,17 @@
     pulse: '<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>',
     terminal: '<polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/>',
     branch: '<line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/>',
-    map: '<polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/>'
+    map: '<polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/>',
+    history: '<polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/><polyline points="12 8 12 13 15 15"/>',
+    webhook: '<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>'
   };
   function svg(p) { return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">' + p + '</svg>'; }
   var CATALOG = {
     access:      { label: 'Access automation', href: '/access-automation', ic: I.access,  grad: 'linear-gradient(135deg,#3b82f6,#22d3ee)' },
     decisionmap:  { label: 'Decision map',      href: '/decision-map',      ic: I.map,     grad: 'linear-gradient(135deg,#6366f1,#a855f7)' },
     decisiontree: { label: 'Decision tree',     href: '/decision-tree',     ic: I.branch,  grad: 'linear-gradient(135deg,#7b3ff2,#22d3ee)' },
+    changelog:   { label: 'Change log',         href: '/changes',           ic: I.history, grad: 'linear-gradient(135deg,#14b8a6,#0ea5e9)' },
+    webhook:     { label: 'Ticketing webhook',  href: '/ticketing-webhook', ic: I.webhook, grad: 'linear-gradient(135deg,#f59e0b,#ef4444)' },
     layers:      { label: 'Dynamic Layers',     href: '/layers',            ic: I.layers,  grad: 'linear-gradient(135deg,#1d9e75,#34d399)' },
     management:  { label: 'Connections',        href: '/management',        ic: I.server,  grad: 'linear-gradient(135deg,#5566dd,#7b3ff2)' },
     gateways:    { label: 'Gateways',           href: '/gateways',          ic: I.gateway, grad: 'linear-gradient(135deg,#06b6d4,#3b82f6)' },
@@ -189,7 +193,7 @@
     system:      { label: 'System',             href: '/system',            ic: I.pulse,   grad: 'linear-gradient(135deg,#10b981,#22d3ee)' },
     account:     { label: 'Account',            href: '/account',           ic: I.user,    grad: 'linear-gradient(135deg,#94a3b8,#64748b)' }
   };
-  var ORDER = ['access', 'decisionmap', 'decisiontree', 'layers', 'management', 'gateways', 'agents', 'apiexplorer', 'apidocs', 'settings', 'activity', 'system', 'account'];
+  var ORDER = ['access', 'decisionmap', 'decisiontree', 'changelog', 'layers', 'management', 'gateways', 'agents', 'apidocs', 'webhook', 'apiexplorer', 'settings', 'activity', 'system', 'account'];
   var wins = {}, z = 100, openCount = 0;
 
   function clamp(v, lo, hi) { return Math.max(lo, Math.min(v, hi)); }

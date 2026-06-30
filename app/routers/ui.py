@@ -311,8 +311,8 @@ def update_profile(
 # --- Home ------------------------------------------------------------------------------
 # --- Desktop layout (OS-style Home): which apps are on the dock + which icons sit on the desktop ------
 # Server-side allowlist of app keys (anything else in a saved layout is dropped — no junk/injection).
-DESKTOP_APP_KEYS = {"access", "decisionmap", "decisiontree", "layers", "management", "gateways", "agents",
-                    "apiexplorer", "apidocs", "settings", "activity", "account", "system"}
+DESKTOP_APP_KEYS = {"access", "decisionmap", "decisiontree", "changelog", "webhook", "layers", "management",
+                    "gateways", "agents", "apiexplorer", "apidocs", "settings", "activity", "account", "system"}
 DEFAULT_DESKTOP_LAYOUT = {"dock": ["access", "layers", "management", "gateways", "agents", "settings",
                                    "activity", "system"],
                           "desktop": []}

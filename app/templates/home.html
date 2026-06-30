@@ -78,10 +78,18 @@
     color:#fff; box-shadow:0 10px 24px rgba(0,0,0,.4), inset 0 1px 0 rgba(255,255,255,.25); }
   .os-ltile .os-tile svg { width:31px; height:31px; }
   .os-ltile .os-lbl { font-size:12.5px; color:#fff; }
-  .os-ltile .os-toggles { display:flex; gap:6px; margin-top:2px; }
-  .os-ltile .os-tg { font-size:10.5px; padding:2px 9px; border-radius:20px; border:1px solid rgba(255,255,255,.22);
-    color:rgba(255,255,255,.75); background:transparent; cursor:pointer; }
-  .os-ltile .os-tg.on { background:var(--accent-grad); border-color:transparent; color:#fff; }
+  .os-ltile .os-tile { position:relative; }
+  .os-lp-more { position:absolute; top:4px; right:4px; width:23px; height:23px; border-radius:50%; padding:0;
+    display:flex; align-items:center; justify-content:center; border:0; cursor:pointer; color:#fff;
+    background:rgba(0,0,0,.32); backdrop-filter:blur(4px); -webkit-backdrop-filter:blur(4px);
+    opacity:.82; transition:opacity .12s, background .12s, transform .12s; }
+  .os-lp-more:hover { background:rgba(0,0,0,.55); opacity:1; transform:scale(1.08); }
+  .os-lp-more svg { width:15px; height:15px; }
+  /* checkable rows in the shared context menu (used by the launchpad ⋯ menu) */
+  .os-ctx .os-ck { width:16px; flex:none; display:inline-flex; align-items:center; }
+  .os-ctx .os-ck svg { width:16px; height:16px; color:var(--accent); }
+  .os-ctx .os-ck:not(.on) svg { visibility:hidden; }
+  .os-ctx button:hover .os-ck svg { color:#fff; }
   .os-launch-x { position:absolute; top:16px; right:20px; }
 
   /* ---- Right-click context menu ---- */
@@ -173,7 +181,9 @@
     branch: '<line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/>',
     map: '<polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/>',
     history: '<polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/><polyline points="12 8 12 13 15 15"/>',
-    webhook: '<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>'
+    webhook: '<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>',
+    dots: '<circle cx="5" cy="12" r="1.6" fill="currentColor"/><circle cx="12" cy="12" r="1.6" fill="currentColor"/><circle cx="19" cy="12" r="1.6" fill="currentColor"/>',
+    check: '<polyline points="20 6 9 17 4 12"/>'
   };
   function svg(p) { return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">' + p + '</svg>'; }
   var CATALOG = {
@@ -388,16 +398,31 @@
     ORDER.forEach(function (key) {
       var app = CATALOG[key];
       var t = document.createElement('div'); t.className = 'os-ltile';
-      t.innerHTML = '<span class="os-tile" style="background:' + app.grad + '">' + svg(app.ic) + '</span><span class="os-lbl">' + app.label + '</span>' +
-        '<span class="os-toggles"><button type="button" class="os-tg ' + (inDock(key) ? 'on' : '') + '" data-tg="dock">Dock</button>' +
-        '<button type="button" class="os-tg ' + (onDesktop(key) ? 'on' : '') + '" data-tg="desktop">Desktop</button></span>';
+      t.innerHTML = '<span class="os-tile" style="background:' + app.grad + '">' + svg(app.ic) +
+        '<button type="button" class="os-lp-more" aria-label="Options for ' + app.label + '" title="Options">' + svg(I.dots) + '</button>' +
+        '</span><span class="os-lbl">' + app.label + '</span>';
       t.addEventListener('click', function (e) {
-        var tg = e.target.closest('.os-tg');
-        if (tg) { e.stopPropagation(); if (tg.dataset.tg === 'dock') toggleDock(key); else toggleDesktop(key); tg.classList.toggle('on'); return; }
+        var more = e.target.closest('.os-lp-more');
+        if (more) {                                  // ⋯ → a checkable Dock / Desktop menu (stays open while ticking)
+          e.stopPropagation();
+          var r = desktop.getBoundingClientRect(), br = more.getBoundingClientRect();
+          showCtx(br.right - r.left - 200, br.bottom - r.top + 6, launchMenuItems(key));
+          return;
+        }
         closeLaunchpad(); openApp(key);
       });
       lgrid.appendChild(t);
     });
+  }
+  // the launchpad ⋯ menu: checkable Dock / On-desktop rows (tick without closing) + open actions
+  function launchMenuItems(key) {
+    return [
+      { label: 'In Dock', check: inDock(key), recheck: function () { return inDock(key); }, keepOpen: true, fn: function () { toggleDock(key); } },
+      { label: 'On Desktop', check: onDesktop(key), recheck: function () { return onDesktop(key); }, keepOpen: true, fn: function () { toggleDesktop(key); } },
+      { sep: true },
+      { label: 'Open', ic: I.play, fn: function () { closeLaunchpad(); openApp(key); } },
+      { label: 'Open in new tab', ic: I.external, fn: function () { openTab(key); } }
+    ];
   }
   function openLaunchpad() { renderLaunch(); launch.classList.add('open'); }
   function closeLaunchpad() { launch.classList.remove('open'); }
@@ -426,8 +451,17 @@
     items.forEach(function (it) {
       if (it.sep) { var s = document.createElement('div'); s.className = 'os-ctx-sep'; ctx.appendChild(s); return; }
       var b = document.createElement('button'); b.type = 'button';
-      b.innerHTML = svg(it.ic || I.play) + '<span>' + it.label + '</span>';
-      b.addEventListener('click', function (e) { e.stopPropagation(); hideCtx(); it.fn(); });
+      var lead = (it.check !== undefined)
+        ? '<span class="os-ck' + (it.check ? ' on' : '') + '">' + svg(I.check) + '</span>'
+        : svg(it.ic || I.play);
+      b.innerHTML = lead + '<span>' + it.label + '</span>';
+      b.addEventListener('click', function (e) {
+        e.stopPropagation();
+        if (it.keepOpen) {                          // checkable row: toggle + update the tick, leave the menu open
+          it.fn();
+          var ck = b.querySelector('.os-ck'); if (ck && it.recheck) ck.classList.toggle('on', it.recheck());
+        } else { hideCtx(); it.fn(); }
+      });
       ctx.appendChild(b);
     });
     ctx.style.left = Math.min(x, desktop.clientWidth - 224) + 'px';

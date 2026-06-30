@@ -19,6 +19,15 @@
   .aa-actions .aa-actions-hint { flex:1; min-width:160px; text-align:right; color:var(--faint); font-size:11.5px; }
   /* legend chips under the diagram */
   .aa-legend { display:flex; gap:8px; flex-wrap:wrap; justify-content:center; margin-top:14px; }
+  /* web_api call rows — click to inspect the request / response in a detail window */
+  .aa-calltable tr.aa-callrow { cursor:pointer; }
+  .aa-calltable tr.aa-callrow:hover td { background:var(--surface-2); }
+  .aa-calltable tr.aa-callrow td:first-child code { border-bottom:1px dotted var(--line-strong); }
+  .aa-cd { padding:2px; } .aa-cd-h { font-size:11px; font-weight:800; letter-spacing:.05em; text-transform:uppercase;
+    color:var(--faint); margin:12px 0 5px; }
+  .aa-cd-pre { margin:0; padding:11px 13px; background:var(--surface-3); border:1px solid var(--line-soft);
+    border-radius:10px; font-family:var(--font-mono,monospace); font-size:11.5px; line-height:1.5; color:var(--text-2);
+    white-space:pre-wrap; word-break:break-word; max-height:300px; overflow:auto; }
 </style>
 <div class="page-head">
   <span class="icon-chip lg"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></span>
@@ -145,7 +154,7 @@
     var btnValidate = document.getElementById('aa-validate');
     var btnPublish = document.getElementById('aa-publish');
     var host = root.getAttribute('data-host') || 'the SMS';
-    var lastActionable = false;
+    var lastActionable = false, lastTrace = [];
 
     // Run output (preview / progress / results) pops in a floating OS window on top, not inline.
     // The live #aa-result element (with its delegated handlers) is moved into the window body, so all
@@ -288,15 +297,42 @@
     }
     function traceBlock(trace) {
       if (!trace || !trace.length) return '';
-      var rows = trace.map(function (t) {
-        var row = '<tr><td class="nowrap"><code>' + esc(t.command) + '</code></td><td class="act-num">' +
+      lastTrace = trace;   // remembered so a row click can open that call's request / response
+      var rows = trace.map(function (t, i) {
+        var row = '<tr class="aa-callrow" data-call-idx="' + i + '" title="Click to inspect the request + response">' +
+               '<td class="nowrap"><code>' + esc(t.command) + '</code></td><td class="act-num">' +
                esc(t.status) + '</td><td class="act-num">' + esc(t.ms) + ' ms</td></tr>';
         if (t.error) row += '<tr><td colspan="3" class="err-inline" style="white-space:pre-wrap;">' + esc(t.error) + '</td></tr>';
         return row;
       }).join('');
-      return '<details style="margin-top:12px;"><summary>web_api calls (' + trace.length + ')</summary>' +
-             '<table class="acttable"><tbody>' + rows + '</tbody></table></details>';
+      return '<details style="margin-top:12px;"><summary>web_api calls (' + trace.length + ') · click a row to inspect</summary>' +
+             '<table class="acttable aa-calltable"><tbody>' + rows + '</tbody></table></details>';
     }
+    // Click a recorded call → open its sent request + received response in a window on top.
+    function callDetail(t) {
+      if (!window.PPWin) return;
+      var w = window.PPWin.create({ title: 'web_api · ' + t.command, width: 640 });
+      function sec(label, val) {
+        var pretty = (val === undefined || val === null) ? '(none)'
+          : (typeof val === 'string' ? val : JSON.stringify(val, null, 2));
+        return '<div class="aa-cd-h">' + esc(label) + '</div><pre class="aa-cd-pre">' + esc(pretty) + '</pre>';
+      }
+      w.body.innerHTML = '<div class="aa-cd">' +
+        '<div class="row" style="gap:8px; align-items:center; margin-bottom:6px;"><code>' + esc(t.command) + '</code>' +
+        '<span class="pill ' + (t.status === 200 ? 'ok' : 'bad') + '">' + esc(t.status) + '</span>' +
+        '<span class="muted">' + esc(t.ms) + ' ms</span></div>' +
+        '<p class="muted" style="font-size:11.5px; margin:0 0 4px;">Secrets (SID / password / token) are redacted; large responses are truncated.</p>' +
+        sec('Request — sent', t.params) +
+        sec('Response — received', (t.response !== undefined ? t.response : '(not captured for this call)')) +
+        (t.error ? sec('Error', t.error) : '') + '</div>';
+      w.show();
+    }
+    result.addEventListener('click', function (e) {
+      var row = e.target.closest && e.target.closest('[data-call-idx]');
+      if (!row) return;
+      var t = lastTrace[+row.getAttribute('data-call-idx')];
+      if (t) callDetail(t);
+    });
     function render(j, mode) {
       if (!j.ok) {
         var eh = '<div class="err">' + esc(j.error || 'Failed.') + '</div>';

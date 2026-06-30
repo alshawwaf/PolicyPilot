@@ -245,11 +245,35 @@ class MgmtSession:
         return self.call_paged("show-access-layers", key="access-layers")
 
     def _record(self, command: str, payload: dict, resp, t0: float) -> None:
-        entry = {"command": command, "params": payload, "status": resp.status_code,
-                 "ms": round((time.perf_counter() - t0) * 1000)}
+        body = _safe_json(resp)
+        # capture the request + response per call so the UI can show exactly what was sent / received.
+        # both are redacted (no SID / password / token leaks) and the response is size-capped.
+        entry = {"command": command, "params": _trace_redact(payload or {}), "status": resp.status_code,
+                 "ms": round((time.perf_counter() - t0) * 1000),
+                 "response": _trace_trim(_trace_redact(body))}
         if resp.status_code != 200:
-            entry["error"] = _cp_error_detail(_safe_json(resp))[:500]
+            entry["error"] = _cp_error_detail(body)[:500]
         self.trace.append(entry)
+
+
+def _trace_redact(obj):
+    """Redact secrets (SID / password / token / …) from a recorded request or response — reuses the
+    activity-log redactor so the rules stay in one place. Never raises (redaction must not break a call)."""
+    try:
+        from .activity import redact_body
+        return redact_body(obj)
+    except Exception:  # noqa: BLE001
+        return obj
+
+
+def _trace_trim(obj, cap: int = 6000):
+    """Cap a recorded response so a big rulebase payload doesn't bloat the result; keep small ones whole."""
+    import json as _json
+    try:
+        s = _json.dumps(obj, default=str)
+    except Exception:  # noqa: BLE001
+        return obj
+    return obj if len(s) <= cap else {"_truncated_bytes": len(s), "preview": s[:cap] + "…"}
 
 
 def _safe_json(resp) -> dict:

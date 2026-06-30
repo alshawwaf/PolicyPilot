@@ -88,6 +88,10 @@
           root.querySelector('.l-close').addEventListener('click', function () { api.hide(); if (opts.onClose) opts.onClose(); });
           root.querySelector('.l-min').addEventListener('click', function () { root.classList.toggle('pp-collapsed'); });
           root.querySelector('.l-zoom').addEventListener('click', function () { root.classList.toggle('pp-zoom'); });
+          bar.addEventListener('dblclick', function (e) {   // double-click the title bar to zoom (matches the desktop windows)
+            if (e.target.closest && e.target.closest('.pp-lights')) return;
+            root.classList.toggle('pp-zoom');
+          });
           bar.addEventListener('mousedown', function (e) {
             if (e.button !== 0 || (e.target.closest && e.target.closest('.pp-lights')) || root.classList.contains('pp-zoom')) return;
             var sx = e.clientX, sy = e.clientY, r = root.getBoundingClientRect(), ox = r.left, oy = r.top;
@@ -846,7 +850,8 @@
     .pp-fwin-spacer { flex:0 0 47px; }   /* balances the lights so the title stays centred */
     .pp-fwin-body { flex:1; min-height:0; overflow:auto; padding:14px 16px; }
     .pp-fwin.pp-collapsed .pp-fwin-body, .pp-fwin.pp-collapsed .pp-fwin-grip { display:none; }
-    .pp-fwin.pp-zoom { left:12px !important; top:12px !important; width:calc(100vw - 24px); max-height:calc(100vh - 24px); }
+    .pp-fwin.pp-zoom { left:12px !important; top:12px !important; width:calc(100vw - 24px) !important;
+      height:calc(100vh - 24px) !important; max-height:calc(100vh - 24px); }
     .pp-fwin-grip { position:absolute; right:2px; bottom:2px; width:16px; height:16px; cursor:nwse-resize; opacity:.55;
       background:linear-gradient(135deg,transparent 0 55%,var(--line) 55% 62%,transparent 62% 70%,var(--line) 70% 78%,transparent 78%); }
   </style>

@@ -20,22 +20,25 @@ def _render(**ctx):
     return templates.env.get_template("iac_exporter.html").render(**ctx)
 
 
-def test_renders_both_export_links_when_credential_saved():
+def test_renders_server_in_rail_and_wires_both_export_endpoints():
+    # Two-pane design: the server is a selectable rail button carrying data-* the JS reads; the export
+    # endpoints are called from the inline script (no per-row links), so assert both the row + the wiring.
     ms = types.SimpleNamespace(id=3, name="HQ-SMS", host="10.0.0.1", port=443, domain="")
     html = _render(rows=[{"ms": ms, "has_secret": True}])
     assert "IaC Exporter" in html and "HQ-SMS" in html
-    assert "/management/3/export" in html          # policy-layer export
-    assert "/management/3/gaia-export" in html      # Gaia OS config export
+    assert 'data-id="3"' in html and 'data-secret="1"' in html and "credential saved" in html
+    assert "/export?name=" in html        # policy-layer export endpoint, called inline
+    assert "/gaia-export/run" in html      # Gaia OS config export endpoint, called inline
 
 
-def test_no_credential_still_offers_gaia_and_add_credential():
+def test_no_credential_server_marked_and_gaia_password_available():
     ms = types.SimpleNamespace(id=4, name="NoCred", host="h", port=443, domain="d1")
     html = _render(rows=[{"ms": ms, "has_secret": False}])
-    # Gaia export accepts a runtime password, so it's offered even without a saved secret…
-    assert "/management/4/gaia-export" in html
-    # …but the policy export needs a saved credential, so it's not linked; nudge to add one instead.
-    assert "/management/4/export" not in html
-    assert "/management/4/edit" in html
+    assert 'data-id="4"' in html and 'data-secret="0"' in html and "no credential" in html
+    # Gaia export accepts a runtime password (the field is always present)…
+    assert 'id="iax-gaia-pw"' in html
+    # …while the policy side shows the "needs a saved credential" note instead of pulling.
+    assert "no saved credential" in html
 
 
 def test_empty_state_when_no_servers():

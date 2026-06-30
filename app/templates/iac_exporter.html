@@ -2,69 +2,313 @@
 {% block title %}IaC Exporter — PolicyPilot{% endblock %}
 {% block content %}
 <style>
-  .iac-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:14px; margin-top:4px; }
-  .iac-card { border:1px solid var(--line); border-radius:var(--r-lg); padding:18px 19px; background:var(--surface);
-    box-shadow:var(--shadow-sm); display:flex; flex-direction:column; gap:10px;
-    transition:border-color .14s, box-shadow .14s; }
-  .iac-card:hover { border-color:var(--line-strong); box-shadow:var(--shadow); }
-  .iac-card h3 { margin:0; font-size:16px; display:flex; align-items:center; gap:8px; }
-  .iac-card .iac-meta { font-size:12.5px; color:var(--muted); }
-  .iac-card .iac-actions { margin-top:auto; display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
-  .iac-do { display:flex; gap:14px; flex-wrap:wrap; margin:2px 0; }
-  .iac-do .iac-do-item { display:flex; gap:12px; align-items:flex-start; flex:1; min-width:240px; max-width:360px;
-    background:var(--surface-2); border:1px solid var(--line-soft); border-radius:12px; padding:14px 15px; }
-  .iac-do .iac-do-item .iac-do-ic { flex:none; width:32px; height:32px; border-radius:9px; display:flex;
-    align-items:center; justify-content:center; background:var(--accent-grad); color:#fff;
-    box-shadow:0 2px 8px rgba(123,63,242,.22); }
-  .iac-do .iac-do-item .iac-do-ic svg { width:17px; height:17px; }
-  .iac-do .iac-do-item > div > b { display:block; font-size:13.5px; margin-bottom:2px; }
-  .iac-do .iac-do-item span { font-size:12.5px; color:var(--muted); line-height:1.45; }
+  /* IaC Exporter — a two-pane export console (macOS System-Settings language, app design tokens). */
+  .iax { display:grid; grid-template-columns:248px minmax(0,1fr); border:1px solid var(--line);
+    border-radius:var(--r-lg); overflow:hidden; background:var(--surface); min-height:460px;
+    box-shadow:var(--shadow-sm); margin-top:4px; }
+  .iax-rail { background:var(--surface-2); border-right:1px solid var(--line); padding:14px 12px;
+    display:flex; flex-direction:column; gap:3px; }
+  .iax-rail-h { font-size:11px; font-weight:800; letter-spacing:.6px; color:var(--faint);
+    text-transform:uppercase; margin:2px 8px 8px; }
+  .iax-srv { display:flex; align-items:center; gap:11px; padding:9px 11px; border-radius:11px;
+    border:1px solid transparent; background:transparent; cursor:pointer; text-align:left; width:100%;
+    color:var(--text); transition:background .12s, border-color .12s; }
+  .iax-srv:hover { background:var(--hover); }
+  .iax-srv.active { background:var(--accent-soft); border-color:var(--accent); }
+  .iax-srv .iax-ic { width:30px; height:30px; border-radius:8px; background:var(--accent-grad);
+    display:flex; align-items:center; justify-content:center; flex:none; box-shadow:0 2px 8px rgba(123,63,242,.22); }
+  .iax-srv .iax-ic svg { width:16px; height:16px; color:#fff; }
+  .iax-srv .iax-tx { min-width:0; }
+  .iax-srv .iax-nm { font-size:13.5px; font-weight:650; line-height:1.25; white-space:nowrap;
+    overflow:hidden; text-overflow:ellipsis; }
+  .iax-srv .iax-sub { font-size:11px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .iax-srv .iax-sub.ok { color:var(--ok); }
+  .iax-add { display:flex; align-items:center; gap:10px; padding:9px 11px; border-radius:11px;
+    color:var(--muted); font-size:13px; margin-top:auto; }
+  .iax-add:hover { background:var(--hover); color:var(--text); }
+  .iax-add .iax-ic { width:30px; height:30px; border-radius:8px; background:var(--surface-3);
+    display:flex; align-items:center; justify-content:center; flex:none; }
+  .iax-add .iax-ic svg { width:15px; height:15px; }
+  /* right pane */
+  .iax-pane { padding:22px 24px; min-width:0; }
+  .iax-empty { color:var(--muted); font-size:14px; padding:56px 16px; text-align:center; }
+  .iax-hd { display:flex; align-items:center; gap:11px; flex-wrap:wrap; }
+  .iax-hd h2 { margin:0; font-size:19px; font-weight:740; }
+  .iax-hd code { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:12px; color:var(--muted); }
+  .iax-seg { display:inline-flex; background:var(--input-bg); border:1px solid var(--line);
+    border-radius:10px; padding:3px; gap:2px; margin:16px 0; }
+  .iax-seg button { border:0; background:transparent; color:var(--muted); font-size:13px; font-weight:600;
+    padding:7px 16px; border-radius:7px; cursor:pointer; transition:color .12s, background .12s; }
+  .iax-seg button.active { color:#fff; background:var(--accent-grad); }
+  .iax-ctl { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .iax-ctl select { min-width:200px; margin:0; }
+  .iax-ctl input[type="password"] { min-width:220px; flex:0 1 300px; margin:0; }
+  .iax-note { font-size:13px; color:var(--muted); }
+  .iax-status { font-size:13px; margin:12px 0 0; min-height:18px; }
+  .iax-out { margin-top:16px; }
+  .iax-outbar { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin:0 0 10px; }
+  .iax-fname { font-size:12px; color:var(--muted); margin-left:auto;
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace; }
+  .iax-stats { font-size:13px; color:var(--muted); margin:0 0 12px; }
+  .iax-code { max-height:46vh; overflow:auto; background:var(--code-bg); color:var(--code-fg);
+    border:1px solid var(--line); border-left:3px solid #6a2fd6; border-radius:11px; padding:14px 16px;
+    font-size:12.5px; line-height:1.62; white-space:pre; margin:0;
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace; }
+  @media (max-width:760px) {
+    .iax { grid-template-columns:1fr; }
+    .iax-rail { flex-direction:row; overflow-x:auto; border-right:0; border-bottom:1px solid var(--line); }
+    .iax-add { margin-top:0; }
+  }
 </style>
 
 <div class="page-head">
   <span class="icon-chip lg"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></span>
   <div class="ph-main">
     <h1>IaC Exporter</h1>
-    <p class="ph-sub">Turn a live Management Server into Infrastructure-as-Code — export a <b>policy layer</b> or the <b>Gaia OS config</b> to Terraform, Ansible and clish/mgmt_cli. A backup-as-code of the appliance.</p>
+    <p class="ph-sub">Back up a live Management Server as code — export a policy layer or its Gaia OS config to Terraform, Ansible and clish/mgmt_cli. Read-only; nothing is written back.</p>
   </div>
 </div>
 
-<div class="card">
-  <div class="iac-do">
-    <div class="iac-do-item"><span class="iac-do-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M3 12h18M3 18h18"/></svg></span>
-      <div><b>Export policy</b><span>Pick an access layer; PolicyPilot pulls its rulebase + every referenced object over the <code>web_api</code> and renders <b>Terraform</b>, <b>Ansible</b> and a <b>mgmt_cli</b> script.</span></div></div>
-    <div class="iac-do-item"><span class="iac-do-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg></span>
-      <div><b>Export Gaia config</b><span>Pull the SMS's live Gaia OS config (hostname, DNS, NTP, interfaces, static routes, proxy) over the <code>gaia_api</code> as <b>Terraform</b>, <b>Ansible</b> and a <b>clish</b> script.</span></div></div>
-    <div class="iac-do-item"><span class="iac-do-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg></span>
-      <div><b>Copy, download, commit</b><span>Every target is read-only — preview it, copy it, or download the file. Nothing is written back to the SMS; this is export-only.</span></div></div>
-  </div>
-</div>
-
-{% if rows %}
-<div class="section-label">Management servers</div>
-<div class="iac-grid">
-  {% for r in rows %}
-  <div class="iac-card">
-    <h3><span class="pill">Management</span> {{ r.ms.name }}</h3>
-    <div class="iac-meta"><code>{{ r.ms.host }}:{{ r.ms.port }}</code>{% if r.ms.domain %} · domain <b>{{ r.ms.domain }}</b>{% endif %}</div>
-    <div class="iac-meta">
-      {% if r.has_secret %}<span class="pill ok">credential saved</span>{% else %}<span class="pill faint">no credential — policy export needs one</span>{% endif %}
-    </div>
-    <div class="iac-actions">
-      {% if r.has_secret %}
-      <a class="btn" href="/management/{{ r.ms.id }}/export">Export policy →</a>
-      <a class="btn secondary" href="/management/{{ r.ms.id }}/gaia-export">Export Gaia config →</a>
-      {% else %}
-      <a class="btn secondary" href="/management/{{ r.ms.id }}/gaia-export">Export Gaia config →</a>
-      <a class="btn secondary" href="/management/{{ r.ms.id }}/edit" data-modal-form="/management/{{ r.ms.id }}/edit" data-modal-title="Edit management server">Add a credential</a>
-      {% endif %}
-    </div>
-  </div>
-  {% endfor %}
-</div>
-{% else %}
+{% if not rows %}
 <div class="card">
   <p class="muted" style="margin:0;">No management servers yet. <a href="/management/new" data-modal-form="/management/new" data-modal-title="Add management server">Add a Management Server</a> (host + a least-privilege API account), then come back to export its policy or Gaia config as code.</p>
 </div>
+{% else %}
+<div class="iax" id="iax">
+  <aside class="iax-rail">
+    <div class="iax-rail-h">Management servers</div>
+    {% for r in rows %}
+    <button type="button" class="iax-srv" data-id="{{ r.ms.id }}" data-name="{{ r.ms.name }}"
+            data-host="{{ r.ms.host }}:{{ r.ms.port }}" data-secret="{{ '1' if r.has_secret else '0' }}">
+      <span class="iax-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 5v14c0 1.66-4 3-9 3s-9-1.34-9-3V5"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/></svg></span>
+      <span class="iax-tx">
+        <span class="iax-nm">{{ r.ms.name }}</span>
+        <span class="iax-sub {{ 'ok' if r.has_secret else '' }}">{{ 'credential saved' if r.has_secret else 'no credential' }}</span>
+      </span>
+    </button>
+    {% endfor %}
+    <a class="iax-add" href="/management/new" data-modal-form="/management/new" data-modal-title="Add management server">
+      <span class="iax-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></span>
+      Add server
+    </a>
+  </aside>
+
+  <section class="iax-pane">
+    <div class="iax-empty" id="iax-empty">Pick a management server to export.</div>
+
+    <div id="iax-panel" hidden>
+      <div class="iax-hd">
+        <h2 id="iax-title">—</h2>
+        <code id="iax-host"></code>
+        <span id="iax-cred"></span>
+      </div>
+
+      <div class="iax-seg" role="tablist">
+        <button type="button" id="iax-tab-policy" class="active" data-mode="policy">Policy layer</button>
+        <button type="button" id="iax-tab-gaia" data-mode="gaia">Gaia OS config</button>
+      </div>
+
+      <div id="iax-mode-policy">
+        <div class="iax-ctl" id="iax-policy-ctl">
+          <select id="iax-layer"><option>Loading layers…</option></select>
+          <button class="btn" type="button" id="iax-gen-policy" disabled>Generate IaC</button>
+        </div>
+        <p class="iax-note" id="iax-policy-nocred" hidden>This server has no saved credential, so policy can't be pulled. <a id="iax-policy-edit" href="#" data-modal-form="" data-modal-title="Edit management server">Add a password on Edit</a> (stored encrypted), then return here.</p>
+      </div>
+
+      <div id="iax-mode-gaia" hidden>
+        <div class="iax-ctl">
+          <input type="password" id="iax-gaia-pw" placeholder="Gaia/OS password" autocomplete="off">
+          <button class="btn" type="button" id="iax-gen-gaia">Generate IaC</button>
+        </div>
+        <p class="iax-note" style="margin-top:10px;">Pulls hostname, DNS, NTP, timezone, interfaces, static routes and proxy over the <code>gaia_api</code>.</p>
+      </div>
+
+      <div class="iax-status" id="iax-status"></div>
+
+      <div class="iax-out" id="iax-out" hidden>
+        <div class="iax-stats" id="iax-stats"></div>
+        <div class="filterbar" id="iax-tabs" style="margin:0 0 12px;"></div>
+        <div class="iax-outbar">
+          <button class="copybtn" type="button" id="iax-copy">Copy</button>
+          <button class="copybtn" type="button" id="iax-download">Download</button>
+          <span class="iax-fname" id="iax-fname"></span>
+        </div>
+        <pre class="iax-code" id="iax-code"></pre>
+      </div>
+    </div>
+  </section>
+</div>
 {% endif %}
+
+<script>
+  (function () {
+    var root = document.getElementById('iax');
+    if (!root) return;
+    var panel = document.getElementById('iax-panel'), empty = document.getElementById('iax-empty');
+    var titleEl = document.getElementById('iax-title'), hostEl = document.getElementById('iax-host'),
+        credEl = document.getElementById('iax-cred');
+    var tabPolicy = document.getElementById('iax-tab-policy'), tabGaia = document.getElementById('iax-tab-gaia');
+    var modePolicy = document.getElementById('iax-mode-policy'), modeGaia = document.getElementById('iax-mode-gaia');
+    var layerSel = document.getElementById('iax-layer'), genPolicy = document.getElementById('iax-gen-policy');
+    var policyCtl = document.getElementById('iax-policy-ctl'), policyNoCred = document.getElementById('iax-policy-nocred'),
+        policyEdit = document.getElementById('iax-policy-edit');
+    var gaiaPw = document.getElementById('iax-gaia-pw'), genGaia = document.getElementById('iax-gen-gaia');
+    var status = document.getElementById('iax-status'), out = document.getElementById('iax-out');
+    var statsEl = document.getElementById('iax-stats'), tabsEl = document.getElementById('iax-tabs');
+    var copyBtn = document.getElementById('iax-copy'), downloadBtn = document.getElementById('iax-download');
+    var fnameEl = document.getElementById('iax-fname'), codeEl = document.getElementById('iax-code');
+
+    var cur = null;                 // { id, name, host, secret }
+    var data = {}, current = '', fbase = 'export';
+    var POLICY_EXT = { terraform: '.tf', ansible: '.ansible.yml', mgmt_cli: '.mgmt_cli.sh', web_api: '.web_api.json' };
+    var GAIA_EXT = { terraform: '.gaia.tf', ansible: '.gaia.yml', clish: '.gaia.clish.sh', web_api: '.gaia.web_api.json' };
+    var LABELS = { terraform: 'Terraform', ansible: 'Ansible', mgmt_cli: 'mgmt_cli', clish: 'clish', web_api: 'web_api JSON' };
+    var ext = POLICY_EXT;
+
+    function esc(s) { var d = document.createElement('div'); d.textContent = (s == null ? '' : s); return d.innerHTML; }
+    function slug(s) { return (s || 'policy').replace(/[^0-9A-Za-z._-]+/g, '_').replace(/^_+|_+$/g, '') || 'policy'; }
+    function clearOut() { out.hidden = true; data = {}; codeEl.textContent = ''; tabsEl.innerHTML = ''; }
+
+    function setMode(mode) {
+      var policy = mode !== 'gaia';
+      tabPolicy.classList.toggle('active', policy); tabGaia.classList.toggle('active', !policy);
+      modePolicy.hidden = !policy; modeGaia.hidden = policy;
+      status.innerHTML = ''; clearOut();
+    }
+
+    function select(btn) {
+      root.querySelectorAll('.iax-srv').forEach(function (b) { b.classList.remove('active'); });
+      btn.classList.add('active');
+      cur = { id: btn.getAttribute('data-id'), name: btn.getAttribute('data-name'),
+              host: btn.getAttribute('data-host'), secret: btn.getAttribute('data-secret') === '1' };
+      empty.hidden = true; panel.hidden = false;
+      titleEl.textContent = cur.name; hostEl.textContent = cur.host;
+      credEl.innerHTML = cur.secret ? '<span class="pill ok">credential saved</span>'
+                                    : '<span class="pill faint">no credential</span>';
+      // policy controls depend on a saved secret; gaia accepts a runtime password
+      policyCtl.hidden = !cur.secret; policyNoCred.hidden = cur.secret;
+      if (!cur.secret) policyEdit.setAttribute('data-modal-form', '/management/' + cur.id + '/edit');
+      if (!cur.secret) policyEdit.setAttribute('href', '/management/' + cur.id + '/edit');
+      gaiaPw.placeholder = cur.secret ? 'Password (blank = use saved)' : 'Gaia/OS password';
+      gaiaPw.value = '';
+      setMode('policy');
+      loadLayers();
+    }
+
+    function loadLayers() {
+      if (!cur || !cur.secret) return;
+      layerSel.innerHTML = '<option>Loading layers…</option>'; genPolicy.disabled = true;
+      fetch('/management/' + cur.id + '/layers').then(function (r) { return r.json(); })
+        .then(function (d) {
+          if (d.error) { layerSel.innerHTML = '<option>' + esc(d.error) + '</option>'; return; }
+          var layers = d.layers || [];
+          if (!layers.length) { layerSel.innerHTML = '<option>No access layers</option>'; return; }
+          layerSel.innerHTML = '';
+          layers.forEach(function (l) {
+            var o = document.createElement('option'); o.value = l.name; o.textContent = l.name; layerSel.appendChild(o);
+          });
+          genPolicy.disabled = false;
+        })
+        .catch(function () { layerSel.innerHTML = '<option>Failed to load layers</option>'; });
+    }
+
+    function renderTabs() {
+      var keys = Object.keys(ext).filter(function (k) { return data[k] != null; });
+      if (current && keys.indexOf(current) < 0) current = keys[0];
+      if (!current) current = keys[0];
+      tabsEl.innerHTML = '';
+      keys.forEach(function (k) {
+        var b = document.createElement('button');
+        b.type = 'button'; b.className = 'chip' + (k === current ? ' active' : ''); b.textContent = LABELS[k] || k;
+        b.addEventListener('click', function () {
+          current = k; renderTabs(); showCode();
+        });
+        tabsEl.appendChild(b);
+      });
+      showCode();
+    }
+    function showCode() {
+      codeEl.textContent = data[current] || '';
+      fnameEl.textContent = fbase + (ext[current] || '');
+    }
+
+    function render(kind, bundle) {
+      data = bundle; ext = (kind === 'gaia') ? GAIA_EXT : POLICY_EXT;
+      current = 'terraform';
+      if (kind === 'gaia') {
+        fbase = (cur.host || 'gaia').split(':')[0].replace(/[^0-9A-Za-z._-]+/g, '_') || 'gaia';
+        var s = bundle.stats || {};
+        statsEl.innerHTML = 'Sections: <b>' + esc((s.sections || []).join(', ') || '—') + '</b> · ' +
+          esc(s.interfaces || 0) + ' interface(s) · ' + esc(s.routes || 0) + ' route(s) · ' +
+          esc(s.ntp_servers || 0) + ' NTP server(s)';
+      } else {
+        fbase = slug(bundle.layer);
+        var p = bundle.stats || {};
+        var skipped = (p.skipped && Object.keys(p.skipped).length)
+          ? ' · <span class="pill faint">skipped: ' + esc(Object.keys(p.skipped).map(function (t) { return t + '×' + p.skipped[t]; }).join(', ')) + '</span>' : '';
+        statsEl.innerHTML = 'Layer <b>' + esc(bundle.layer) + '</b> · ' + esc(p.objects || 0) + ' object(s) · ' +
+          esc(p.rules || 0) + ' rule(s) · ' + esc(p.sections || 0) + ' section(s)' + skipped;
+      }
+      out.hidden = false; renderTabs();
+    }
+
+    function busy(btn, on, label) {
+      btn.disabled = on;
+      if (on) { btn.dataset.t = btn.dataset.t || btn.textContent; btn.innerHTML = '<span class="spin" style="margin-right:7px; vertical-align:-2px;"></span>' + (label || 'Pulling…'); }
+      else { btn.textContent = btn.dataset.t || 'Generate IaC'; }
+    }
+
+    genPolicy.addEventListener('click', function () {
+      var layer = layerSel.value; if (!layer || !cur) return;
+      busy(genPolicy, true); clearOut();
+      status.innerHTML = '<span class="muted">Pulling “' + esc(layer) + '” + objects over web_api…</span>';
+      fetch('/management/' + cur.id + '/export?name=' + encodeURIComponent(layer), { method: 'POST' })
+        .then(function (r) { return r.json(); })
+        .then(function (j) {
+          busy(genPolicy, false);
+          if (j.error) { status.innerHTML = '<span class="err">' + esc(j.error) + '</span>'; return; }
+          status.innerHTML = '<span class="ok">✓ Generated.</span>'; render('policy', j);
+        })
+        .catch(function () { busy(genPolicy, false); status.innerHTML = '<span class="err">Export failed.</span>'; });
+    });
+
+    genGaia.addEventListener('click', function () {
+      if (!cur) return;
+      busy(genGaia, true); clearOut();
+      status.innerHTML = '<span class="muted">Reading the live Gaia config over <code>gaia_api</code> — this can take a few seconds…</span>';
+      var body = new URLSearchParams(); if (gaiaPw.value) body.set('password', gaiaPw.value);
+      fetch('/management/' + cur.id + '/gaia-export/run', { method: 'POST', body: body })
+        .then(function (r) { return r.json(); })
+        .then(function (j) {
+          busy(genGaia, false);
+          if (j.error) { status.innerHTML = '<span class="err">' + esc(j.error) + '</span>'; return; }
+          status.innerHTML = '<span class="ok">✓ Generated.</span>'; render('gaia', j);
+        })
+        .catch(function () { busy(genGaia, false); status.innerHTML = '<span class="err">Export failed.</span>'; });
+    });
+
+    copyBtn.addEventListener('click', function () {
+      navigator.clipboard.writeText(data[current] || '').then(function () {
+        var t = copyBtn.textContent; copyBtn.textContent = 'Copied ✓';
+        setTimeout(function () { copyBtn.textContent = t; }, 1200);
+      });
+    });
+    downloadBtn.addEventListener('click', function () {
+      var blob = new Blob([data[current] || ''], { type: 'text/plain' });
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(blob); a.download = fbase + (ext[current] || '');
+      document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(a.href);
+    });
+
+    tabPolicy.addEventListener('click', function () { setMode('policy'); });
+    tabGaia.addEventListener('click', function () { setMode('gaia'); });
+    root.querySelectorAll('.iax-srv').forEach(function (b) {
+      b.addEventListener('click', function () { select(b); });
+    });
+
+    var servers = root.querySelectorAll('.iax-srv');
+    if (servers.length === 1) select(servers[0]);   // one server -> open it straight away
+  })();
+</script>
 {% endblock %}

@@ -22,7 +22,7 @@ class Node:
     id: str
     label: str
     sub: str
-    kind: str        # start | process | decision | review | noop | widen | create
+    kind: str        # start | process | decision | review | noop | widen | create | note | terminal
     x: int           # layout coords (used by the .drawio exporter; Mermaid/DOT auto-lay-out)
     y: int
     w: int = 250
@@ -66,11 +66,17 @@ NODES: list[Node] = [
          "process", 40, 200, 320, 104),
     Node("noteO", "Note & keep going", "anything we can’t fully resolve — an OPAQUE rule (updatable feed · negated / unparsable cell · non-Accept/Drop action), a CONDITIONAL rule (VPN / time / data / install-on), or a request that SPLITS across an inline layer — is flagged “review later”, NOT stopped. The walk continues; the new rule is placed BELOW it. A rule that provably CAN’T cover the request (e.g. a specific destination vs an Any request) is NOT flagged as a possible allow.",
          "note", 430, 196, 320, 132, option="aa_emit_notes"),
-    Node("review", "Needs review (rare)",
-         "the REQUEST itself can’t be turned into a concrete change — an empty / unparsable service, or a typed endpoint (domain / role / zone …) that names no object — so nothing is decided; fix the request and retry. Distinct from a POLICY rule we can’t fully resolve, which is noted & passed (never a stop).",
+    Node("review", "Incomplete request — fix & retry",
+         "ONLY the REQUEST itself is unusable — an empty / unparsable service (no concrete port or application), a typed endpoint (domain / role / zone …) whose name resolves to NO object, an IP that resolves to nothing, or an unsupported action — so there is nothing to evaluate or create. NOT a POLICY rule we can’t fully resolve (those are noted & passed, never a stop).",
          "review", 780, 40, 330, 120),
+    Node("action", "Allow, or block / divert?",
+         "Accept → the reuse / widen / create flow below. Drop · Reject · Ask · Inform · Apply-Layer → place the REQUESTED verdict, never reuse an Accept (those answer “is this allowed?”, meaningless for a block / conditional / divert).",
+         "decision", 40, 330, 320, 92),
+    Node("verdict", "Place the requested verdict",
+         "Drop / Reject → no-op if the first in-path rule already denies it, else create the block ABOVE the first in-path rule (first-match denies exactly this flow) · Ask / Inform / Apply-Layer → create, floored BELOW any opaque possible-deny so it can’t silently override an unmodeled block; always flagged for review.",
+         "create", 430, 326, 330, 116),
     Node("perm", "Already permitted?", "first reachable Accept covering all 3 columns, before any covering drop",
-         "decision", 40, 400, 300, 68),
+         "decision", 40, 470, 300, 68),
     Node("noop", "No-op", "already allowed WITHIN this access layer — just attach the rule to the ticket (Check Point Ordered Layers chain, so a downstream layer can still restrict it)", "noop", 430, 396, 250, 84),
     Node("deny", "Resolved deny covering the path?",
          "a covering / partial DROP we can fully resolve → CREATE the allow ABOVE it so the access works (first-match then hits the allow). A conditional / opaque possible-deny is NOT here — it’s noted & passed, above.",
@@ -80,8 +86,8 @@ NODES: list[Node] = [
     Node("doWiden", "Widen the rule", "add the differing source / destination / service to the cell (never a shared group)",
          "widen", 430, 760, 260, 72),
     Node("create", "Create least-privilege rule",
-         "above a blocking / cleanup drop · an APPLICATION or category is carved out ABOVE a rule that blocks it (CP identifies the app; other traffic still hits the rule) · below a more-specific rule · BELOW any opaque possible-deny · else grouped into the provisioned SECTION above the cleanup (never inside it). A more-specific deny SHADOWED below the new allow is flagged; an Internet-object destination is noted topology/blade-dependent. Every choice here is tunable in Settings → Access automation logic.", "create",
-         40, 752, 320, 104, option="aa_app_carveout"),
+         "above a blocking deny, below a more-specific rule, or at the section floor — least-privilege · an APPLICATION or category is carved out ABOVE a rule that blocks it (CP identifies the app; other traffic still hits the rule) · BELOW any opaque possible-deny · else grouped into the provisioned SECTION above the cleanup (never inside it). A more-specific deny SHADOWED below the new allow is flagged; an Internet-object destination is noted topology/blade-dependent. Every choice here is tunable in Settings → Access automation logic.", "create",
+         40, 822, 320, 104, option="aa_app_carveout"),
 
     # --- DETAIL tier 1: HOW each source/destination is matched (IP space vs identity space) -------
     # A self-contained branch off "resolve", laid out left→right: kindq → {ipspace, idspace} →
@@ -91,15 +97,15 @@ NODES: list[Node] = [
     Node("kindq", "How is each source / destination matched?", "by its KIND — an IP/CIDR/Any, or a typed object",
          "decision", 900, 120, 300, 68, level=1),
     Node("ipspace", "IP space", "compare IPv4 / IPv6 intervals · host = exact · gateway / cluster / mgmt = approx (under-count — never proven disjoint)",
-         "process", 1300, 30, 320, 96, level=1),
+         "terminal", 1300, 30, 320, 96, level=1),
     Node("idspace", "Identity space (typed object)", "matched by OBJECT IDENTITY, not by IP — the policy as written, not runtime DNS",
          "process", 1300, 210, 320, 84, level=1),
     Node("iddomain", "Domain request", "covered by Any, or a dns-domain object EQUAL-TO / a PARENT-OF the FQDN (.example.com covers www.example.com; an exact object covers only itself)",
          "decision", 1700, 150, 340, 96, level=1),
     Node("idexact", "Role / dynamic / updatable / zone", "matched by EXACT object name (its own identity)",
-         "process", 1700, 300, 280, 72, level=1),
+         "terminal", 1700, 300, 280, 72, level=1),
     Node("iddisjoint", "Different kinds never collide", "a domain ≠ an IP / role / zone object → provably OUT of the request’s path (can’t satisfy OR block it)",
-         "process", 1700, 432, 340, 96, level=1),
+         "terminal", 1700, 432, 340, 96, level=1),
     Node("idupd", "Note & keep going", "a domain meets an updatable feed (e.g. Office365) — it may contain the FQDN, so it’s flagged “review later” and the walk continues (never a hard stop)",
          "note", 2100, 150, 340, 96, level=1),
 
@@ -108,32 +114,36 @@ NODES: list[Node] = [
          "decision", 900, 340, 300, 92, level=1),
     Node("recurse", "Descend into the inline layer",
          "a normal inline layer re-runs this whole flow INSIDE it — its own no-op / widen / create, plus the layer’s implicit cleanup. A request that SPLITS across the inline + parent layers is noted & the new rule placed below.",
-         "process", 1300, 470, 330, 116, level=1),
+         "terminal", 1300, 470, 330, 116, level=1),
     Node("opts", "Automation mode (Settings): ignore-conditions",
          "optionally treat VPN / time / data / install-on rules as unconditional — a conditional Accept then counts as covering and a conditional Drop as a resolved block (create above it), instead of being noted & passed",
-         "process", 900, 560, 360, 96, level=1, option="aa_ignore_conditions"),
+         "terminal", 900, 560, 360, 96, level=1, option="aa_ignore_conditions"),
 
     # --- DETAIL tier 1: object materialisation on apply — a fan along the bottom -------------------
     Node("apply", "On apply: materialise the objects", "reuse an existing object, else create it — then write the rule",
          "process", 430, 940, 300, 72, level=1),
     Node("matIP", "IP endpoint", "reuse a host / network by IP, else add-host / add-network (a CIDR stays a NETWORK — never narrowed to /32)",
-         "process", 40, 1100, 320, 96, level=1),
+         "terminal", 40, 1100, 320, 96, level=1),
     Node("matMk", "Domain / dynamic-object", "reuse, else add-dns-domain (leading dot = sub-domains) / add-dynamic-object",
-         "process", 430, 1100, 320, 84, level=1),
+         "terminal", 430, 1100, 320, 84, level=1),
     Node("matReuse", "Reuse-only object?", "access-role · security-zone · updatable-object", "decision",
          820, 1100, 300, 72, level=1),
     Node("matMissing", "Note: define it first", "a reuse-only object that’s missing can’t be fabricated from a request — create it once (Identity Awareness / topology / CP repository), then re-run",
-         "note", 820, 1244, 340, 96, level=1),
+         "terminal", 820, 1244, 340, 96, level=1),
 ]
 
 EDGES: list[Edge] = [
     Edge("req", "resolve"),
-    Edge("resolve", "review", "request can’t be resolved"),
-    Edge("resolve", "noteO", "opaque rule"), Edge("noteO", "perm", "continue"),
-    Edge("resolve", "perm", "resolved"),
+    Edge("resolve", "review", "empty / unparsable request"),
+    Edge("resolve", "noteO", "opaque rule"), Edge("noteO", "action", "continue"),
+    Edge("resolve", "action", "resolved"),
+    Edge("action", "perm", "Accept"),
+    Edge("action", "verdict", "block / conditional / divert"),
     Edge("perm", "noop", "yes"), Edge("perm", "deny", "no"),
-    Edge("deny", "create", "yes → create above it"), Edge("deny", "widen", "no"),
-    Edge("widen", "doWiden", "yes"), Edge("widen", "create", "no"),
+    Edge("deny", "create", "yes → create above it"),
+    Edge("deny", "doWiden", "clean rule above the deny — widen it"),
+    Edge("deny", "widen", "no covering deny — prefer reuse"),
+    Edge("widen", "doWiden", "yes"), Edge("widen", "create", "no exact 2-of-3 match"),
 
     # how each endpoint is matched (detail) — IP-interval space vs typed-object identity space
     Edge("resolve", "kindq", "how each endpoint matches"),
@@ -174,6 +184,7 @@ PALETTE: dict[str, tuple[str, str, str]] = {
     "widen":    ("#dceffb", "#0ea5e9", "#0b6a96"),   # sky
     "create":   ("#fbeecb", "#f59e0b", "#92610a"),   # amber
     "note":     ("#e6f0fb", "#3b82f6", "#1e497f"),   # advisory blue — "noted, not blocked; keep going"
+    "terminal": ("#f1f4fa", "#a9b4c8", "#35435d"),   # muted slate — an informational dead-end leaf
 }
 
 # DARK palette — for the on-page render on the portal's dark canvas: nodes sit IN the dark (deep tinted
@@ -187,6 +198,7 @@ PALETTE_DARK: dict[str, tuple[str, str, str]] = {
     "widen":    ("#0f2738", "#38bdf8", "#bce3f7"),   # sky
     "create":   ("#33270f", "#fbbf24", "#f7d99a"),   # amber
     "note":     ("#15233b", "#3b82f6", "#bcd7f7"),   # advisory blue — "noted, not blocked; keep going"
+    "terminal": ("#202c44", "#4a5a7d", "#aab6cf"),   # muted slate — an informational dead-end leaf
 }
 
 # Per-theme Mermaid look (fed via the %%{init}%% directive baked into the source, so the downloaded
@@ -210,7 +222,8 @@ _MM_THEME = {
 # shape delimiters per kind: stadium for start, hexagons for decisions, rounded rects for the rest.
 _MM_SHAPE = {"start": ('(["', '"])'), "process": ('["', '"]'), "decision": ('{{"', '"}}'),
              "review": ('("', '")'), "noop": ('("', '")'), "widen": ('("', '")'), "create": ('("', '")'),
-             "note": ('>"', '"]')}    # a flag/note shape (asymmetric) — "advisory, keep going"
+             "note": ('>"', '"]'),    # a flag/note shape (asymmetric) — "advisory, keep going"
+             "terminal": ('[["', '"]]')}    # a framed subroutine box — an informational dead-end leaf
 
 
 def _mm_text(n: Node) -> str:

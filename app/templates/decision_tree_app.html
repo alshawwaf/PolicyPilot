@@ -144,26 +144,31 @@
        (≈2.3–3.1× luminance drop) for real depth; a saturated same-hue border carries identity; text is
        white with a tinted sub-line, WCAG-verified ≥4.89:1 against the lighter (top) stop. */
     .dtwrap{--dt-edge:#64769a;--dt-elabel-bg:rgba(14,23,38,.80);--dt-elabel-fg:#cdd8ec;}
-    .dtnode{--dt-top:#3a4865;--dt-bot:#1d2740;--dt-bd:#6c7fa0;--dt-fg:#ffffff;--dt-sub:#d4dcec;}   /* process */
-    .k-start{--dt-top:#a8186a;--dt-bot:#481896;--dt-bd:#ff5aa8;--dt-fg:#ffffff;--dt-sub:#ffe1f0;}
-    .k-decision{--dt-top:#3647a8;--dt-bot:#1c2570;--dt-bd:#7184ee;--dt-fg:#ffffff;--dt-sub:#dde2ff;}
-    .k-note{--dt-top:#1f5aa0;--dt-bot:#123866;--dt-bd:#56a0f0;--dt-fg:#ffffff;--dt-sub:#d9e8fb;}
-    .k-noop{--dt-top:#0f6f44;--dt-bot:#0a4429;--dt-bd:#38d68a;--dt-fg:#ffffff;--dt-sub:#d4f3e4;}
-    .k-widen{--dt-top:#0a6a86;--dt-bot:#06465a;--dt-bd:#3fc2da;--dt-fg:#ffffff;--dt-sub:#dbf1f9;}
-    .k-create{--dt-top:#8a5a0e;--dt-bot:#553306;--dt-bd:#e8ad3c;--dt-fg:#ffffff;--dt-sub:#fbe7c6;}
+    .dtnode, .k-process{--dt-top:#33415c;--dt-bot:#1e2a44;--dt-bd:#5d6f93;--dt-fg:#eef2fb;--dt-sub:#c4cee2;}   /* process / default */
+    .k-start{--dt-top:#b3186e;--dt-bot:#5a1898;--dt-bd:#ff5aa8;--dt-fg:#fff;--dt-sub:#ffe1f0;}
+    .k-decision{--dt-top:#3d4fb0;--dt-bot:#1e2876;--dt-bd:#8294f5;--dt-fg:#fff;--dt-sub:#dde2ff;}
+    .k-note{--dt-top:#2a7bd0;--dt-bot:#16467e;--dt-bd:#6cb6ff;--dt-fg:#fff;--dt-sub:#dbeeff;}
+    .k-noop{--dt-top:#0f7a4a;--dt-bot:#0a4a2c;--dt-bd:#3ee08f;--dt-fg:#fff;--dt-sub:#d4f3e4;}
+    .k-widen{--dt-top:#0b7e9c;--dt-bot:#064c62;--dt-bd:#46cfe6;--dt-fg:#fff;--dt-sub:#dbf1f9;}
+    .k-create{--dt-top:#9a6410;--dt-bot:#5e3806;--dt-bd:#f0b541;--dt-fg:#fff;--dt-sub:#fbe7c6;}
+    .k-review{--dt-top:#a52834;--dt-bot:#5e141c;--dt-bd:#ff6b73;--dt-fg:#fff;--dt-sub:#ffd6d6;}
+    .k-terminal{--dt-top:#2b3852;--dt-bot:#1a2640;--dt-bd:#4a5a7d;--dt-fg:#dde4f2;--dt-sub:#aab6cf;}
+    .dtnode.k-terminal{border-style:dashed;}
     /* light theme overrides — deliberate (not washed-out) gradients: a tinted top drops to a deeper same-hue
        base, a stronger white top-sheen for the glass read, dark text per kind, WCAG-verified ≥5.39:1. The
        per-kind rules set --dt-fg so the start node is dark text on light magenta (fixes the old white-on-light bug). */
     html[data-theme="light"] .dtwrap{--dt-edge:#94a3b8;--dt-elabel-bg:rgba(255,255,255,.85);--dt-elabel-fg:#3d4a60;}
-    html[data-theme="light"] .dtnode{--dt-top:#e8edf6;--dt-bot:#c8d2e2;--dt-bd:#7385a0;--dt-fg:#1c2638;--dt-sub:#3a4860;
+    html[data-theme="light"] .dtnode, html[data-theme="light"] .k-process{--dt-top:#eef2f9;--dt-bot:#d3dcea;--dt-bd:#8294ad;--dt-fg:#1c2638;--dt-sub:#41506c;
       background:linear-gradient(180deg, rgba(255,255,255,.50), rgba(255,255,255,0) 46%), linear-gradient(160deg,var(--dt-top),var(--dt-bot));
       box-shadow:0 6px 16px -7px rgba(31,45,71,.24), 0 2px 5px rgba(31,45,71,.12), inset 0 1px 0 rgba(255,255,255,.60);}
     html[data-theme="light"] .k-start{--dt-top:#f6a6e6;--dt-bot:#cf57c6;--dt-bd:#b21f86;--dt-fg:#5a0d52;--dt-sub:#7a1568;}
     html[data-theme="light"] .k-decision{--dt-top:#d2dcff;--dt-bot:#9aa8ee;--dt-bd:#4f5fcf;--dt-fg:#1a2060;--dt-sub:#2d3680;}
-    html[data-theme="light"] .k-note{--dt-top:#d4e6fb;--dt-bot:#9cc4ee;--dt-bd:#2f7ad1;--dt-fg:#103a66;--dt-sub:#1d4a82;}
+    html[data-theme="light"] .k-note{--dt-top:#d4e9fb;--dt-bot:#9cc8ee;--dt-bd:#1f7ad1;--dt-fg:#0c3a66;--dt-sub:#164a82;}
     html[data-theme="light"] .k-noop{--dt-top:#c8eed6;--dt-bot:#92d4ad;--dt-bd:#1c9a64;--dt-fg:#0b4428;--dt-sub:#115f38;}
     html[data-theme="light"] .k-widen{--dt-top:#c6ecf6;--dt-bot:#8cd2e4;--dt-bd:#1391b5;--dt-fg:#0a4655;--dt-sub:#0d5e74;}
     html[data-theme="light"] .k-create{--dt-top:#fbe7c2;--dt-bot:#f0c468;--dt-bd:#c88812;--dt-fg:#5e3606;--dt-sub:#7c4a0c;}
+    html[data-theme="light"] .k-review{--dt-top:#fbdada;--dt-bot:#ef9aa0;--dt-bd:#c0344d;--dt-fg:#6e0f1a;--dt-sub:#8a1622;}
+    html[data-theme="light"] .k-terminal{--dt-top:#f1f4fa;--dt-bot:#e1e7f1;--dt-bd:#a9b4c8;--dt-fg:#35435d;--dt-sub:#5a6781;}
   </style>
   <div class="dtbar">
     <span class="dtzoom" role="group" aria-label="Diagram zoom">
@@ -228,22 +233,36 @@
     // flow reads top-to-bottom and outcomes sit in a parallel column aligned to the step that yields them;
     // the deep (L1) branches fan to the right, one row each, revealed on expand. Mutates x/y/w in place.
     (function autoLayout() {
-      var SPINE_X = 24, OUT_X = 470, DET_X = 770, COL = 250, ROW = 116, TOP = 20, W = 250;
+      // Three lanes: the core SPINE (top→bottom), the OUTCOME column (each aligned to the decision row that
+      // yields it), and the DETAIL lane where each L1 subtree gets its OWN vertical band (a running cursor,
+      // never one shared row counter) so expanded branches stay local instead of raking across the canvas.
+      var SPINE_X = 40, OUT_X = 384, DET_X = 724, COL = 300, ROW = 150, TOP = 24, W = 250, BAND_GAP = 0.6;
       var byId = {}; GRAPH.nodes.forEach(function (n) { byId[n.id] = n; });
-      function parentsOf(id) { return GRAPH.edges.filter(function (e) { return e.dst === id; }).map(function (e) { return e.src; }); }
-      var spine = ['req', 'resolve', 'perm', 'deny', 'widen'];                  // the main first-match path
-      var outRow = { review: 0, noteO: 1, noop: 2, create: 3, doWiden: 4 };     // outcome → aligned spine row
+      function kids(id) { return GRAPH.edges.filter(function (e) { return e.src === id; }).map(function (e) { return e.dst; }); }
+      function hasCoreParent(id) { return GRAPH.edges.some(function (e) { return e.dst === id && byId[e.src] && isCore(byId[e.src]); }); }
+      // 1) core spine
+      var spine = ['req', 'resolve', 'action', 'perm', 'deny', 'widen', 'create'];
       spine.forEach(function (id, i) { var n = byId[id]; if (n) { n.x = SPINE_X; n.y = TOP + i * ROW; n.w = W; } });
-      Object.keys(outRow).forEach(function (id) { var n = byId[id]; if (n) { n.x = OUT_X; n.y = TOP + outRow[id] * ROW; n.w = W; } });
-      var placed = {}, row = 5;
-      function dfs(id, depth) {
-        var n = byId[id]; if (!n || isCore(n) || placed[id]) return;
-        placed[id] = true; n.x = DET_X + depth * COL; n.y = TOP + row * ROW; n.w = W; row++;
-        childrenOf(id).forEach(function (c) { dfs(c, depth + 1); });
-      }
-      GRAPH.nodes.forEach(function (n) {
-        if (!isCore(n) && parentsOf(n.id).some(function (p) { return byId[p] && isCore(byId[p]); })) dfs(n.id, 0);
+      // 2) outcomes, aligned to the Y of the decision that produces them (small offset so two off one row don't collide)
+      var outAlign = { review: 'resolve', noteO: 'resolve', verdict: 'action', noop: 'perm', doWiden: 'widen' };
+      var outOff = { review: -0.5, noteO: 0.5, verdict: 0, noop: 0, doWiden: 0 };
+      Object.keys(outAlign).forEach(function (id) {
+        var n = byId[id], a = byId[outAlign[id]];
+        if (n && a) { n.x = OUT_X; n.y = a.y + (outOff[id] || 0) * ROW; n.w = W; }
       });
+      // 3) detail subtrees, one contiguous band each
+      var bandY = TOP, placed = {};
+      function placeBand(rootId) {
+        var order = [], depth = {}; depth[rootId] = 0;
+        (function dfs(id) {
+          if (!byId[id] || isCore(byId[id]) || placed[id]) return;
+          placed[id] = true; order.push(id);
+          kids(id).forEach(function (c) { if (byId[c] && !isCore(byId[c]) && depth[c] == null) { depth[c] = depth[id] + 1; dfs(c); } });
+        })(rootId);
+        order.forEach(function (id, i) { var n = byId[id]; n.x = DET_X + depth[id] * COL; n.y = bandY + i * ROW; n.w = W; });
+        if (order.length) bandY += order.length * ROW + ROW * BAND_GAP;
+      }
+      GRAPH.nodes.forEach(function (n) { if (!isCore(n) && hasCoreParent(n.id) && !placed[n.id]) placeBand(n.id); });
     })();
     var activeNodes = {}, activePairs = {};   // the traced path (set by the walkthrough via window.PPDTree)
 
@@ -292,7 +311,7 @@
 
     // per-node position overrides from user drag — persisted per browser so a custom layout survives reload.
     // Bump the version when the DEFAULT layout changes so a stale saved arrangement doesn't mask the new one.
-    var LSKEY = 'dt-layout-v3', override = {};   // bumped: the default layout is now the auto-laid spine
+    var LSKEY = 'dt-layout-v4', override = {};   // bumped: new lane/band auto-layout — drop stale v3 drags
     try { override = JSON.parse(localStorage.getItem(LSKEY) || '{}') || {}; } catch (e) { override = {}; }
     function saveOverride() { try { localStorage.setItem(LSKEY, JSON.stringify(override)); } catch (e) {} }
     function nodeX(n) { return (override[n.id] && override[n.id].x != null) ? override[n.id].x : n.x; }
@@ -370,6 +389,10 @@
       // labels wrap, so measure heights next frame, then draw edges + (optionally) fit
       requestAnimationFrame(function () { drawEdges(); if (refit) fit(); else { clampPan(); apply(); } });
     }
+    // A STRUCTURAL change (expand/collapse) clears any active trace first, so a stale dim from a selected
+    // scenario never greys out the freshly revealed nodes. (The walkthrough's setActive/focusPath are
+    // unaffected — they still drive the trace; this only runs on the user's own expand/collapse clicks.)
+    function structuralRender(refit) { activeNodes = {}; activePairs = {}; render(refit); }
 
     // controls
     // A drag updates positions in memory only; the user explicitly clicks "Save layout" to persist them
@@ -384,9 +407,9 @@
       var det = document.getElementById('dt-detail'); if (det) det.hidden = false;
       var hint = document.getElementById('dt-hint'); if (hint) hint.hidden = false;
       var eb = document.getElementById('dt-expand');
-      if (eb) eb.addEventListener('click', function () { GRAPH.nodes.forEach(function (n) { visible.add(n.id); }); render(true); });
+      if (eb) eb.addEventListener('click', function () { GRAPH.nodes.forEach(function (n) { visible.add(n.id); }); structuralRender(true); });
       var cb = document.getElementById('dt-collapse');
-      if (cb) cb.addEventListener('click', function () { resetVisible(); render(true); });
+      if (cb) cb.addEventListener('click', function () { resetVisible(); structuralRender(true); });
       if (saveBtn) saveBtn.addEventListener('click', function () {
         saveOverride(); markDirty(false); saveBtn.classList.add('saved');
         var lbl = saveBtn.querySelector('.dt-savelbl'); if (lbl) { var t0 = lbl.textContent; lbl.textContent = 'Saved ✓';
@@ -421,7 +444,7 @@
       var b = e.target.closest ? e.target.closest('[data-expand]') : null;
       if (!b) return;
       var id = b.getAttribute('data-expand'); var hc = hiddenChildren(id); if (!hc.length) return;
-      hc.forEach(function (c) { visible.add(c); }); render(false);
+      hc.forEach(function (c) { visible.add(c); }); structuralRender(false);   // clear any stale trace so the reveal isn't dimmed
     });
 
     // pointer handling: drag a CARD to move it (persisted); drag the BACKGROUND to pan; pinch / Ctrl-wheel zoom.
@@ -525,8 +548,8 @@
       return null;
     }
     function edgeLabel(a, b) { var es = adj[a] || []; for (var i = 0; i < es.length; i++) if (es[i].dst === b) return es[i].label || ''; return ''; }
-    var KC = { start: 'var(--accent)', decision: 'var(--info)', process: 'var(--muted)', noop: 'var(--ok)',
-               widen: '#0aa1c0', create: 'var(--warn)', note: 'var(--info)', review: 'var(--danger)' };
+    var KC = { start: 'var(--accent)', decision: '#8294f5', process: '#7e8db0', noop: 'var(--ok)',
+               widen: '#2bb8d6', create: 'var(--warn)', note: '#5aa8ff', review: 'var(--danger)', terminal: '#7e8db0' };
     function kc(id) { var n = byId[id]; return (n && KC[n.kind]) || 'var(--muted)'; }
 
     var SCN = [

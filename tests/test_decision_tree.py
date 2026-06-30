@@ -194,8 +194,9 @@ def test_object_materialisation_branch_is_drawn():
     edges = {(e.src, e.dst) for e in dt.EDGES}
     assert ("create", "apply") in edges and ("doWiden", "apply") in edges   # off both write outcomes
     assert ("apply", "matIP") in edges and ("apply", "matMk") in edges and ("apply", "matReuse") in edges
-    assert ("matReuse", "matMissing") in edges           # reuse-only-missing -> a note (define it first)
-    assert next(n for n in dt.NODES if n.id == "matMissing").kind == "note"   # not a crimson review
+    assert ("matReuse", "matMissing") in edges           # reuse-only-missing -> an annotation (define it first)
+    # an informational leaf ('note' or the muted 'terminal' annotation kind) — never a crimson review stop
+    assert next(n for n in dt.NODES if n.id == "matMissing").kind in ("note", "terminal")
 
 
 def test_every_typed_request_kind_is_named_in_the_tree():
@@ -219,8 +220,53 @@ def test_opaque_rules_note_and_continue_is_drawn():
     assert {"noteO", "idupd"} <= ids
     assert all(n.kind == "note" for n in dt.NODES if n.id in ("noteO", "idupd"))
     edges = {(e.src, e.dst) for e in dt.EDGES}
-    assert ("resolve", "noteO") in edges and ("noteO", "perm") in edges     # noted, then continues the walk
+    # noted, then continues the walk (into the Accept-vs-block 'action' decision, which leads on to perm)
+    assert ("resolve", "noteO") in edges and ("noteO", "action") in edges
+    assert ("action", "perm") in edges
     resolve = next(n for n in dt.NODES if n.id == "resolve")
     assert "continue" in resolve.sub.lower()                                # advertises continue, not review
     note = next(n for n in dt.NODES if n.id == "noteO")
     assert "note" in (note.label + note.sub).lower() and note.kind == "note"
+
+
+def test_non_accept_branch_is_drawn():
+    # The engine's _decide_nonaccept (Drop/Reject/Ask/Inform/Apply-Layer requests) must be depicted: an
+    # 'action' decision off resolve splitting Accept (→ perm) from block/divert (→ a 'verdict' outcome).
+    ids = {n.id for n in dt.NODES}
+    assert {"action", "verdict"} <= ids, "the non-Accept branch (action/verdict) isn't drawn"
+    edges = {(e.src, e.dst) for e in dt.EDGES}
+    assert ("resolve", "action") in edges
+    assert ("action", "perm") in edges and ("action", "verdict") in edges
+    assert ("resolve", "perm") not in edges          # the spine now routes through 'action', not straight to perm
+    action = next(n for n in dt.NODES if n.id == "action")
+    assert action.kind == "decision"
+    verdict = next(n for n in dt.NODES if n.id == "verdict")
+    assert "verdict" in (verdict.label + verdict.sub).lower()
+
+
+def test_review_is_demoted_to_an_input_guard():
+    # REVIEW now survives ONLY as an input-validation guard for an unparsable/empty REQUEST — never for a
+    # policy rule the engine can't resolve. The node must read as such, not as a primary "needs review" stop.
+    review = next(n for n in dt.NODES if n.id == "review")
+    text = (review.label + " " + review.sub).lower()
+    assert "needs review" not in review.label.lower()    # the stale, over-prominent framing is gone
+    assert any(w in text for w in ("incomplete", "unparsable", "empty", "fix")), text
+    assert ("resolve", "review") in {(e.src, e.dst) for e in dt.EDGES}
+
+
+def test_widen_above_a_deny_is_representable():
+    # The engine can WIDEN a clean rule even with a covering deny present (_widen_above_block); the graph
+    # must offer deny -> doWiden, not imply widen requires "no deny".
+    edges = {(e.src, e.dst) for e in dt.EDGES}
+    assert ("deny", "doWiden") in edges
+    assert ("deny", "create") in edges and ("deny", "widen") in edges
+
+
+def test_terminal_annotation_kind_exists_and_is_palette_backed():
+    # Pure dead-end annotation leaves use the muted 'terminal' kind so they read as endpoints, not broken
+    # decisions. Every kind in use must have a colour in BOTH palettes (so exports/render don't fall back).
+    kinds = {n.kind for n in dt.NODES}
+    assert "terminal" in kinds
+    for kind in kinds:
+        assert kind in dt.PALETTE, f"{kind} missing from PALETTE (light)"
+        assert kind in dt.PALETTE_DARK, f"{kind} missing from PALETTE_DARK (dark)"

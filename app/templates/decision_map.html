@@ -7,23 +7,24 @@
      Decision tree (reuse=green, widen=teal/cyan, create=amber, note=blue, fix=red). Pure presentation
      (no server data); uses only the portal's tokens so light / dark are handled automatically. */
 
-  .dm-wrap { --dm-stagger:0ms; }
+  /* map-local "Widen" teal — base.html has no teal token, so it lives here and swaps at the html level,
+     keeping the Widen card and the flow bar's mid-stop identical in both themes (no hardcoded literals elsewhere). */
+  .dm-wrap { --dm-stagger:0ms; --dm-cyan:#22c3dd; }
+  html[data-theme="light"] .dm-wrap { --dm-cyan:#0e8aa0; }
   .dm-sr { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden;
     clip:rect(0,0,0,0); white-space:nowrap; border:0; }
 
-  /* per-outcome palette — kept in one place so the hero, ladder and cards stay in lock-step with the tree */
-  .o-reuse  { --c:var(--ok);     --c-bg:var(--ok-bg);     --c-line:var(--ok-line); }
-  .o-widen  { --c:#22c3dd;       --c-bg:rgba(34,195,221,.16); --c-line:rgba(34,195,221,.36); }
-  .o-create { --c:var(--warn);   --c-bg:var(--warn-bg);   --c-line:rgba(251,191,36,.34); }
-  .o-note   { --c:var(--info);   --c-bg:var(--info-bg);   --c-line:rgba(56,189,248,.34); }
-  .o-fix    { --c:var(--danger); --c-bg:var(--danger-bg); --c-line:var(--danger-line); }
-  .o-skip   { --c:var(--muted);  --c-bg:var(--surface-3); --c-line:var(--line); }
-  .o-match  { --c:var(--accent); --c-bg:var(--accent-soft); --c-line:var(--accent-soft); }
-  /* light-mode: the teal/amber/blue tints flip to darker, legible shades (base.html has no teal/-line tokens) */
-  html[data-theme="light"] .o-widen  { --c:#0e8aa0; --c-bg:rgba(14,138,160,.13); --c-line:rgba(14,138,160,.40); }
-  html[data-theme="light"] .o-create { --c-line:rgba(183,121,31,.40); }
-  html[data-theme="light"] .o-note   { --c-line:rgba(2,132,199,.40); }
-  html[data-theme="light"] .dm-flow  { background:linear-gradient(90deg, var(--ok) 0%, #0e8aa0 50%, var(--warn) 100%); }
+  /* per-outcome palette — each class sets ONLY its base colour (--c) from a token / the map-local teal;
+     .dm-card and .dm-stage derive the bg + line tint from it, so light / dark stay legible automatically
+     and the colours stay in lock-step with the Decision tree (reuse=green, widen=teal, create=amber,
+     note=blue, fix=red, skip=secondary-text, match=accent). */
+  .o-reuse  { --c:var(--ok); }
+  .o-widen  { --c:var(--dm-cyan); }
+  .o-create { --c:var(--warn); }
+  .o-note   { --c:var(--info); }
+  .o-fix    { --c:var(--danger); }
+  .o-skip   { --c:var(--text-2); }
+  .o-match  { --c:var(--accent); }
 
   .dm-lead { color:var(--text-2); font-size:13.5px; line-height:1.62; max-width:80ch; margin:7px 0 0; }
   .dm-lead b { color:var(--text); }
@@ -40,8 +41,10 @@
     box-shadow:0 18px 44px -22px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.07); }
   /* a soft drifting glow so the hero reads alive, not flat */
   .dm-hero::before { content:""; position:absolute; inset:-40% -10% auto auto; width:340px; height:340px;
-    background:radial-gradient(circle, var(--accent-soft), transparent 65%); filter:blur(8px);
-    opacity:.7; pointer-events:none; animation:dm-drift 14s ease-in-out infinite; }
+    background:radial-gradient(circle, color-mix(in srgb, var(--accent) 22%, transparent), transparent 65%);
+    filter:blur(8px); opacity:.7; pointer-events:none; animation:dm-drift 14s ease-in-out infinite; }
+  /* light mode: --accent-soft is very pale, so lean on a slightly stronger accent mix and dial the opacity back */
+  html[data-theme="light"] .dm-hero::before { opacity:.42; }
   @keyframes dm-drift { 0%,100%{ transform:translate(0,0) scale(1); } 50%{ transform:translate(-26px,22px) scale(1.12); } }
 
   .dm-hero-tag { display:inline-flex; align-items:center; gap:7px; font-size:11px; font-weight:800;
@@ -51,20 +54,32 @@
   .dm-hero h2 { margin:13px 0 4px; font-size:19px; font-weight:760; color:var(--text); letter-spacing:-.01em; }
   .dm-hero .dm-sub { margin:0 0 20px; color:var(--muted); font-size:13px; line-height:1.55; max-width:70ch; }
 
-  /* the pipeline: three stages joined by an animated gradient flow line */
+  /* the pipeline: three stages joined by an animated gradient flow line (horizontal on desktop) */
   .dm-pipe { position:relative; display:grid; grid-template-columns:repeat(3, 1fr); gap:14px; }
-  @media (max-width:720px){ .dm-pipe { grid-template-columns:1fr; } }
-  /* the energy line behind the stages (desktop only — it tracks the 3-up row) */
+  /* the energy line behind the stages (desktop — it tracks the 3-up row) */
   .dm-flow { position:absolute; left:8%; right:8%; top:30px; height:4px; border-radius:999px; z-index:0;
-    background:linear-gradient(90deg, var(--ok) 0%, #22c3dd 50%, var(--warn) 100%); opacity:.55; }
+    background:linear-gradient(90deg, var(--ok) 0%, var(--dm-cyan) 50%, var(--warn) 100%); opacity:.55; }
   .dm-flow::after { content:""; position:absolute; inset:0; border-radius:999px;
     background:linear-gradient(90deg, transparent, rgba(255,255,255,.85), transparent);
     background-size:42% 100%; background-repeat:no-repeat;
     animation:dm-trace 3.4s linear infinite; }
   @keyframes dm-trace { 0%{ background-position:-50% 0; } 100%{ background-position:150% 0; } }
-  @media (max-width:720px){ .dm-flow { display:none; } }
+  /* mobile: stack to one column and turn the flow into a VERTICAL gradient rail down the left,
+     with the stages offset to clear it (top→bottom: reuse → widen → create). */
+  @media (max-width:720px){
+    .dm-pipe { grid-template-columns:1fr; padding-left:26px; }
+    .dm-flow { left:8px; right:auto; top:12px; bottom:12px; width:4px; height:auto; opacity:.6;
+      background:linear-gradient(180deg, var(--ok) 0%, var(--dm-cyan) 50%, var(--warn) 100%); }
+    .dm-flow::after {
+      background:linear-gradient(180deg, transparent, rgba(255,255,255,.85), transparent);
+      background-size:100% 42%; background-repeat:no-repeat;
+      animation:dm-trace-v 3.4s linear infinite; }
+  }
+  @keyframes dm-trace-v { 0%{ background-position:0 -50%; } 100%{ background-position:0 150%; } }
 
   .dm-stage { position:relative; z-index:1; padding:16px 16px 15px; border-radius:var(--r-lg);
+    --c-bg:color-mix(in srgb, var(--c) 14%, transparent);
+    --c-line:color-mix(in srgb, var(--c) 36%, transparent);
     border:1px solid var(--c-line);
     background:
       linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,0) 42%),
@@ -86,9 +101,13 @@
   .dm-stage h3 { margin:3px 0 5px; font-size:16px; color:var(--text); letter-spacing:-.01em; }
   .dm-stage p { margin:0 0 12px; font-size:12.5px; line-height:1.52; color:var(--muted); }
   .dm-stage p b { color:var(--text); }
-  .dm-stage .dm-pill { display:inline-flex; align-items:center; gap:6px; font-size:11px; font-weight:700;
-    padding:4px 11px; border-radius:999px; background:var(--c-bg); color:var(--c); border:1px solid var(--c-line); }
-  .dm-stage .dm-pill .dot { width:6px; height:6px; border-radius:50%; background:var(--c); }
+  .dm-stage .dm-pill { display:inline-flex; align-items:center; gap:6px; font-size:11px; font-weight:800;
+    letter-spacing:.2px; padding:4px 11px; border-radius:999px; color:var(--c);
+    background:color-mix(in srgb, var(--c) 18%, var(--surface));
+    border:1px solid var(--c-line);
+    box-shadow:0 2px 8px -4px color-mix(in srgb, var(--c) 60%, transparent), inset 0 1px 0 rgba(255,255,255,.10); }
+  .dm-stage .dm-pill .dot { width:6px; height:6px; border-radius:50%; background:var(--c);
+    box-shadow:0 0 6px -1px var(--c); }
 
   /* ---------- section heading ---------- */
   .dm-h { display:flex; align-items:center; gap:10px; font-size:12px; font-weight:800; letter-spacing:.5px;
@@ -97,7 +116,11 @@
 
   /* ---------- principle cards — lit-glass, per-outcome accent ---------- */
   .dm-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(300px, 1fr)); gap:14px; }
+  @media (max-width:768px){ .dm-grid { grid-template-columns:repeat(auto-fill, minmax(280px, 1fr)); } }
+  @media (max-width:480px){ .dm-grid { grid-template-columns:1fr; } }
   .dm-card { position:relative; overflow:hidden; padding:17px 18px; border-radius:var(--r-lg);
+    --c-bg:color-mix(in srgb, var(--c) 14%, transparent);
+    --c-line:color-mix(in srgb, var(--c) 36%, transparent);
     border:1px solid var(--line);
     background:
       linear-gradient(180deg, rgba(255,255,255,.07), rgba(255,255,255,0) 38%),
@@ -121,7 +144,8 @@
     border:1px solid var(--c-line); box-shadow:inset 0 1px 0 rgba(255,255,255,.12); }
   .dm-card .dm-ico svg { width:20px; height:20px; }
   .dm-card .dm-badge { margin-left:auto; font-size:10px; font-weight:800; letter-spacing:.4px;
-    text-transform:uppercase; color:var(--c); background:var(--c-bg); border:1px solid var(--c-line);
+    text-transform:uppercase; color:var(--c); border:1px solid var(--c-line);
+    background:color-mix(in srgb, var(--c) 16%, var(--surface));
     padding:3px 9px; border-radius:999px; }
   .dm-card h4 { margin:0; font-size:14.5px; color:var(--text); letter-spacing:-.01em; line-height:1.25; }
   .dm-card p { margin:0; font-size:12.5px; line-height:1.55; color:var(--muted); position:relative; z-index:1; }
@@ -246,7 +270,7 @@
         <h4>Note, don't stop</h4>
         <span class="dm-badge">Note</span>
       </div>
-      <p>A rule it <em>can't fully resolve</em> (an updatable feed, an unresolvable cell, a conditional or inline-layer rule) is flagged <b>&ldquo;possible match — review later&rdquo;</b> and the walk continues; the new rule goes <b>below</b> it, so it can't leap over a possible block.</p>
+      <p>A rule it <em>can't fully resolve</em> (an updatable feed, an unresolvable cell, a conditional or inline-layer rule) is flagged <b>&ldquo;possible match — review later&rdquo;</b> and the walk continues. Because it might still be a deny, the new rule is placed <b>below</b> it — so <b>first-match</b> keeps that unresolved rule in effect and the new allow can never leap over a possible block.</p>
     </div>
 
     <div class="dm-card o-skip" style="--d:300ms;">

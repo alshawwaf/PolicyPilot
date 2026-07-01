@@ -26,12 +26,49 @@ class User(Base):
     first_name: Mapped[str] = mapped_column(String(80), default="")
     last_name: Mapped[str] = mapped_column(String(80), default="")
     email: Mapped[str] = mapped_column(String(200), default="")
-    title: Mapped[str] = mapped_column(String(120), default="")          # role / job title
+    title: Mapped[str] = mapped_column(String(120), default="")          # job title (free text, cosmetic)
     created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    # --- Access control (real-OS style: an admin, or a standard user with granular capabilities) --------
+    is_admin: Mapped[bool] = mapped_column(Boolean, default=False)        # admin ⇒ every permission, always
+    status: Mapped[str] = mapped_column(String(20), default="active")    # active | pending | disabled
+    # Granular capabilities for a STANDARD (non-admin) user. Admins bypass these. "View" is implicit for
+    # any active account, so there is no perm_view — logging in is the view grant.
+    perm_preview: Mapped[bool] = mapped_column(Boolean, default=True)     # run access decisions / previews
+    perm_apply: Mapped[bool] = mapped_column(Boolean, default=False)     # stage/apply a change (dry-run)
+    perm_publish: Mapped[bool] = mapped_column(Boolean, default=False)   # publish to the SMS (irreversible)
+    perm_export: Mapped[bool] = mapped_column(Boolean, default=True)     # generate IaC / Gaia exports
+    perm_manage_users: Mapped[bool] = mapped_column(Boolean, default=False)  # create/approve/reset users
+    # Sign-in lifecycle
+    must_change_password: Mapped[bool] = mapped_column(Boolean, default=False)   # force a change next login
+    last_login_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Password-reset token (email flow): only the SHA-256 of the token is stored, with an expiry.
+    reset_token_hash: Mapped[str] = mapped_column(String(255), default="")
+    reset_token_expires: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     @property
     def display_name(self) -> str:
         return (f"{self.first_name} {self.last_name}".strip()) or self.username
+
+    @property
+    def initials(self) -> str:
+        fn, ln = (self.first_name or "").strip(), (self.last_name or "").strip()
+        if fn or ln:
+            return (fn[:1] + ln[:1]).upper()
+        return (self.username or "?")[:2].upper()
+
+    @property
+    def avatar_hue(self) -> int:
+        """A stable hue (0–359) derived from the username, so every user gets a distinct, consistent
+        avatar colour without storing one — the macOS 'coloured initials' look."""
+        h = 0
+        for ch in (self.username or "?"):
+            h = (h * 31 + ord(ch)) & 0xFFFFFF
+        return h % 360
+
+    @property
+    def role_label(self) -> str:
+        return "Administrator" if self.is_admin else "Standard"
 
 
 class DynamicLayer(Base):

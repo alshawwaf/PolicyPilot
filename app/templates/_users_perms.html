@@ -1,0 +1,21 @@
+{# Permissions checkboxes for the add/edit user forms. `selected` = the user being edited (None on add);
+   `grantable` = permission catalogue; `me` = the acting user. In add mode, preview + export are on by
+   default (the read-only-ish standard). The manage-users row is admin-only (no privilege escalation). #}
+<div class="fieldset" id="perm-box">
+  <p class="lg">Permissions <span class="muted small" style="text-transform:none;letter-spacing:0;font-weight:500;">— for a standard user</span></p>
+  <div class="perm-grid">
+    {% for key, lbl, desc in grantable %}
+      {% if key != 'manage_users' or me.is_admin %}
+        {% if selected %}
+          {% set checked = selected|attr('perm_' + key) %}
+        {% else %}
+          {% set checked = key in ('preview', 'export') %}
+        {% endif %}
+        <label class="perm-item">
+          <input type="checkbox" name="perm_{{ key }}" {{ 'checked' if checked }}>
+          <span class="pt"><b>{{ lbl }}</b><span>{{ desc }}</span></span>
+        </label>
+      {% endif %}
+    {% endfor %}
+  </div>
+</div>

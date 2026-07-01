@@ -61,6 +61,19 @@ _ADDED_COLUMNS = {
         "last_name": "VARCHAR(80) DEFAULT ''",
         "email": "VARCHAR(200) DEFAULT ''",
         "title": "VARCHAR(120) DEFAULT ''",
+        # Multi-user + RBAC (added after single-admin shipped). Defaults make an existing account a
+        # standard user; _seed_admin backfills is_admin/status on the configured admin username at boot.
+        "is_admin": "BOOLEAN DEFAULT 0",
+        "status": "VARCHAR(20) DEFAULT 'active'",
+        "perm_preview": "BOOLEAN DEFAULT 1",
+        "perm_apply": "BOOLEAN DEFAULT 0",
+        "perm_publish": "BOOLEAN DEFAULT 0",
+        "perm_export": "BOOLEAN DEFAULT 1",
+        "perm_manage_users": "BOOLEAN DEFAULT 0",
+        "must_change_password": "BOOLEAN DEFAULT 0",
+        "last_login_at": "DATETIME",
+        "reset_token_hash": "VARCHAR(255) DEFAULT ''",
+        "reset_token_expires": "DATETIME",
     },
     "api_keys": {"expires_at": "DATETIME",                  # key-expiry, added after the table shipped
                  "can_write": "BOOLEAN DEFAULT 1"},          # read-only vs write capability (default: write)

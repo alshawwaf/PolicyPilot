@@ -22,7 +22,7 @@ from ..db import get_db
 from ..models import AppliedChange, ManagementServer, User, utcnow
 from ..security import get_user_or_none
 from ..services import access_automation as aa
-from ..services import api_keys, app_settings, applications, change_log, decision_tree, mgmt_api, mgmt_creds, services, table_prefs, ticketing, typed_objects
+from ..services import api_keys, app_settings, applications, change_log, decision_tree, mgmt_api, mgmt_creds, permissions, services, table_prefs, ticketing, typed_objects
 from ..services.gaia_client import ensure_pinned
 from .ui import _pop_flash, templates
 
@@ -225,6 +225,14 @@ def _record_change_safe(db, **kw) -> None:
         logging.getLogger("policypilot.access_automation").exception("recording change for rollback failed")
 
 
+def _perm_or_403(user: User, perm: str):
+    """None if *user* may do *perm*, else a JSON 403 (these are fetch/JSON endpoints)."""
+    if not permissions.can(user, perm):
+        return JSONResponse(
+            {"error": f"You don't have permission to {permissions.label(perm).lower()}."}, status_code=403)
+    return None
+
+
 def _run(db: Session, sid: int, user: User, body: AccessReqBody, *, do_apply: bool):
     ms = _owned(db, sid, user)
     secret, err = _secret_or_error(db, ms)
@@ -331,6 +339,8 @@ def aa_take_over(sid: int, body: TakeOverBody, request: Request, db: Session = D
     user = get_user_or_none(request, db)
     if user is None:
         return JSONResponse({"error": "Not authenticated"}, status_code=401)
+    if (e := _perm_or_403(user, permissions.APPLY)):
+        return e
     ms = _owned(db, sid, user)
     secret, err = _secret_or_error(db, ms)
     if err:
@@ -348,6 +358,10 @@ def aa_apply(sid: int, body: AccessReqBody, request: Request, db: Session = Depe
     user = get_user_or_none(request, db)
     if user is None:
         return JSONResponse({"error": "Not authenticated"}, status_code=401)
+    if (e := _perm_or_403(user, permissions.APPLY)):
+        return e
+    if body.publish and (e := _perm_or_403(user, permissions.PUBLISH)):
+        return e
     return _run(db, sid, user, body, do_apply=True)
 
 
@@ -404,6 +418,10 @@ def aa_revert(sid: int, cid: int, body: RevertBody, request: Request, db: Sessio
     user = get_user_or_none(request, db)
     if user is None:
         return JSONResponse({"error": "Not authenticated"}, status_code=401)
+    if (e := _perm_or_403(user, permissions.APPLY)):
+        return e
+    if body.publish and (e := _perm_or_403(user, permissions.PUBLISH)):
+        return e
     ms = _owned(db, sid, user)
     secret, err = _secret_or_error(db, ms)
     if err:

@@ -20,15 +20,20 @@ from sqlalchemy.orm import Session
 from ..config import get_settings
 from ..db import get_db
 from ..models import (ActivityLog, ApiKey, DynamicLayer, GlobalPref, Gateway, ManagementServer, User,
-                      UserDesktopPref)
-from ..security import get_user_or_none, hash_password, password_strength_error, verify_password
-from ..services import coverage, login_guard
+                      UserDesktopPref, utcnow)
+from ..security import (get_user_or_none, hash_password, hash_token, new_reset_token,
+                        password_strength_error, username_error, verify_password)
+from ..services import coverage, login_guard, mailer, permissions
 
 router = APIRouter(include_in_schema=False)
 TEMPLATES_DIR = Path(__file__).resolve().parent.parent / "templates"
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 from .. import __version__ as _app_version
 templates.env.globals["app_version"] = _app_version   # surfaced in the footer (single shared templates env)
+# RBAC helpers available in every template: {{ can(user, 'publish') }} to show/hide controls, and
+# {{ perms(user) }} for the full capability map. Single shared env, so this reaches all routers.
+templates.env.globals["can"] = permissions.can
+templates.env.globals["perms"] = permissions.effective
 
 
 @router.get("/mcp-guide", response_class=HTMLResponse)
@@ -215,9 +220,17 @@ def _pop_flash(request: Request) -> dict | None:
 
 
 # --- Auth ------------------------------------------------------------------------------
+def _valid_email(email: str) -> bool:
+    email = (email or "").strip()
+    return bool(email) and "@" in email and " " not in email and len(email) <= 200
+
+
 @router.get("/login", response_class=HTMLResponse)
-def login_page(request: Request):
-    return templates.TemplateResponse(request, "login.html", {"error": None})
+def login_page(request: Request, db: Session = Depends(get_db)):
+    if get_user_or_none(request, db) is not None:
+        return RedirectResponse("/", status_code=303)
+    return templates.TemplateResponse(request, "login.html",
+                                      {"error": None, "email_reset": mailer.is_configured()})
 
 
 @router.post("/login")
@@ -229,18 +242,39 @@ def login_submit(
 ):
     ip = login_guard.client_ip(request)
     wait = login_guard.locked_for(db, ip)
+    email_reset = mailer.is_configured()
     if wait:
         return templates.TemplateResponse(
             request, "login.html",
-            {"error": f"Too many failed attempts. Try again in {wait}s."}, status_code=429)
+            {"error": f"Too many failed attempts. Try again in {wait}s.", "email_reset": email_reset},
+            status_code=429)
     user = db.scalar(select(User).where(User.username == username))
     if user is None or not verify_password(password, user.password_hash):
         login_guard.record_failure(db, ip)
         return templates.TemplateResponse(
-            request, "login.html", {"error": "Invalid credentials"}, status_code=401
-        )
+            request, "login.html", {"error": "Invalid credentials", "email_reset": email_reset},
+            status_code=401)
+    # Credentials are correct — now enforce the account lifecycle. Do NOT clear the brute-force throttle
+    # here: a valid-credential login to an inactive account must not reset the IP's failure count (else a
+    # self-signup / disabled account whose password the attacker knows becomes a throttle-reset oracle for
+    # guessing OTHER accounts). Leave the counter untouched — neither a success nor a failure.
+    if user.status == "pending":
+        return templates.TemplateResponse(
+            request, "login.html",
+            {"error": "Your account is awaiting administrator approval.", "email_reset": email_reset},
+            status_code=403)
+    if user.status == "disabled":
+        return templates.TemplateResponse(
+            request, "login.html",
+            {"error": "This account has been disabled. Contact an administrator.", "email_reset": email_reset},
+            status_code=403)
     login_guard.record_success(db, ip)
+    user.last_login_at = utcnow()
+    db.commit()
     request.session["uid"] = user.id
+    # A temp password from an admin reset (or first login) forces a change before anything else.
+    if user.must_change_password:
+        return RedirectResponse("/account?force=1", status_code=303)
     return RedirectResponse("/", status_code=303)
 
 
@@ -250,13 +284,150 @@ def logout(request: Request):
     return RedirectResponse("/login", status_code=303)
 
 
+# --- Self-service registration (self-signup → pending admin approval) -------------------
+@router.get("/register", response_class=HTMLResponse)
+def register_page(request: Request, db: Session = Depends(get_db)):
+    if get_user_or_none(request, db) is not None:
+        return RedirectResponse("/", status_code=303)
+    return templates.TemplateResponse(request, "register.html", {"error": None, "form": {}})
+
+
+@router.post("/register")
+def register_submit(
+    request: Request,
+    username: str = Form(...),
+    first_name: str = Form(""),
+    last_name: str = Form(""),
+    email: str = Form(""),
+    password: str = Form(...),
+    confirm: str = Form(...),
+    db: Session = Depends(get_db),
+):
+    username = (username or "").strip()
+    email = (email or "").strip()
+    form = {"username": username, "first_name": first_name, "last_name": last_name, "email": email}
+
+    def _err(msg: str):
+        return templates.TemplateResponse(request, "register.html",
+                                          {"error": msg, "form": form}, status_code=400)
+
+    if (e := username_error(username)):
+        return _err(e)
+    if db.scalar(select(User).where(func.lower(User.username) == username.lower())):
+        return _err("That username is already taken.")
+    if email and not _valid_email(email):
+        return _err("That doesn't look like a valid email address.")
+    if password != confirm:
+        return _err("Passwords do not match.")
+    if (e := password_strength_error(password)):
+        return _err(e)
+
+    # New self-signups land as a pending, standard, read-only-ish account (preview + export), disabled
+    # until an admin approves — the chosen "self-signup + approval" posture.
+    user = User(username=username, password_hash=hash_password(password),
+                first_name=(first_name or "").strip()[:80], last_name=(last_name or "").strip()[:80],
+                email=email, is_admin=False, status="pending",
+                perm_preview=True, perm_export=True,
+                perm_apply=False, perm_publish=False, perm_manage_users=False)
+    db.add(user)
+    db.commit()
+    # Notify every admin so a pending request never sits unseen.
+    try:
+        from ..services import notifications
+        for adm in db.scalars(select(User).where(User.is_admin.is_(True), User.status == "active")).all():
+            notifications.add(db, adm.id, f"New user '{username}' is awaiting approval.", "info")
+    except Exception:  # noqa: BLE001 — notification is best-effort
+        pass
+    _flash(request, "Account created — it's awaiting administrator approval. You'll be able to sign in once approved.")
+    return RedirectResponse("/login", status_code=303)
+
+
+# --- Forgot / reset password ------------------------------------------------------------
+@router.get("/forgot-password", response_class=HTMLResponse)
+def forgot_password_page(request: Request):
+    return templates.TemplateResponse(request, "forgot_password.html",
+                                      {"sent": False, "email_reset": mailer.is_configured(), "error": None})
+
+
+@router.post("/forgot-password")
+def forgot_password_submit(request: Request, identifier: str = Form(...), db: Session = Depends(get_db)):
+    identifier = (identifier or "").strip()
+    if not mailer.is_configured():
+        return templates.TemplateResponse(request, "forgot_password.html",
+                                          {"sent": False, "email_reset": False, "error": None})
+    # Match by username OR email. Respond identically whether or not a match exists (no user enumeration).
+    user = db.scalar(select(User).where(
+        (func.lower(User.username) == identifier.lower()) | (func.lower(User.email) == identifier.lower())))
+    if user is not None and user.status == "active" and user.email:
+        token = new_reset_token()
+        user.reset_token_hash = hash_token(token)
+        user.reset_token_expires = utcnow() + dt.timedelta(hours=1)
+        db.commit()
+        from ..services import app_settings
+        link = f"{app_settings.base_url().rstrip('/')}/reset-password/{token}"
+        mailer.send(user.email, "Reset your PolicyPilot password",
+                    f"Hi {user.display_name},\n\n"
+                    f"We received a request to reset your PolicyPilot password. Open this link to choose "
+                    f"a new one (it expires in 1 hour):\n\n{link}\n\n"
+                    f"If you didn't request this, you can safely ignore this email.\n\n— PolicyPilot")
+    return templates.TemplateResponse(request, "forgot_password.html",
+                                      {"sent": True, "email_reset": True, "error": None})
+
+
+def _user_for_reset_token(db: Session, token: str) -> User | None:
+    if not token:
+        return None
+    user = db.scalar(select(User).where(User.reset_token_hash == hash_token(token)))
+    if user is None or not user.reset_token_expires:
+        return None
+    exp = user.reset_token_expires
+    if exp.tzinfo is None:
+        exp = exp.replace(tzinfo=dt.timezone.utc)
+    if exp < utcnow():
+        return None
+    return user
+
+
+@router.get("/reset-password/{token}", response_class=HTMLResponse)
+def reset_password_page(token: str, request: Request, db: Session = Depends(get_db)):
+    user = _user_for_reset_token(db, token)
+    return templates.TemplateResponse(request, "reset_password.html",
+                                      {"token": token, "valid": user is not None, "error": None})
+
+
+@router.post("/reset-password/{token}")
+def reset_password_submit(token: str, request: Request, new: str = Form(...),
+                          confirm: str = Form(...), db: Session = Depends(get_db)):
+    user = _user_for_reset_token(db, token)
+    if user is None:
+        return templates.TemplateResponse(request, "reset_password.html",
+                                          {"token": token, "valid": False, "error": None})
+    if new != confirm:
+        return templates.TemplateResponse(request, "reset_password.html",
+                                          {"token": token, "valid": True, "error": "Passwords do not match."})
+    if (e := password_strength_error(new)):
+        return templates.TemplateResponse(request, "reset_password.html",
+                                          {"token": token, "valid": True, "error": e})
+    user.password_hash = hash_password(new)
+    user.reset_token_hash = ""
+    user.reset_token_expires = None
+    user.must_change_password = False
+    db.commit()
+    _flash(request, "Password reset — you can now sign in.")
+    return RedirectResponse("/login", status_code=303)
+
+
+# --- Account (self-service profile + password) -----------------------------------------
 @router.get("/account", response_class=HTMLResponse)
-def account_page(request: Request, db: Session = Depends(get_db)):
+def account_page(request: Request, force: int = 0, db: Session = Depends(get_db)):
     user = get_user_or_none(request, db)
     if user is None:
         return RedirectResponse("/login", status_code=303)
     return templates.TemplateResponse(request, "account.html",
-                                      {"user": user, "flash": _pop_flash(request)})
+                                      {"user": user, "flash": _pop_flash(request),
+                                       "force_password": bool(force) or bool(user.must_change_password),
+                                       "my_perms": permissions.effective(user),
+                                       "grantable": permissions.GRANTABLE})
 
 
 @router.post("/account/password")
@@ -278,6 +449,7 @@ def change_password(
         _flash(request, err, "error")
     else:
         user.password_hash = hash_password(new)
+        user.must_change_password = False        # clears a forced-change requirement
         db.commit()
         _flash(request, "Password changed.")
     return RedirectResponse("/account", status_code=303)
@@ -296,7 +468,7 @@ def update_profile(
     if user is None:
         return RedirectResponse("/login", status_code=303)
     email = (email or "").strip()
-    if email and ("@" not in email or " " in email or len(email) > 200):
+    if email and not _valid_email(email):
         _flash(request, "That doesn't look like a valid email address.", "error")
         return RedirectResponse("/account", status_code=303)
     user.first_name = (first_name or "").strip()[:80]
@@ -313,10 +485,10 @@ def update_profile(
 # Server-side allowlist of app keys (anything else in a saved layout is dropped — no junk/injection).
 DESKTOP_APP_KEYS = {"access", "decisionmap", "decisiontree", "changelog", "webhook", "layers", "management",
                     "policymanager", "iacexporter", "gateways", "agents", "apiexplorer", "apidocs",
-                    "settings", "activity", "account", "system"}
+                    "settings", "activity", "account", "system", "users"}
 # Toggleable desktop widgets (the right-hand rail on the OS Home). Each is backed by real, DB-side data.
 DESKTOP_WIDGET_KEYS = {"decisions", "activity", "last", "connections", "coverage",
-                       "errors", "latency", "recent", "clock", "quick"}
+                       "errors", "latency", "recent", "clock", "quick", "system"}
 DEFAULT_DESKTOP_LAYOUT = {"dock": ["access", "layers", "management", "policymanager", "iacexporter",
                                    "gateways", "agents", "settings", "activity", "system"],
                           "desktop": []}
@@ -377,9 +549,9 @@ def _sanitize_layout(raw) -> dict:
 
 
 def _is_admin(user: User) -> bool:
-    """The portal admin is the single seeded account (config ``admin_username``). Admin sets the default
+    """Any administrator (the seeded admin OR one promoted in Users & Groups) may set the shared default
     desktop; every other user freely customises their own on top of it."""
-    return bool(user) and user.username == get_settings().admin_username
+    return permissions.is_admin(user)
 
 
 def _global_default_layout(db: Session) -> dict | None:
@@ -406,6 +578,50 @@ def _fmt_uptime(secs: float) -> str:
     if h or d: out.append(f"{h}h")
     out.append(f"{m}m")
     return " ".join(out)
+
+
+def _mem_pct() -> int | None:
+    """Used-memory percent from /proc/meminfo (Linux). None where unavailable (e.g. macOS dev)."""
+    try:
+        info = {}
+        with open("/proc/meminfo") as f:
+            for line in f:
+                key, _, rest = line.partition(":")
+                if rest:
+                    info[key.strip()] = int(rest.split()[0])   # value in kB
+        total = info.get("MemTotal")
+        avail = info.get("MemAvailable", info.get("MemFree"))
+        if total and avail is not None:
+            return max(0, min(100, round((total - avail) / total * 100)))
+    except (OSError, ValueError):
+        pass
+    return None
+
+
+def _system_metrics() -> dict:
+    """Process uptime + host utilization for the desktop System widget. Stdlib only; each metric degrades
+    to None on a platform that doesn't expose its source (load average is POSIX; /proc is Linux-only)."""
+    up_s = max(0.0, time.time() - _PROCESS_START)
+    cpus = os.cpu_count() or 1
+    load1 = None
+    cpu_pct = None
+    try:
+        load1 = round(os.getloadavg()[0], 2)
+        cpu_pct = max(0, min(100, round(load1 / cpus * 100)))   # 1-min load / cores, clamped
+    except (OSError, AttributeError):
+        pass
+    disk_pct = None
+    try:
+        st = os.statvfs("/")
+        total = st.f_blocks * st.f_frsize
+        avail = st.f_bavail * st.f_frsize
+        if total > 0:
+            disk_pct = max(0, min(100, round((total - avail) / total * 100)))
+    except (OSError, AttributeError):
+        pass
+    return {"uptime": _fmt_uptime(up_s), "uptime_s": int(up_s),
+            "cpu_pct": cpu_pct, "mem_pct": _mem_pct(), "disk_pct": disk_pct,
+            "cpus": os.cpu_count(), "load1": load1}
 
 
 def _system_health(db: Session) -> dict:
@@ -573,6 +789,7 @@ def _widget_data(db: Session) -> dict:
         "connections": conns,
         "coverage": coverage_counts,
         "recent": recent,
+        "system": _system_metrics(),
     }
 
 
@@ -599,7 +816,9 @@ def home(request: Request, db: Session = Depends(get_db)):
               "layers": _count(DynamicLayer)}
     return templates.TemplateResponse(request, "home.html",
                                       {"user": user, "counts": counts, "layout": _load_desktop_layout(db, user),
-                                       "is_admin": _is_admin(user), "flash": _pop_flash(request)})
+                                       "is_admin": _is_admin(user),
+                                       "can_manage_users": permissions.can(user, permissions.MANAGE_USERS),
+                                       "flash": _pop_flash(request)})
 
 
 @router.post("/desktop/default")

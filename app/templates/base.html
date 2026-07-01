@@ -504,6 +504,17 @@
     .menu-items .menu-label { display:block; padding:7px 12px 3px; font-size:10px; font-weight:700;
       letter-spacing:.5px; color:var(--faint); text-transform:uppercase; }
     .menu-items .menu-sep { height:1px; background:var(--line); margin:5px 8px; }
+    /* Account chip + dropdown (the top-bar profile menu — real-OS style). */
+    .acct-trigger { padding:3px !important; }
+    .acct-chip { width:26px; height:26px; border-radius:8px; display:flex; align-items:center; justify-content:center;
+      font-size:11px; font-weight:800; color:#fff; letter-spacing:.3px; box-shadow:0 2px 6px rgba(0,0,0,.22); }
+    .acct-chip.lg { width:38px; height:38px; border-radius:11px; font-size:15px; }
+    .menu.open .acct-trigger .acct-chip { box-shadow:0 0 0 2px var(--accent), 0 2px 6px rgba(0,0,0,.22); }
+    .acct-who { display:flex; align-items:center; gap:11px; padding:8px 10px 12px; margin-bottom:4px; border-bottom:1px solid var(--line); }
+    .acct-who-t { min-width:0; } .acct-who-t b { display:block; font-size:13.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .acct-who-t span { font-size:11.5px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; display:block; }
+    .acct-signout { color:var(--danger) !important; }
+    .acct-signout:hover, .acct-signout:focus { background:var(--danger-bg) !important; color:var(--danger) !important; }
     /* Export dropdown — two-line options with a gradient icon chip (fills on hover). */
     .export-items { min-width:250px; }
     .export-opt { display:flex; align-items:center; gap:11px; padding:8px 10px !important; border-radius:9px; }
@@ -888,7 +899,8 @@
           <a href="/api-explorer">API explorer (Check Point)</a>
         </div>
       </div>
-      <a href="/settings">Settings</a>
+      {% if not user or user.is_admin %}<a href="/settings">Settings</a>{% endif %}
+      {% if user and (user.is_admin or user.perm_manage_users) %}<a href="/users">Users</a>{% endif %}
       <a href="/activity">Activity</a>
     </nav>
     <div class="nav-side">
@@ -903,9 +915,26 @@
           <div id="notif-list"><div class="notif-empty muted small">No notifications</div></div>
         </div>
       </div>
+      {% if user %}
+      <div class="menu" id="acct-menu">
+        <button type="button" class="menu-trigger icon-btn acct-trigger" id="acct-btn" title="Account" aria-label="Account">
+          <span class="acct-chip" style="background:linear-gradient(135deg, hsl({{ user.avatar_hue }},72%,58%), hsl({{ (user.avatar_hue + 42) % 360 }},66%,46%));">{{ user.initials }}</span>
+        </button>
+        <div class="menu-items acct-panel" style="min-width:230px;">
+          <div class="acct-who">
+            <span class="acct-chip lg" style="background:linear-gradient(135deg, hsl({{ user.avatar_hue }},72%,58%), hsl({{ (user.avatar_hue + 42) % 360 }},66%,46%));">{{ user.initials }}</span>
+            <div class="acct-who-t"><b>{{ user.display_name }}</b><span>@{{ user.username }} · {{ user.role_label }}</span></div>
+          </div>
+          <a href="/account">My Account</a>
+          {% if user.is_admin or user.perm_manage_users %}<a href="/users">Users &amp; Groups</a>{% endif %}
+          <form method="post" action="/logout" style="margin:0;"><button type="submit" class="acct-signout">Sign out</button></form>
+        </div>
+      </div>
+      {% else %}
       <a href="/account" class="icon-btn" title="Account &amp; password" aria-label="Account">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
       </a>
+      {% endif %}
       <button type="button" id="theme-toggle" class="icon-btn" title="Toggle light / dark" aria-label="Toggle theme">
         <svg class="ic-sun" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
         <svg class="ic-moon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>

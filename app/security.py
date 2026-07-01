@@ -3,6 +3,7 @@ import base64
 import hashlib
 import hmac
 import os
+import re
 import secrets
 
 from fastapi import Depends, HTTPException, Request, status
@@ -39,6 +40,26 @@ def new_feed_token(nbytes: int = 24) -> str:
     return secrets.token_urlsafe(nbytes)
 
 
+_USERNAME_RE = re.compile(r"^[a-zA-Z0-9._-]{3,32}$")
+
+
+def username_error(username: str) -> str | None:
+    """Return a human message if *username* is unusable, else None."""
+    if not _USERNAME_RE.match((username or "").strip()):
+        return "Username must be 3–32 characters: letters, numbers, dot, dash or underscore."
+    return None
+
+
+def new_reset_token() -> str:
+    """A high-entropy, URL-safe password-reset token (the plaintext is emailed; only its hash is stored)."""
+    return secrets.token_urlsafe(32)
+
+
+def hash_token(token: str) -> str:
+    """SHA-256 of a reset token, hex. We store this (never the plaintext) so a DB leak can't be replayed."""
+    return hashlib.sha256((token or "").encode()).hexdigest()
+
+
 _MIN_PASSWORD = 10
 _COMMON_PASSWORDS = {
     "password", "password1", "123456", "12345678", "123456789", "qwerty", "qwerty123",
@@ -64,7 +85,14 @@ def get_user_or_none(request: Request, db: Session) -> User | None:
     uid = request.session.get("uid")
     if not uid:
         return None
-    return db.get(User, uid)
+    user = db.get(User, uid)
+    # A session established while active must stop working the moment the account is disabled or reverted
+    # to pending — otherwise "disable" wouldn't revoke a live tab. Enforcing it in the single resolver
+    # covers every endpoint (gated and ungated) uniformly. Inlined (no permissions import) to avoid a
+    # circular import; matches permissions.is_active().
+    if user is None or (getattr(user, "status", "active") or "active") != "active":
+        return None
+    return user
 
 
 def current_user(request: Request, db: Session = Depends(get_db)) -> User:

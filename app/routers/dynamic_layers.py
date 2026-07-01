@@ -20,7 +20,7 @@ from ..schemas.dynamic_layer import (
     validate_layer_content,
 )
 from ..security import get_user_or_none, new_feed_token
-from ..services import app_settings, gateway_creds, table_prefs
+from ..services import app_settings, gateway_creds, permissions, table_prefs
 from ..services.apply_runner import STAGES, fetch_dynamic_content, get_progress, start_apply
 from ..services.gaia_client import ensure_pinned, fetch_gateway_cert
 from .ui import _flash, _pop_flash, templates
@@ -353,8 +353,13 @@ def apply_start(
     user = _user(request, db)
     if user is None:
         return JSONResponse({"error": "Not authenticated"}, status_code=401)
+    if not permissions.can(user, permissions.APPLY):
+        return JSONResponse({"error": "You don't have permission to apply changes."}, status_code=403)
     layer = _owned(db, layer_id, user)
     dry = bool(dry_run)
+    # Pushing to a REAL gateway (not the mock, not a dry-run) is an irreversible publish.
+    if not use_mock and not dry and not permissions.can(user, permissions.PUBLISH):
+        return JSONResponse({"error": "You don't have permission to publish to management."}, status_code=403)
     if use_mock:
         pid = start_apply(layer_id=layer.id, target="mock", dry_run=dry)
     else:

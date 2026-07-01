@@ -9,12 +9,19 @@ from sqlalchemy.orm import Session
 from ..db import get_db
 from ..models import DynamicLayer, Gateway, GatewayLayerSnapshot, User
 from ..security import get_user_or_none, new_feed_token
-from ..services import gateway_creds, gaia_export, table_prefs
+from ..services import gateway_creds, gaia_export, permissions, table_prefs
 from ..services.apply_runner import fetch_dynamic_content
 from ..services.gaia_client import cert_fingerprint, ensure_pinned, fetch_gateway_cert, pin_now
 from .ui import _flash, _pop_flash, templates
 
 router = APIRouter(include_in_schema=False)
+
+
+def _perm_or_403(user, perm):
+    if not permissions.can(user, perm):
+        return JSONResponse(
+            {"error": f"You don't have permission to {permissions.label(perm).lower()}."}, status_code=403)
+    return None
 
 
 def _owned(db: Session, gid: int, user: User) -> Gateway:
@@ -274,6 +281,8 @@ def gw_gaia_export_run(gid: int, request: Request, password: str = Form(""),
     user = get_user_or_none(request, db)
     if user is None:
         return JSONResponse({"error": "Not authenticated"}, status_code=401)
+    if (e := _perm_or_403(user, permissions.EXPORT)):
+        return e
     gw = _owned(db, gid, user)
     if not gw.username:
         return JSONResponse({"error": "This gateway has no username — set one on Edit."}, status_code=400)

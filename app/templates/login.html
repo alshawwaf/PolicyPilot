@@ -3,43 +3,7 @@
 {% block body_class %}login-screen{% endblock %}
 {% block main_class %}login{% endblock %}
 {% block content %}
-<style>
-  /* OS lock-screen: full-bleed wallpaper, centred avatar panel. No menubar (pure sign-in). */
-  body.login-screen { overflow:hidden; }
-  body.login-screen header { display:none; }
-  main.login { max-width:none; margin:0; padding:0; }
-  .login-os { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; padding:20px;
-    background:
-      radial-gradient(1100px 480px at 78% -10%, rgba(123,63,242,.40), transparent 60%),
-      radial-gradient(950px 460px at 10% 112%, rgba(255,61,154,.30), transparent 55%),
-      radial-gradient(700px 520px at 100% 100%, rgba(34,211,238,.12), transparent 60%),
-      linear-gradient(160deg,#0c1120,#0a0e18); }
-  html[data-theme="light"] .login-os { background:
-      radial-gradient(1100px 480px at 78% -10%, rgba(123,63,242,.22), transparent 60%),
-      radial-gradient(950px 460px at 10% 112%, rgba(255,61,154,.16), transparent 55%),
-      linear-gradient(160deg,#eef1f8,#e7ebf4); }
-  .login-os::before { content:""; position:absolute; inset:0; pointer-events:none; opacity:.025;
-    background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); }
-  .login-panel { position:relative; width:332px; text-align:center; }
-  .login-avatar { width:96px; height:96px; border-radius:50%; margin:0 auto 18px; background:var(--accent-grad);
-    display:flex; align-items:center; justify-content:center; box-shadow:0 14px 38px rgba(255,61,154,.40), inset 0 1px 0 rgba(255,255,255,.3); }
-  .login-avatar svg { width:42px; height:42px; color:#fff; }
-  .login-panel h1 { font-size:23px; margin:0 0 4px; color:#fff; }
-  html[data-theme="light"] .login-panel h1 { color:#10172a; }
-  .login-panel .sub { font-size:13px; margin:0 0 22px; color:rgba(233,238,245,.7); }
-  html[data-theme="light"] .login-panel .sub { color:#5b6577; }
-  .login-fields2 { display:flex; flex-direction:column; gap:10px; }
-  .login-fields2 input { width:100%; text-align:center; padding:13px 14px; font-size:14px; border-radius:12px;
-    color:#fff; background:rgba(255,255,255,.10); border:1px solid rgba(255,255,255,.18);
-    backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px); }
-  html[data-theme="light"] .login-fields2 input { color:#10172a; background:rgba(255,255,255,.75); border-color:var(--line); }
-  .login-fields2 input::placeholder { color:rgba(233,238,245,.55); }
-  html[data-theme="light"] .login-fields2 input::placeholder { color:#94a0b3; }
-  .login-fields2 input:focus { outline:none; border-color:var(--accent); box-shadow:0 0 0 3px rgba(255,61,154,.22); }
-  .login-panel .login-go { width:100%; justify-content:center; margin-top:16px; padding:13px; font-size:14px; }
-  .login-panel .err { margin-bottom:14px; color:#fff; background:rgba(239,107,107,.22); border:1px solid rgba(239,107,107,.5);
-    border-radius:10px; padding:9px 12px; font-size:13px; }
-</style>
+{% include "_auth_styles.html" %}
 <div class="login-os">
   <div class="login-panel">
     <div class="login-avatar">
@@ -49,12 +13,17 @@
     <p class="sub">Sign in to continue</p>
     {% if error %}<div class="err">{{ error }}</div>{% endif %}
     <form method="post" action="/login">
-      <div class="login-fields2">
+      <div class="login-fields2 center">
         <input name="username" placeholder="Username" aria-label="Username" autofocus autocomplete="username">
         <input name="password" type="password" placeholder="Password" aria-label="Password" autocomplete="current-password">
       </div>
       <button type="submit" class="btn login-go">Sign in</button>
     </form>
+    <div class="login-links">
+      <a href="/register">Create account</a>
+      <span class="sep">·</span>
+      <a href="/forgot-password">Forgot password?</a>
+    </div>
   </div>
 </div>
 {% endblock %}

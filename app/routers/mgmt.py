@@ -13,9 +13,16 @@ from sqlalchemy.orm import Session
 from ..db import get_db
 from ..models import ManagementServer, User
 from ..security import get_user_or_none
-from ..services import gaia_export, mgmt_api, mgmt_creds, mgmt_export, table_prefs
+from ..services import gaia_export, mgmt_api, mgmt_creds, mgmt_export, permissions, table_prefs
 from ..services.gaia_client import ensure_pinned, fetch_gateway_cert, pin_now
 from .ui import _flash, _pop_flash, templates
+
+
+def _perm_or_403(user: User, perm: str):
+    if not permissions.can(user, perm):
+        return JSONResponse(
+            {"error": f"You don't have permission to {permissions.label(perm).lower()}."}, status_code=403)
+    return None
 
 router = APIRouter(include_in_schema=False)
 
@@ -214,6 +221,8 @@ def mgmt_export_run(sid: int, request: Request, name: str = "", db: Session = De
     user = get_user_or_none(request, db)
     if user is None:
         return JSONResponse({"error": "Not authenticated"}, status_code=401)
+    if (e := _perm_or_403(user, permissions.EXPORT)):
+        return e
     if not name:
         return JSONResponse({"error": "No layer specified."}, status_code=400)
     ms = _owned(db, sid, user)
@@ -234,6 +243,10 @@ def mgmt_apply(sid: int, request: Request, edit: RuleEdit, db: Session = Depends
     user = get_user_or_none(request, db)
     if user is None:
         return JSONResponse({"error": "Not authenticated"}, status_code=401)
+    if (e := _perm_or_403(user, permissions.APPLY)):
+        return e
+    if edit.publish and (e := _perm_or_403(user, permissions.PUBLISH)):
+        return e
     if not edit.layer or not edit.uid:
         return JSONResponse({"error": "Missing layer or rule id."}, status_code=400)
     if not edit.changes:
@@ -272,6 +285,8 @@ def mgmt_gaia_export_run(sid: int, request: Request, password: str = Form(""),
     user = get_user_or_none(request, db)
     if user is None:
         return JSONResponse({"error": "Not authenticated"}, status_code=401)
+    if (e := _perm_or_403(user, permissions.EXPORT)):
+        return e
     ms = _owned(db, sid, user)
     if not (ms.gaia_username or "").strip():
         return JSONResponse({"error": "No Gaia credentials configured for this server — add the Gaia OS "

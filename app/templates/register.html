@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Create account{% endblock %}
+{% block body_class %}login-screen{% endblock %}
+{% block main_class %}login{% endblock %}
+{% block content %}
+{% include "_auth_styles.html" %}
+<div class="login-os">
+  <div class="login-panel wide">
+    <div class="login-avatar">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M20 8v6M23 11h-6"/></svg>
+    </div>
+    <h1>Create your account</h1>
+    <p class="sub">New accounts are reviewed by an administrator before they can sign in.</p>
+    {% if error %}<div class="err">{{ error }}</div>{% endif %}
+    <form method="post" action="/register">
+      <div class="login-fields2">
+        <div class="two">
+          <div><label>First name</label>
+            <input name="first_name" value="{{ form.first_name or '' }}" autocomplete="given-name"></div>
+          <div><label>Last name</label>
+            <input name="last_name" value="{{ form.last_name or '' }}" autocomplete="family-name"></div>
+        </div>
+        <div><label>Username</label>
+          <input name="username" value="{{ form.username or '' }}" placeholder="3–32 chars: a–z 0–9 . _ -" autocomplete="username" autofocus required></div>
+        <div><label>Email <span style="opacity:.6">(optional, for password reset)</span></label>
+          <input name="email" type="email" value="{{ form.email or '' }}" placeholder="you@example.com" autocomplete="email"></div>
+        <div class="two">
+          <div><label>Password</label>
+            <input name="password" type="password" autocomplete="new-password" required></div>
+          <div><label>Confirm</label>
+            <input name="confirm" type="password" autocomplete="new-password" required></div>
+        </div>
+      </div>
+      <div class="login-hint">At least 10 characters, with a mix of letters and numbers.</div>
+      <button type="submit" class="btn login-go">Request account</button>
+    </form>
+    <div class="login-links">
+      Already have an account? <a href="/login">Sign in</a>
+    </div>
+  </div>
+</div>
+{% endblock %}

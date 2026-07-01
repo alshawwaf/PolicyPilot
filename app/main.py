@@ -35,7 +35,7 @@ def _setup_logging() -> None:
 from .routers import (
     access_automation, activity, api_docs, api_v1, dynamic_layers, exports, gateways,
     gaia_mock, iac_exporter, mgmt, notifications, policy_manager,
-    settings as settings_router, ui,
+    settings as settings_router, ui, users,
 )
 # Connections (/management) now configures servers; Policy Manager (/policy-manager) browses/edits the live
 # rulebase; IaC Exporter (/iac-export) renders policy + Gaia config as Terraform/Ansible/clish.
@@ -44,10 +44,24 @@ from .security import hash_password
 
 def _seed_admin(settings) -> None:
     with SessionLocal() as db:
-        if db.scalar(select(User).where(User.username == settings.admin_username)):
+        existing = db.scalar(select(User).where(User.username == settings.admin_username))
+        if existing:
+            # Backfill: an admin created before the RBAC columns existed comes back as a standard user
+            # (columns defaulted to 0/active). Guarantee the configured admin is always a full active admin
+            # so a deploy can never lock everyone out of user management.
+            changed = False
+            if not existing.is_admin:
+                existing.is_admin = True
+                changed = True
+            if (existing.status or "active") != "active":
+                existing.status = "active"
+                changed = True
+            if changed:
+                db.commit()
             return
         password = settings.admin_password or secrets.token_urlsafe(12)
-        db.add(User(username=settings.admin_username, password_hash=hash_password(password)))
+        db.add(User(username=settings.admin_username, password_hash=hash_password(password),
+                    is_admin=True, status="active", first_name="Portal", last_name="Admin"))
         db.commit()
         if not settings.admin_password:
             banner = "=" * 64
@@ -127,6 +141,7 @@ def create_app() -> FastAPI:
     app.add_middleware(_MCPCanonicalPath)   # /mcp served without the auth-dropping 307 -> /mcp/ redirect
 
     app.include_router(ui.router)
+    app.include_router(users.router)            # /users — Users & Groups (multi-user + RBAC admin)
     app.include_router(gaia_mock.router)
     app.include_router(dynamic_layers.router)
     app.include_router(gateways.router)

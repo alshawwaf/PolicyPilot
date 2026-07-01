@@ -103,6 +103,14 @@
   .pw-ticker .ln + .ln { border-top:1px solid var(--line-soft); }
   .pw-ticker .mth { font-size:9.5px; font-weight:700; opacity:.8; min-width:30px; }
   .pw-ticker .pth { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-family:var(--font-mono,monospace); opacity:.8; }
+  /* System widget — uptime badge + CPU/Mem/Disk utilization bars */
+  .pw-up { font-size:11px; font-weight:600; color:var(--accent); text-transform:none; letter-spacing:0; }
+  .pw-sys-row { display:flex; align-items:center; gap:9px; font-size:11.5px; }
+  .pw-sys-row + .pw-sys-row { margin-top:8px; }
+  .pw-sys-row .l { width:32px; flex:none; color:var(--muted); font-weight:600; }
+  .pw-sys-row .v { width:34px; flex:none; text-align:right; font-weight:700; font-variant-numeric:tabular-nums; }
+  .pw-sys-bar { flex:1; height:7px; border-radius:4px; background:rgba(148,163,184,.18); overflow:hidden; }
+  .pw-sys-bar > div { height:100%; border-radius:4px; transition:width .3s ease; }
   @media (max-width:1040px){ .os-widgets { display:none; } }   /* the desktop is narrow — drop the widget rail */
 
   /* ---- Dock ---- */
@@ -216,7 +224,7 @@
   <div class="os-dock" id="os-dock"></div>
 </div>
 
-<script>window.PP_LAYOUT = {{ layout | tojson }}; window.PP_ADMIN = {{ is_admin | tojson }};</script>
+<script>window.PP_LAYOUT = {{ layout | tojson }}; window.PP_ADMIN = {{ is_admin | tojson }}; window.PP_CAN_MANAGE_USERS = {{ can_manage_users | tojson }};</script>
 <script>
 (function () {
   // The desktop must never render inside a window. If this page is somehow loaded in an iframe (a window
@@ -259,7 +267,8 @@
     edit: '<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>',
     check: '<polyline points="20 6 9 17 4 12"/>',
     rules: '<rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/>',
-    download: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>'
+    download: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>',
+    users: '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>'
   };
   function svg(p) { return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">' + p + '</svg>'; }
   var CATALOG = {
@@ -279,9 +288,19 @@
     settings:    { label: 'Settings',           href: '/settings',          ic: I.sliders, grad: 'linear-gradient(135deg,#a855f7,#7b3ff2)' },
     activity:    { label: 'Activity',           href: '/activity',          ic: I.clock,   grad: 'linear-gradient(135deg,#ec4899,#f43f5e)' },
     system:      { label: 'System',             href: '/system',            ic: I.pulse,   grad: 'linear-gradient(135deg,#10b981,#22d3ee)' },
+    users:       { label: 'Users & Groups',     href: '/users',             ic: I.users,   grad: 'linear-gradient(135deg,#0ea5b7,#6366f1)' },
     account:     { label: 'Account',            href: '/account',           ic: I.user,    grad: 'linear-gradient(135deg,#94a3b8,#64748b)' }
   };
-  var ORDER = ['access', 'decisionmap', 'decisiontree', 'changelog', 'layers', 'management', 'policymanager', 'iacexporter', 'gateways', 'agents', 'apidocs', 'webhook', 'apiexplorer', 'settings', 'activity', 'system', 'account'];
+  // Some apps are permission-gated: 'users' needs the manage-users capability; 'settings' is admin-only.
+  // The server injects PP_CAN_MANAGE_USERS + PP_ADMIN; a hidden app never renders on the dock/launchpad
+  // and can't be opened (the route also enforces it server-side — this is just UX).
+  function appVisible(key) {
+    if (key === 'users') return !!window.PP_CAN_MANAGE_USERS;
+    if (key === 'settings') return !!window.PP_ADMIN;
+    return true;
+  }
+  var ORDER = ['access', 'decisionmap', 'decisiontree', 'changelog', 'layers', 'management', 'policymanager', 'iacexporter', 'gateways', 'agents', 'apidocs', 'webhook', 'apiexplorer', 'settings', 'activity', 'system', 'users', 'account']
+    .filter(appVisible);
   var wins = {}, z = 100, openCount = 0;
 
   function clamp(v, lo, hi) { return Math.max(lo, Math.min(v, hi)); }
@@ -376,7 +395,7 @@
     });
   }
   function openApp(key) {
-    var app = CATALOG[key]; if (!app) return;
+    var app = CATALOG[key]; if (!app || !appVisible(key)) return;
     if (wins[key]) { wins[key].style.display = 'flex'; focusWin(wins[key]); return; }
     if (hello) hello.style.display = 'none';
     var w = document.createElement('div'); w.className = 'os-win'; w.dataset.key = key;
@@ -424,7 +443,7 @@
     lp.addEventListener('click', openLaunchpad); dock.appendChild(lp);
     if (LAYOUT.dock.length) { var sep = document.createElement('div'); sep.className = 'os-sep'; dock.appendChild(sep); }
     LAYOUT.dock.forEach(function (key) {
-      var app = CATALOG[key]; if (!app) return;
+      var app = CATALOG[key]; if (!app || !appVisible(key)) return;
       var d = document.createElement('button'); d.type = 'button'; d.className = 'os-dik'; d.dataset.key = key;
       d.style.background = app.grad;
       d.innerHTML = svg(app.ic) + '<span class="os-tip">' + esc(labelOf(key)) + '</span><span class="os-run"></span>';
@@ -481,7 +500,7 @@
   function renderDesktopIcons() {
     desktop.querySelectorAll('.os-deskicon').forEach(function (n) { n.remove(); });
     LAYOUT.desktop.forEach(function (it) {
-      var app = CATALOG[it.key]; if (!app) return;
+      var app = CATALOG[it.key]; if (!app || !appVisible(it.key)) return;
       var el = document.createElement('div'); el.className = 'os-deskicon'; el.dataset.key = it.key;
       el.style.left = (it.x || 0) + 'px'; el.style.top = (it.y || 0) + 'px';
       el.innerHTML = '<span class="os-tile" style="background:' + app.grad + '">' + svg(app.ic) + '</span><span class="os-lbl">' + esc(labelOf(it.key)) + '</span>';
@@ -665,10 +684,10 @@
   /* ---- desktop widgets (toggleable per-user; live data from /desktop/widgets, DB-side only) ---- */
   var widgetsEl = document.getElementById('os-widgets');
   var WDATA = {};
-  var WIDGET_ORDER = ['decisions', 'activity', 'last', 'connections', 'coverage', 'errors', 'latency', 'recent', 'clock', 'quick'];
+  var WIDGET_ORDER = ['decisions', 'activity', 'last', 'connections', 'coverage', 'errors', 'latency', 'recent', 'system', 'clock', 'quick'];
   var WIDGET_LABEL = { decisions: 'Decisions today', activity: 'API activity', last: 'Last decision',
     connections: 'Connections', coverage: 'Coverage', errors: 'Error rate', latency: 'Avg latency',
-    recent: 'Recent activity', clock: 'Clock & date', quick: 'Quick actions' };
+    recent: 'Recent activity', system: 'System', clock: 'Clock & date', quick: 'Quick actions' };
 
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) {
     return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
@@ -754,6 +773,22 @@
         return '<div class="ln"><span class="mth">' + esc(x.method || '') + '</span><span class="pth">' + esc(x.path || '') +
           '</span><span style="color:' + sc + ';font-weight:600;font-size:11px;">' + (x.status || '') + '</span></div>';
       }).join('') + '</div>';
+    } },
+    system: { open: 'system', render: function (d) {
+      var s = (d && d.system) || {};
+      function bar(label, pct) {
+        var has = (pct !== null && pct !== undefined);
+        var col = !has ? 'rgba(148,163,184,.35)'
+          : (pct >= 90 ? 'linear-gradient(90deg,#f43f5e,#f97316)'
+            : pct >= 70 ? 'linear-gradient(90deg,#f59e0b,#fbbf24)'
+            : 'linear-gradient(90deg,#2ecf86,#22d3ee)');
+        var w = has ? Math.max(3, pct) : 0;
+        return '<div class="pw-sys-row"><span class="l">' + label + '</span>' +
+          '<div class="pw-sys-bar"><div style="width:' + w + '%;background:' + col + '"></div></div>' +
+          '<span class="v">' + (has ? pct + '%' : '—') + '</span></div>';
+      }
+      return '<div class="pw-k"><span>System</span><span class="pw-up" title="App uptime">' + esc(s.uptime || '—') + '</span></div>' +
+        bar('CPU', s.cpu_pct) + bar('Mem', s.mem_pct) + bar('Disk', s.disk_pct);
     } },
     clock: { render: function () { return '<div class="pw-clock"><div class="t">--:--</div><div class="pw-sub d"></div></div>'; } },
     quick: { render: function () {

@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from ..db import get_db
 from ..security import get_user_or_none
-from ..services import api_keys, app_settings, table_prefs
+from ..services import api_keys, app_settings, permissions, table_prefs
 from .ui import _flash, _pop_flash, templates
 
 router = APIRouter(include_in_schema=False)
@@ -88,6 +88,7 @@ SECTIONS = [
     ("governance", "Governance & audit",  "Governance & audit",      "shield-check", "#639922", "A work-note after every committed change."),
     ("webhook",    "Ticketing webhook",   "Ticketing webhook",       "webhook",      "#ba7517", "Turn a ServiceNow / Jira / custom ticket into a policy change."),
     ("writeback",  "Ticket write-back",   "Ticket write-back",       "reply",        "#d4537e", "Optional ServiceNow write-back adapter."),
+    ("email",      "Email (SMTP)",        "Email (SMTP)",            "mail",         "#0ea5b7", "Outbound mail for self-service password reset."),
     ("keys",       "API keys",            None,                      "key",          "#ef9f27", "Named, scoped, revocable keys for /mcp, the REST API, and the webhook."),
 ]
 _SECTION_GROUP = {key: group for key, _l, group, _i, _c, _b in SECTIONS if group}
@@ -124,13 +125,27 @@ def _section_summaries(vals: dict, secrets: dict, key_count: int) -> dict:
     }
 
 
+def _require_admin(request: Request, db: Session):
+    """(user, None) if the caller is an administrator, else (None, redirect). Portal settings + secrets
+    are administrator-only — never grantable to a standard user."""
+    user = get_user_or_none(request, db)
+    if user is None:
+        return None, RedirectResponse("/login", status_code=303)
+    if user.must_change_password:
+        return None, RedirectResponse("/account?force=1", status_code=303)
+    if not permissions.is_admin(user):
+        _flash(request, "Only an administrator can change portal settings.", "error")
+        return None, RedirectResponse("/", status_code=303)
+    return user, None
+
+
 @router.get("/settings", response_class=HTMLResponse)
 def settings_page(request: Request, db: Session = Depends(get_db)):
     """The whole Settings surface as one page: a fixed category sidebar + a detail pane per section that the
     browser swaps in place (client-side, by URL hash) — no per-section navigation. Lands on Overview."""
-    user = get_user_or_none(request, db)
-    if user is None:
-        return RedirectResponse("/login", status_code=303)
+    user, redir = _require_admin(request, db)
+    if redir:
+        return redir
     vals = app_settings.all_values(fresh=True)
     secrets = app_settings.secret_status()
     grouped = _grouped()
@@ -164,9 +179,9 @@ async def settings_save(request: Request, db: Session = Depends(get_db)):
     """Section-scoped save: persist ONLY the keys belonging to the posted section (so a partial form never
     resets another section's toggles). ``section=mode`` saves the three Operating-mode keys. Redirects back
     to the matching pane via the URL hash."""
-    user = get_user_or_none(request, db)
-    if user is None:
-        return RedirectResponse("/login", status_code=303)
+    user, redir = _require_admin(request, db)
+    if redir:
+        return redir
     form = await request.form()
     section = (form.get("section") or "").strip()
     if section == "mode":
@@ -209,9 +224,9 @@ async def settings_save(request: Request, db: Session = Depends(get_db)):
 
 @router.post("/settings/reset")
 def settings_reset(request: Request, db: Session = Depends(get_db)):
-    user = get_user_or_none(request, db)
-    if user is None:
-        return RedirectResponse("/login", status_code=303)
+    user, redir = _require_admin(request, db)
+    if redir:
+        return redir
     app_settings.save(app_settings.defaults())
     _flash(request, "Settings restored to defaults.")
     return RedirectResponse("/settings", status_code=303)
@@ -221,9 +236,9 @@ def settings_reset(request: Request, db: Session = Depends(get_db)):
 async def api_key_create(request: Request, db: Session = Depends(get_db)):
     """Generate a new API key. The plaintext is shown ONCE via a one-time session entry (never written
     to the notification log), then only its hash remains."""
-    user = get_user_or_none(request, db)
-    if user is None:
-        return RedirectResponse("/login", status_code=303)
+    user, redir = _require_admin(request, db)
+    if redir:
+        return redir
     form = await request.form()
     name = (form.get("name") or "").strip() or "key"
     scope = form.get("scope") or "mcp"
@@ -244,9 +259,9 @@ async def api_key_create(request: Request, db: Session = Depends(get_db)):
 async def api_key_set_expiry(key_id: int, request: Request, db: Session = Depends(get_db)):
     """Change an existing key's expiry. Explicit (no create-form 90-day default): a picked date wins, else
     a chosen preset ('never' → no expiry); anything else is a no-op so an empty submit never changes it."""
-    user = get_user_or_none(request, db)
-    if user is None:
-        return RedirectResponse("/login", status_code=303)
+    user, redir = _require_admin(request, db)
+    if redir:
+        return redir
     form = await request.form()
     raw_date = (form.get("expires_date") or "").strip()
     preset = (form.get("expires") or "").strip()
@@ -272,9 +287,9 @@ async def api_key_set_expiry(key_id: int, request: Request, db: Session = Depend
 
 @router.post("/settings/api-keys/{key_id}/revoke")
 def api_key_revoke(key_id: int, request: Request, db: Session = Depends(get_db)):
-    user = get_user_or_none(request, db)
-    if user is None:
-        return RedirectResponse("/login", status_code=303)
+    user, redir = _require_admin(request, db)
+    if redir:
+        return redir
     if api_keys.revoke(key_id):
         _flash(request, "API key revoked — it can no longer authenticate.")
     return RedirectResponse("/settings#keys", status_code=303)

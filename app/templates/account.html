@@ -3,51 +3,80 @@
 {% block content %}
 <style>
   .acct-id { display:flex; align-items:center; gap:18px; flex-wrap:wrap; }
-  .avatar { width:66px; height:66px; border-radius:18px; flex:none; display:flex; align-items:center;
-    justify-content:center; font-size:25px; font-weight:800; letter-spacing:.5px; color:#fff;
-    background:var(--accent-grad); box-shadow:0 6px 18px rgba(123,63,242,.28); }
-  .acct-name { font-size:20px; font-weight:760; letter-spacing:-.3px; }
-  .acct-sub { color:var(--muted); font-size:13px; margin-top:4px; display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+  .avatar { width:72px; height:72px; border-radius:20px; flex:none; display:flex; align-items:center;
+    justify-content:center; font-size:26px; font-weight:800; letter-spacing:.5px; color:#fff;
+    box-shadow:0 8px 22px rgba(0,0,0,.22); }
+  .acct-name { font-size:21px; font-weight:760; letter-spacing:-.3px; display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  .acct-sub { color:var(--muted); font-size:13px; margin-top:5px; display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
   .acct-sub .dot { color:var(--line-strong); }
+  .rolebadge { font-size:11px; font-weight:700; letter-spacing:.03em; text-transform:uppercase;
+    padding:3px 9px; border-radius:999px; border:1px solid transparent; }
+  .rolebadge.admin { color:#fff; background:var(--accent-grad); box-shadow:0 2px 8px rgba(123,63,242,.3); }
+  .rolebadge.std { color:var(--muted); background:var(--surface-3); border-color:var(--line); }
+  .statusdot { font-size:12px; display:inline-flex; align-items:center; gap:6px; }
+  .statusdot i { width:8px; height:8px; border-radius:50%; background:var(--ok); display:inline-block; }
   .acct-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(330px, 1fr)); gap:16px; margin-top:16px; align-items:start; }
   .acct-card h2 { margin:0; font-size:15px; font-weight:680; letter-spacing:-.1px; display:flex; align-items:center; gap:11px; }
   .acct-card .csub { color:var(--muted); font-size:12.5px; margin:5px 0 18px; }
-  /* Section icon chip — matches the gradient icon-chip language of the page head + Settings sections. */
   .acct-ic { display:inline-flex; align-items:center; justify-content:center; width:32px; height:32px;
-    border-radius:10px; background:var(--accent-grad); color:#fff; flex:none;
-    box-shadow:0 2px 8px rgba(123,63,242,.24); }
+    border-radius:10px; background:var(--accent-grad); color:#fff; flex:none; box-shadow:0 2px 8px rgba(123,63,242,.24); }
   .acct-ic svg { width:17px; height:17px; }
   .pw-hint { font-size:12px; color:var(--muted); margin:10px 0 0; display:flex; gap:8px; align-items:flex-start; }
   .pw-hint svg { width:14px; height:14px; flex:none; margin-top:1px; color:var(--faint); }
-  /* Inset hairline-divided footnote, in the Settings grouped-card spirit. */
   .secnote { margin-top:16px; padding:13px 15px; border:1px solid var(--line-soft); border-radius:var(--r);
     background:var(--surface-2); font-size:12.5px; color:var(--muted); display:flex; gap:9px; align-items:center; }
   .secnote svg { width:15px; height:15px; color:var(--ok); flex:none; }
+  /* Capabilities list */
+  .caps { display:flex; flex-direction:column; gap:2px; }
+  .cap-row { display:flex; align-items:flex-start; gap:11px; padding:9px 2px; border-bottom:1px solid var(--line-soft); }
+  .cap-row:last-child { border-bottom:0; }
+  .cap-ck { width:22px; height:22px; border-radius:7px; flex:none; display:flex; align-items:center; justify-content:center; }
+  .cap-ck.on { background:rgba(52,211,153,.16); color:var(--ok); }
+  .cap-ck.off { background:var(--surface-3); color:var(--faint); }
+  .cap-ck svg { width:14px; height:14px; }
+  .cap-txt b { font-size:13px; font-weight:640; display:block; }
+  .cap-txt span { font-size:11.5px; color:var(--muted); }
+  .cap-row.off .cap-txt b { color:var(--muted); }
+  .kv { display:flex; justify-content:space-between; gap:12px; padding:9px 2px; border-bottom:1px solid var(--line-soft); font-size:13px; }
+  .kv:last-child { border-bottom:0; } .kv .k { color:var(--muted); } .kv .v { font-weight:600; text-align:right; }
+  .force-banner { display:flex; gap:12px; align-items:center; padding:14px 16px; border-radius:var(--r);
+    margin-bottom:16px; background:linear-gradient(135deg, rgba(255,159,39,.16), rgba(255,159,39,.05));
+    border:1px solid rgba(255,159,39,.5); }
+  .force-banner svg { width:22px; height:22px; color:#e08a12; flex:none; }
+  .force-banner b { display:block; font-size:13.5px; } .force-banner span { font-size:12.5px; color:var(--muted); }
 </style>
 
-{% set fn = user.first_name or '' %}{% set ln = user.last_name or '' %}
-{% set initials = ((fn[:1] ~ ln[:1]) if (fn or ln) else user.username[:2]) | upper %}
+{% set hue = user.avatar_hue %}
 
 <div class="page-head">
   <span class="icon-chip lg"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span>
   <div class="ph-main">
     <h1>Account</h1>
-    <p class="ph-sub">Your profile and sign-in for PolicyPilot. Changes apply right away.</p>
+    <p class="ph-sub">Your profile, sign-in and access for PolicyPilot. Changes apply right away.</p>
   </div>
   <div class="ph-actions"><a class="btn secondary" href="/">← Back to portal</a></div>
 </div>
 
+{% if force_password %}
+<div class="force-banner">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4M12 17h.01M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/></svg>
+  <div><b>Please choose a new password</b><span>You're signing in with a temporary password. Set your own below to finish.</span></div>
+</div>
+{% endif %}
+
 <div class="card" style="margin-bottom:4px;">
   <div class="acct-id">
-    <span class="avatar">{{ initials }}</span>
-    <div class="grow" style="min-width:200px;">
-      <div class="acct-name">{{ user.display_name }}</div>
+    <span class="avatar" style="background:linear-gradient(135deg, hsl({{ hue }},72%,58%), hsl({{ (hue + 42) % 360 }},66%,46%));">{{ user.initials }}</span>
+    <div class="grow" style="min-width:220px;">
+      <div class="acct-name">{{ user.display_name }}
+        <span class="rolebadge {{ 'admin' if user.is_admin else 'std' }}">{{ user.role_label }}</span>
+      </div>
       <div class="acct-sub">
         <span><code>{{ user.username }}</code></span>
         {% if user.title %}<span class="dot">·</span><span>{{ user.title }}</span>{% endif %}
         {% if user.email %}<span class="dot">·</span><span>{{ user.email }}</span>{% endif %}
+        <span class="dot">·</span><span class="statusdot"><i></i>{{ user.status|capitalize }}</span>
       </div>
-      <div class="muted small" style="margin-top:7px;">Member since {{ user.created_at.strftime('%B %-d, %Y') }}</div>
     </div>
   </div>
 </div>
@@ -76,7 +105,7 @@
     <p class="csub">Change your sign-in password.</p>
     <form method="post" action="/account/password">
       <label>Current password</label>
-      <input type="password" name="current" autocomplete="current-password" required>
+      <input type="password" name="current" autocomplete="current-password" {% if force_password %}autofocus{% endif %} required>
       <label>New password</label>
       <input type="password" name="new" autocomplete="new-password" required>
       <label>Confirm new password</label>
@@ -87,6 +116,39 @@
       </p>
       <div style="margin-top:16px;"><button type="submit">Change password</button></div>
     </form>
+  </div>
+
+  <div class="card acct-card">
+    <h2><span class="acct-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg></span> My access</h2>
+    <p class="csub">{% if user.is_admin %}You're an administrator — you have every permission.{% else %}What you're allowed to do. An administrator sets these.{% endif %}</p>
+    <div class="caps">
+      {% for key, lbl, desc in grantable %}
+      {% set on = my_perms.get(key) %}
+      <div class="cap-row {{ 'on' if on else 'off' }}">
+        <span class="cap-ck {{ 'on' if on else 'off' }}">
+          {% if on %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          {% else %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>{% endif %}
+        </span>
+        <div class="cap-txt"><b>{{ lbl }}</b><span>{{ desc }}</span></div>
+      </div>
+      {% endfor %}
+    </div>
+    {% if my_perms.get('manage_users') %}
+    <div class="secnote" style="border-color:var(--accent); background:var(--accent-soft);">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+      You can manage users. <a href="/users" style="margin-left:4px;font-weight:600;">Open Users &amp; Groups →</a>
+    </div>
+    {% endif %}
+  </div>
+
+  <div class="card acct-card">
+    <h2><span class="acct-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span> Account details</h2>
+    <p class="csub">Your sign-in record.</p>
+    <div class="kv"><span class="k">Username</span><span class="v"><code>{{ user.username }}</code></span></div>
+    <div class="kv"><span class="k">Role</span><span class="v">{{ user.role_label }}</span></div>
+    <div class="kv"><span class="k">Status</span><span class="v">{{ user.status|capitalize }}</span></div>
+    <div class="kv"><span class="k">Member since</span><span class="v">{{ user.created_at.strftime('%B %-d, %Y') if user.created_at else '—' }}</span></div>
+    <div class="kv"><span class="k">Last sign-in</span><span class="v">{{ user.last_login_at.strftime('%b %-d, %Y · %-I:%M %p') if user.last_login_at else 'This session' }}</span></div>
     <div class="secnote">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg>
       Sign-in is brute-force throttled and your session expires when idle.

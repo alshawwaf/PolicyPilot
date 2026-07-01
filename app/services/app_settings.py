@@ -342,6 +342,43 @@ SETTINGS: list[Setting] = [
             "PILOT_SERVICENOW_TABLE when blank.",
             group="Ticket write-back", max=60),
 
+    # --- Email (SMTP) --------------------------------------------------------------------------------
+    # Outbound email for self-service password reset ("Forgot password?"). Until a host is set, reset
+    # falls back to an administrator resetting the password from Users & Groups.
+    Setting("smtp_host", "str", "",
+            "SMTP host",
+            "Mail server hostname (e.g. smtp.gmail.com, smtp.office365.com, or an internal relay). "
+            "Leave blank to disable email — password reset then works only via an administrator.",
+            group="Email (SMTP)", max=200),
+    Setting("smtp_port", "int", 587,
+            "SMTP port",
+            "587 for STARTTLS, 465 for SSL/TLS, 25 for an unauthenticated internal relay.",
+            group="Email (SMTP)", min=1, max=65535),
+    Setting("smtp_security", "choice", "starttls",
+            "Connection security",
+            "How to secure the connection to the mail server. STARTTLS and SSL/TLS are strongly preferred; "
+            "'None' is for a trusted internal relay only.",
+            group="Email (SMTP)",
+            choices=(("starttls", "STARTTLS (port 587)"), ("ssl", "SSL/TLS (port 465)"),
+                     ("none", "None — internal relay only"))),
+    Setting("smtp_username", "str", "",
+            "SMTP username",
+            "Username for authenticated submission. Leave blank for an anonymous internal relay.",
+            group="Email (SMTP)", max=200),
+    Setting("smtp_password", "secret", "",
+            "SMTP password",
+            "Password / app-password for the SMTP username. Encrypted at rest (AES-256-GCM).",
+            group="Email (SMTP)"),
+    Setting("smtp_from", "str", "",
+            "From address",
+            "The envelope + header From address (e.g. policypilot@yourco.com). Defaults to the SMTP "
+            "username when blank.",
+            group="Email (SMTP)", max=200),
+    Setting("smtp_from_name", "str", "PolicyPilot",
+            "From name",
+            "Friendly sender name shown in the recipient's inbox.",
+            group="Email (SMTP)", max=80),
+
     # --- Portal --------------------------------------------------------------------------------------
     Setting("base_url", "str", "",
             "Public base URL",

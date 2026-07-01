@@ -342,13 +342,38 @@
       var h = '<div class="runbox">';
       h += '<div class="row" style="align-items:center; gap:10px;">' + outcomeBadge(j.outcome) +
            '<span>' + esc(j.reason) + '</span></div>';
-      // Advisory: opaque rules the engine passed over instead of stopping — flagged for a later review,
-      // never a blocker. (An updatable feed / unresolvable cell that may also match this traffic.)
+      // Advisories, rendered by KIND (j.notes_detail: [{text, kind}]). Not every note is benign: a
+      // "shadow" note means this placement NEUTRALIZES a more-specific deny below it (an over-grant
+      // warning) — it must read as a danger, never as info-blue "review later". "redundant" warns the
+      // new rule may never match (0 hits). Everything else (review/disabled/prereq) is the classic
+      // advisory. Falls back to plain j.notes (all info) for a response without notes_detail.
       if (j.notes && j.notes.length) {
-        h += '<div style="margin-top:10px; font-size:12.5px; color:var(--info); background:var(--info-bg); ' +
-             'border-radius:8px; padding:9px 12px;">⚑ Possible matches to review later ' +
-             '<span class="muted">(the automated decision still applies):</span><ul style="margin:6px 0 0; padding-left:20px;">' +
-             j.notes.map(function (n) { return '<li>' + esc(n) + '</li>'; }).join('') + '</ul></div>';
+        var nd = (j.notes_detail && j.notes_detail.length)
+          ? j.notes_detail
+          : j.notes.map(function (n) { return { text: n, kind: 'review' }; });
+        var noteUl = function (items) {
+          return '<ul style="margin:6px 0 0; padding-left:20px;">' +
+            items.map(function (n) { return '<li>' + esc(n.text) + '</li>'; }).join('') + '</ul>';
+        };
+        var shadowN = nd.filter(function (n) { return n.kind === 'shadow'; });
+        var redunN = nd.filter(function (n) { return n.kind === 'redundant'; });
+        var restN = nd.filter(function (n) { return n.kind !== 'shadow' && n.kind !== 'redundant'; });
+        if (shadowN.length) {
+          h += '<div style="margin-top:10px; font-size:12.5px; color:var(--danger); background:var(--danger-bg); ' +
+               'border:1px solid var(--danger-line); border-radius:8px; padding:9px 12px;">' +
+               '⚠ Placement warning — an existing deny will be neutralized ' +
+               '<span style="opacity:.75;">(review the intent before publishing):</span>' + noteUl(shadowN) + '</div>';
+        }
+        if (redunN.length) {
+          h += '<div style="margin-top:10px; font-size:12.5px; color:var(--warn); background:var(--warn-bg); ' +
+               'border-radius:8px; padding:9px 12px;">⚠ Likely redundant ' +
+               '<span style="opacity:.75;">(the new rule may never match):</span>' + noteUl(redunN) + '</div>';
+        }
+        if (restN.length) {
+          h += '<div style="margin-top:10px; font-size:12.5px; color:var(--info); background:var(--info-bg); ' +
+               'border-radius:8px; padding:9px 12px;">⚑ Possible matches to review later ' +
+               '<span class="muted">(the automated decision still applies):</span>' + noteUl(restN) + '</div>';
+        }
       }
       if (j.app_resolution) h += objBlock(j.app_resolution, 'data-app', 'application');
       if (j.svc_resolution) h += objBlock(j.svc_resolution, 'data-svc', 'service');

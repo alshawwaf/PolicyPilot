@@ -678,6 +678,39 @@ class ParsedRule:
         return self.is_accept or self.is_drop
 
 
+class Note(str):
+    """A decision advisory that IS a plain string (so every existing consumer — substring checks, joins,
+    json serialization, the MCP/REST passthrough — keeps working unchanged) while carrying a machine-
+    readable ``kind`` for consumers that render severity. Kinds:
+
+      * ``review``    (default) — a possible match the walk continued past; benign, review later.
+      * ``shadow``    — DENY-NEUTRALIZATION warning: the created allow is placed above a more-specific
+                        deny below it, which will no longer match its overlapping scope. NOT benign —
+                        the UI must render this as a warning, never under "review later".
+      * ``redundant`` — the new allow is likely already permitted by a higher web-port accept (may
+                        never match / 0 hits).
+      * ``disabled``  — a disabled rule already matches this access (re-enable instead of duplicating).
+      * ``prereq``    — an environmental prerequisite (e.g. the predefined Internet object needs
+                        topology + the App Control blade) without which the rule matches nothing.
+
+    Plain ``str`` notes are still fine everywhere — consumers read ``getattr(note, "kind", "review")``.
+    """
+    kind: str = "review"
+
+    def __new__(cls, text: str, kind: str = "review"):
+        n = super().__new__(cls, text)
+        n.kind = kind
+        return n
+
+
+def notes_payload(notes: list) -> dict:
+    """Serialize a Decision/RemovalDecision notes list for a JSON boundary: the backward-compatible
+    ``notes`` (plain strings, exactly as before) plus ``notes_detail`` ({text, kind}) so the UI and
+    agents can style/weight each advisory by severity."""
+    return {"notes": [str(n) for n in notes],
+            "notes_detail": [{"text": str(n), "kind": getattr(n, "kind", "review")} for n in notes]}
+
+
 class Outcome(str, Enum):
     NO_OP = "no_op"
     WIDEN = "widen"
@@ -1251,10 +1284,12 @@ def _service_widenable(req: "AccessRequest") -> bool:
     return bool(req.application or req.service) or req.svc_set is None
 
 
-def _shadow_note(shadowed: "ParsedRule") -> str:
-    return (f"this allow is placed above the more-specific deny rule {shadowed.number} "
-            f"({shadowed.name}) below it, which overlaps this request — that deny will no longer match its "
-            f"scope. Review the intent.")
+def _shadow_note(shadowed: "ParsedRule") -> Note:
+    # kind="shadow": this is a DENY-NEUTRALIZATION warning, not a benign "review later" advisory — the UI
+    # renders it as a danger box so an operator can't publish past it thinking it's informational.
+    return Note(f"this allow is placed above the more-specific deny rule {shadowed.number} "
+                f"({shadowed.name}) below it, which overlaps this request — that deny will no longer match "
+                f"its scope. Review the intent.", kind="shadow")
 
 
 @dataclass(frozen=True)
@@ -1317,10 +1352,11 @@ def decide(req: AccessRequest, rules: list[ParsedRule], options: "DecideOptions"
     # Surface that prerequisite whenever we build a rule against it, so a PoV doesn't install a green policy
     # whose app rule silently matches nothing.
     if req.dst_kind == "internet" and decision.outcome in (Outcome.CREATE, Outcome.WIDEN):
-        notes.append("destination is the predefined Internet object (Application Control / URL Filtering "
-                     "best practice for app rules) — it matches only internet/DMZ-bound traffic, so it needs "
-                     "the gateway topology defined (an External interface) and the Application Control / URL "
-                     "Filtering blade enabled, or the rule will match nothing.")
+        notes.append(Note(
+            "destination is the predefined Internet object (Application Control / URL Filtering "
+            "best practice for app rules) — it matches only internet/DMZ-bound traffic, so it needs "
+            "the gateway topology defined (an External interface) and the Application Control / URL "
+            "Filtering blade enabled, or the rule will match nothing.", kind="prereq"))
     # ``emit_notes`` off = quiet mode: drop the advisory notes (placement/uncertain_deny safety is decided
     # inside _decide and is unaffected — only the human-facing advisories are suppressed).
     if options.emit_notes and notes:
@@ -1975,23 +2011,23 @@ def _decide(req: AccessRequest, rules: list[ParsedRule], options: "DecideOptions
                    f"but only applies under {', '.join(conditional_skip.conditions)}, so it does not "
                    f"grant this traffic)")
     if disabled_match is not None:
-        notes.append(f"rule {disabled_match.number} ({disabled_match.name}) already matches this access but "
-                     f"is DISABLED — re-enable it (and the engine will extend it) instead of creating a "
-                     f"duplicate, if that rule is what you intended.")
+        notes.append(Note(f"rule {disabled_match.number} ({disabled_match.name}) already matches this access "
+                          f"but is DISABLED — re-enable it (and the engine will extend it) instead of creating "
+                          f"a duplicate, if that rule is what you intended.", kind="disabled"))
     # If an opaque rule that COULD deny was passed over, never anchor the new allow on a more-specific
     # rule above it (that could place the allow ABOVE the possible-deny -> a first-match leap over it).
     # Drop lower_anchor so placement falls to the cleanup floor / bottom — guaranteed below any such rule.
     anchor = None if uncertain_deny else lower_anchor
     if likely_covered_rule is not None:
         lc = likely_covered_rule
-        notes.append(
+        notes.append(Note(
             f"likely redundant: rule {lc.number} ({lc.name}) already accepts this source → destination on "
             f"web ports (HTTP/HTTPS), and Check Point App Control identifies the requested application over "
             f"80/443 — so this traffic will most likely match rule {lc.number} first and the new rule may "
             f"see no hits. If the application only rides HTTP/HTTPS the access is already permitted (consider "
             f"not adding the rule, or enforcing app control in a dedicated Application layer); if it also uses "
             f"other ports, the new rule is still needed for those. To RESTRICT it instead, a Drop must be "
-            f"placed ABOVE rule {lc.number}.")
+            f"placed ABOVE rule {lc.number}.", kind="redundant"))
     return Decision(
         Outcome.CREATE,
         reason,
@@ -2915,8 +2951,8 @@ def build_preview(session, decision: Decision, req: AccessRequest, rules: list[P
     # An explicit yes/no the caller can trust: ``ok`` means the check RAN; ``currently_allowed`` means the
     # access EXISTS. Conflating the two is the classic agent error ("ok:true" -> wrongly answers "yes").
     out["currently_allowed"], out["answer"] = _allowed_summary(out["outcome"], out["target_rule"])
-    if decision.notes:                       # advisory 'possible match — review later' warnings
-        out["notes"] = list(decision.notes)
+    if decision.notes:                       # advisories: notes (compat strings) + notes_detail ({text, kind})
+        out.update(notes_payload(decision.notes))
     if decision.layer:                       # the change lands inside an inline layer, not the top layer
         out["layer"] = decision.layer
     if decision.outcome in (Outcome.NO_OP, Outcome.REVIEW):
@@ -3575,7 +3611,7 @@ def execute(server, secret, req: AccessRequest, layer: str, *, package: Optional
             if layer_note:
                 base["layer_note"] = layer_note
             if decision.notes:
-                base["notes"] = list(decision.notes)
+                base.update(notes_payload(decision.notes))
             # Surface the same near-miss overlay the preview path shows ("already permitted for these
             # sources, just not the one asked") so a dry-run apply / REST /access/apply / MCP apply_access
             # don't diverge from decide_access for the same request. Derived from the request (no extra
@@ -3633,7 +3669,7 @@ def _build_removal_preview(decision: RemovalDecision, req: AccessRequest, rules:
     if decision.position:
         out["position"] = _position_human(decision.position, rules)
     if decision.notes:
-        out["notes"] = list(decision.notes)
+        out.update(notes_payload(decision.notes))
     return out
 
 
@@ -3768,7 +3804,7 @@ def remove_execute(server, secret, req: AccessRequest, layer: str, *, package: O
             if layer_note:
                 base["layer_note"] = layer_note
             if decision.notes:
-                base["notes"] = list(decision.notes)
+                base.update(notes_payload(decision.notes))
             if decision.outcome in (RemovalOutcome.NO_OP, RemovalOutcome.REVIEW):
                 return {"ok": True, "applied": False, "published": False, **base, "trace": s.trace}
             try:

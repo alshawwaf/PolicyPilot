@@ -3291,6 +3291,42 @@ def test_create_above_partial_deny_flags_shadowed_specific_deny_below():
     d = aa.decide(req, [A, B, CLEANUP])
     assert d.outcome is Outcome.CREATE and d.position == {"above": "rA", "_anomaly": True}
     assert any("rB" in n for n in (d.notes or []))                 # advisory names the shadowed deny
+    # ...and the advisory is TYPED as a deny-neutralization warning, not a benign "review later" note —
+    # the UI renders kind="shadow" in a danger box so an operator can't publish past it unaware.
+    shadow = [n for n in d.notes if getattr(n, "kind", "review") == "shadow"]
+    assert shadow and "rB" in shadow[0]
+
+
+# --- structured notes (Note kinds -> UI severity; backward-compatible strings) -----------------
+def test_note_is_a_plain_string_everywhere_it_matters():
+    import json
+    n = aa.Note("something to review", kind="shadow")
+    assert isinstance(n, str) and n == "something to review" and "review" in n
+    assert json.dumps({"notes": [n]}) == '{"notes": ["something to review"]}'   # serializes as a bare string
+    assert " ".join([n, "x"]) == "something to review x"                        # join/concat unchanged
+    assert getattr("plain string", "kind", "review") == "review"                # untyped notes default safely
+
+
+def test_notes_payload_emits_compat_strings_plus_kinds():
+    p = aa.notes_payload([aa.Note("deny neutralized", kind="shadow"), "opaque feed in path"])
+    assert p["notes"] == ["deny neutralized", "opaque feed in path"]
+    assert p["notes_detail"] == [{"text": "deny neutralized", "kind": "shadow"},
+                                 {"text": "opaque feed in path", "kind": "review"}]
+
+
+def test_note_kinds_redundant_disabled_and_prereq_are_tagged():
+    # likely-redundant (app under a web-port accept) -> kind="redundant"
+    web = _rule("r9", 9, "Accept", _net("10.1.2.0/24"), ANY, _tcp(443))
+    d = aa.decide(AccessRequest(["10.1.2.250/32"], ["Any"], application="ABC"), [web, CLEANUP])
+    assert any(getattr(n, "kind", "") == "redundant" for n in d.notes)
+    # disabled covering accept -> kind="disabled"
+    off = _rule("rd", 3, "Accept", _host("10.1.2.250"), _host("1.1.1.1"), _tcp(443), enabled=False)
+    d2 = aa.decide(AccessRequest(["10.1.2.250/32"], ["1.1.1.1/32"], "tcp", "443"), [off, CLEANUP])
+    assert any(getattr(n, "kind", "") == "disabled" for n in d2.notes)
+    # Internet-destination prerequisite -> kind="prereq"
+    d3 = aa.decide(AccessRequest(["10.1.2.250/32"], [], application="ABC",
+                                 dst_kind="internet", dst_value="Internet"), [CLEANUP])
+    assert any(getattr(n, "kind", "") == "prereq" for n in d3.notes)
 
 
 def test_create_above_partial_deny_no_flag_when_nothing_specific_below():

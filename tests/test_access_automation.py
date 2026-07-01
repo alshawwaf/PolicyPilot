@@ -161,6 +161,35 @@ def test_decide_app_opaque_category_notes_and_continues():
     assert d.outcome is Outcome.CREATE and _noted(d, "rule 5")
 
 
+# --- likely-redundant advisory: an app request covered by a higher web-port ACCEPT (the "rule 9" scenario) --
+def test_decide_app_flags_likely_redundant_under_web_port_accept():
+    # Rule 9 accepts the source subnet -> Any on tcp/443 (http/https). App Control identifies ABC over 443,
+    # so this app-allow will match rule 9 first and see no hits. Outcome is still CREATE (we can't PROVE the
+    # app is granted — its transport isn't fixed), but the engine flags the likely redundancy.
+    web = _rule("r9", 9, "Accept", _net("10.1.2.0/24"), ANY, _tcp(443))
+    d = aa.decide(AccessRequest(["10.1.2.250/32"], ["Any"], application="ABC"), [web, CLEANUP])
+    assert d.outcome is Outcome.CREATE
+    assert _noted(d, "likely redundant") and _noted(d, "rule 9")
+
+
+def test_decide_app_no_redundancy_flag_when_ports_cant_carry_web_app():
+    # Same shape, but rule 9 accepts tcp/22 (SSH) — which can NEVER carry a web app, so it's provably
+    # disjoint from an application request. No false "likely redundant" flag; a real CREATE is needed.
+    ssh = _rule("r9", 9, "Accept", _net("10.1.2.0/24"), ANY, _tcp(22))
+    d = aa.decide(AccessRequest(["10.1.2.250/32"], ["Any"], application="ABC"), [ssh, CLEANUP])
+    assert d.outcome is Outcome.CREATE
+    assert not _noted(d, "likely redundant")
+
+
+def test_decide_block_app_places_drop_above_the_covering_web_accept():
+    # The allow/deny asymmetry: to RESTRICT an app that a broader ACCEPT above would permit, the Drop must
+    # be placed ABOVE that accept (first-match). A Drop below rule 9 would never fire.
+    web = _rule("r9", 9, "Accept", _net("10.1.2.0/24"), ANY, _tcp(443))
+    d = aa.decide(AccessRequest(["10.1.2.250/32"], ["Any"], application="ABC", action="Drop"), [web, CLEANUP])
+    assert d.outcome is Outcome.CREATE
+    assert d.position == {"above": "r9"} and "ABOVE rule 9" in d.reason
+
+
 def test_decide_app_create_when_two_dims_differ():
     rule = _rule("ra", 5, "Accept", _host("10.9.9.9"), _host("2.2.2.2"), _app({"Facebook"}))
     d = aa.decide(AccessRequest(["10.1.2.250/32"], ["1.1.1.1/32"], application="Facebook"), [rule, CLEANUP])

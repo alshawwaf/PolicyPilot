@@ -1479,6 +1479,12 @@ def _decide(req: AccessRequest, rules: list[ParsedRule], options: "DecideOptions
     # misleading "No — not permitted" into "permitted for these sources, just not the one you asked").
     partial_rule: Optional[ParsedRule] = None
     partial_field: Optional[str] = None
+    # A reachable, unconditional ACCEPT whose L4 ports could already carry this APPLICATION over HTTP/HTTPS
+    # (App Control identifies web apps on 80/443) and that already covers the request's source + destination.
+    # We can't PROVE it grants the app (an app has no fixed transport — see _svc_indeterminate), so the
+    # outcome stays CREATE; but the new app rule will most likely match this rule FIRST (at L4) and see no
+    # hits — so we flag it (CP best practice: don't add redundant 0-hit rules). Display/advisory only.
+    likely_covered_rule: Optional[ParsedRule] = None
     last_enabled = max((i for i, r in enumerate(rules) if r.enabled), default=-1)
 
     # ``uncertain_deny`` records that the walk continued past an opaque rule that COULD block (a drop /
@@ -1931,6 +1937,19 @@ def _decide(req: AccessRequest, rules: list[ParsedRule], options: "DecideOptions
             if len(_ncov) == 1 and _rel[_ncov[0]] == Relation.SUPERSET:
                 partial_rule, partial_field = r, _ncov[0]
 
+        # LIKELY-REDUNDANT flag (advisory only — never changes the outcome). This APPLICATION request meets a
+        # reachable, unconditional ACCEPT whose L4 ports already carry web apps (cover TCP 80/443) and that
+        # already covers the request's source + destination. App Control identifies the app over those ports,
+        # so first-match will most likely hit THIS rule and the new app-Accept below it will be a dead 0-hit
+        # rule. It's not a NO_OP (we can't prove the app is granted — its transport isn't fixed), so we still
+        # CREATE, but we surface the likely redundancy. The topmost such rule wins.
+        if (likely_covered_rule is None and r.is_accept and not complex_eff and not r.conditional
+                and covering_drop is None and not uncertain_deny
+                and (req_svc.apps or req_svc.categories)
+                and _rule_may_bear_web_app(r.svc)
+                and _dim_covered(rel_src) and _dim_covered(rel_dst)):
+            likely_covered_rule = r
+
         # Placement lower bound: a fully-resolved rule strictly MORE specific than req (don't shadow it).
         if not complex_eff and _is_proper_superset(rel_src, rel_dst, rel_svc):
             lower_anchor = r
@@ -1963,6 +1982,16 @@ def _decide(req: AccessRequest, rules: list[ParsedRule], options: "DecideOptions
     # rule above it (that could place the allow ABOVE the possible-deny -> a first-match leap over it).
     # Drop lower_anchor so placement falls to the cleanup floor / bottom — guaranteed below any such rule.
     anchor = None if uncertain_deny else lower_anchor
+    if likely_covered_rule is not None:
+        lc = likely_covered_rule
+        notes.append(
+            f"likely redundant: rule {lc.number} ({lc.name}) already accepts this source → destination on "
+            f"web ports (HTTP/HTTPS), and Check Point App Control identifies the requested application over "
+            f"80/443 — so this traffic will most likely match rule {lc.number} first and the new rule may "
+            f"see no hits. If the application only rides HTTP/HTTPS the access is already permitted (consider "
+            f"not adding the rule, or enforcing app control in a dedicated Application layer); if it also uses "
+            f"other ports, the new rule is still needed for those. To RESTRICT it instead, a Drop must be "
+            f"placed ABOVE rule {lc.number}.")
     return Decision(
         Outcome.CREATE,
         reason,

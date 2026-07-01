@@ -3,7 +3,13 @@
   body.login-screen { overflow:auto; }
   body.login-screen header { display:none; }
   main.login { max-width:none; margin:0; padding:0; }
-  .login-os { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; padding:24px; overflow:auto;
+  /* Normal-flow full-height (NOT position:fixed): a fixed full-viewport layer inside a
+     cross-origin iframe (the dev-hub desktop frames this page) hits a Chrome compositing
+     bug where the layer's background paints but its children with their own layers — here
+     the backdrop-filter inputs — don't, so the panel goes invisible while the gradient
+     shows. min-height:100vh renders identically standalone and paints reliably framed. */
+  html.embedded main.login { margin:0; }
+  .login-os { position:relative; min-height:100vh; min-height:100dvh; display:flex; align-items:center; justify-content:center; padding:24px; overflow:auto;
     background:
       radial-gradient(1100px 480px at 78% -10%, rgba(123,63,242,.40), transparent 60%),
       radial-gradient(950px 460px at 10% 112%, rgba(255,61,154,.30), transparent 55%),

@@ -372,12 +372,38 @@ Environment variables bootstrap the deployment; **most secrets are also settable
 
 ## Deployment
 
-Build from the **`Dockerfile`**, expose port **8000**, add a domain (Traefik handles Let's Encrypt TLS),
-mount **`/data`** for the SQLite database, and set the `PILOT_*` variables above. The build bakes the git
-SHA, surfaced in the About menu and at `GET /version` (`build`, `built_at`) so you can confirm exactly which
-commit is live. `GET /healthz` and `GET /readyz` are for liveness / readiness probes; `GET /dbapi/v1/conformance`
-is a read-only self-check that the agent surface is wired and safe. Full guide: **[DEPLOY.md](DEPLOY.md)**;
-post-deploy smoke test: **[docs/live-validation.md](docs/live-validation.md)**.
+PolicyPilot is a **single container**: it listens on port **8000** (plain HTTP), stores state in SQLite under
+**`/data`**, reads config from `PILOT_*` variables, and expects a **TLS-terminating reverse proxy** in front.
+It runs on any Docker host — a VM, a container PaaS, or your own orchestrator.
+
+The repo ships a `docker-compose.yml` with **Caddy** for automatic HTTPS — the quickest self-host path:
+
+```bash
+cp .env.example .env       # set PILOT_DOMAIN, PILOT_BASE_URL, and the secrets
+docker compose up -d --build
+```
+
+Prefer your own setup? Build and run the image directly and front it with **any** reverse proxy (nginx, Caddy,
+Traefik, a cloud load balancer) or a container PaaS (Dokploy, Coolify, Render, Fly.io, …) — anything that
+terminates TLS and forwards to port 8000:
+
+```bash
+docker build -t policypilot .
+docker run -d -p 8000:8000 -v policypilot-data:/data \
+  -e PILOT_BASE_URL=https://policypilot.example.com \
+  -e PILOT_SESSION_SECRET=... -e PILOT_ENCRYPTION_KEY=... \
+  -e PILOT_ADMIN_PASSWORD=... -e PILOT_TRUSTED_PROXY_HOPS=1 \
+  policypilot
+```
+
+Set `PILOT_TRUSTED_PROXY_HOPS` to the number of proxies in front (so the login throttle keys on the real
+client IP) and persist `PILOT_ENCRYPTION_KEY` (saved credentials are encrypted with it). The build bakes the
+git SHA, so `GET /version` (`build`, `built_at`) and the About menu confirm exactly which commit is live;
+`GET /healthz` / `GET /readyz` are liveness / readiness probes, and `GET /dbapi/v1/conformance` is a read-only
+self-check that the agent surface is wired and safe.
+
+Full guide (secrets, the single-worker note, platform specifics): **[DEPLOY.md](DEPLOY.md)**. Post-deploy
+smoke test: **[docs/live-validation.md](docs/live-validation.md)**.
 
 ---
 

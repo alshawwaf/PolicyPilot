@@ -4381,3 +4381,20 @@ def test_build_request_rejects_usercheck_on_accept_and_freq_on_drop():
     with pytest.raises(ValueError):
         tk.build_request("10.1.1.0/24", "1.2.3.4", "tcp", "443", action="Drop",
                          user_check="Blocked", user_check_frequency="once a day")
+
+
+# --- Service=Any ("block/allow all traffic") --------------------------------------------------
+def test_service_any_alias_is_the_wildcard_not_a_named_service():
+    for alias in ("Any", "any", "all", "*"):
+        r = tk.build_request("10.1.1.222", "10.1.2.250", "tcp", "", service=alias, action="Drop")
+        assert r.svc().any is True, alias                       # the wildcard, not named={('','Any')}
+        assert aa._resolve_svc_object(None, r) == "Any"          # apply writes the predefined Any
+        assert aa._svc_object_preview(None, r)["name"] == "Any"  # preview shows Any
+
+
+def test_block_all_traffic_creates_drop_above_the_covering_accept():
+    # "block 10.1.0.50 -> 172.16.5.10 (all services)" — the exact case that used to fail with
+    # "port is required." Now it's a Service=Any Drop placed ABOVE the first in-path accept.
+    req = tk.build_request("10.1.0.50", "172.16.5.10", "tcp", "", service="Any", action="Drop")
+    d = aa.decide(req, [WEB, CLEANUP])
+    assert d.outcome is Outcome.CREATE and d.position == {"above": "r8"} and "ABOVE rule 8" in d.reason

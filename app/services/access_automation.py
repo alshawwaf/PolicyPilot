@@ -597,8 +597,11 @@ class AccessRequest:
             if self.application_kind == "application-site-category":
                 return ServiceSet(categories={self.application})   # a category matches a category cell
             return ServiceSet(apps={self.application})
-        if self.service:                # (family, name): family-less (unresolved) fails safe — it won't
-            return ServiceSet(named={(self.service_kind or "", self.service)})  # alias a real family object
+        if self.service:
+            if self.service.strip().lower() in ("any", "all", "*"):
+                return ServiceSet(any=True)   # Service=Any — the "all services/ports" wildcard (block/allow all)
+            # (family, name): family-less (unresolved) fails safe — it won't alias a real family object
+            return ServiceSet(named={(self.service_kind or "", self.service)})
         return ServiceSet(by_proto={self.protocol.lower(): _ports_to_iv(self.ports)})
 
 
@@ -2863,14 +2866,23 @@ def lookup_application(session, name: str) -> bool:
     return False
 
 
+_ANY_SVC_ALIASES = ("any", "all", "*")
+
+
+def _svc_write_name(service: str) -> str:
+    """The service NAME to write: the predefined "Any" for an all-services request (block/allow all), else
+    the given (already-canonical) service name verbatim."""
+    return "Any" if (service or "").strip().lower() in _ANY_SVC_ALIASES else service
+
+
 def _resolve_svc_object(session, req: AccessRequest) -> str:
     """The object to put in the rule's 'Services & Applications' cell: an application-site or a named
-    service referenced by name (predefined / already correlated to the canonical Check Point name), or
-    a reused/created tcp/udp port service."""
+    service referenced by name (predefined / already correlated to the canonical Check Point name), the
+    predefined "Any" (all services), or a reused/created tcp/udp port service."""
     if req.application:
         return req.application
     if req.service:
-        return req.service
+        return _svc_write_name(req.service)      # "any"/"all"/"*" -> the predefined Any object
     return resolve_service(session, req.protocol, req.ports)
 
 
@@ -2879,7 +2891,7 @@ def _svc_object_preview(session, req: AccessRequest) -> dict:
         return {"name": req.application, "exists": lookup_application(session, req.application),
                 "kind": "application"}
     if req.service:                       # already correlated to a real service by services.resolve()
-        return {"name": req.service, "exists": True, "kind": "service"}
+        return {"name": _svc_write_name(req.service), "exists": True, "kind": "service"}
     ex = lookup_service(session, req.protocol, req.ports)
     from . import naming
     return {"name": ex or naming.service_name(req.protocol, req.ports), "exists": bool(ex), "kind": "service"}

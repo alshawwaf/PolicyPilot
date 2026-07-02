@@ -176,7 +176,8 @@ def build_request(source, destination, protocol, port, application=None, service
                   user_check_custom_every=0, user_check_custom_unit="") -> AccessRequest:
     """Validate + normalise a raw tuple into an AccessRequest. Shared by the UI and the webhook.
     Precedence: `application` (e.g. "Facebook") > `service` (a named non-port service, e.g. "icmp" /
-    "GRE") > protocol+port. Source/destination may be an IP, a CIDR, 'Any', OR a typed (non-IP) object
+    "GRE"; ``service="Any"`` / "all" / "*" means ALL services — the Service=Any wildcard, e.g. to
+    block/allow everything from a source to a destination) > protocol+port. Source/destination may be an IP, a CIDR, 'Any', OR a typed (non-IP) object
     when ``source_kind``/``destination_kind`` is one of the typed kinds (domain / access-role /
     dynamic-object / updatable-object / security-zone) — then the value is the object's identity (an
     FQDN for a domain, the object name otherwise). ``action`` (full-column support) is Accept / Drop /

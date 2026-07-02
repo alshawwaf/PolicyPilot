@@ -49,7 +49,7 @@ the **Settings** UI — see the note under this table.
 > precedence** over its `PILOT_*` env var, so env is the **bootstrap path** and you rotate secrets from the
 > browser with no redeploy. See [docs/settings.md](docs/settings.md).
 
-> ⚠️ **`PILOT_ENCRYPTION_KEY` must be set and persisted.** All saved credentials and portal-set secrets are
+> **`PILOT_ENCRYPTION_KEY` must be set and persisted.** All saved credentials and portal-set secrets are
 > encrypted with it. If it's unset it derives from `PILOT_SESSION_SECRET`; if **both** are unset (dev), the
 > ephemeral session key changes on every restart and **every stored secret becomes undecryptable** — you'd
 > re-enter them in Settings. Even with a value, don't derive it from the session secret in prod: **rotating

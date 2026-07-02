@@ -19,8 +19,8 @@ Two ready-made n8n agents drive these rails over that same endpoint:
 **`docs/policypilot-management-agent.json`** (the management battery) and
 **`docs/policypilot-dynamic-layer-agent.json`** (the dynamic-layer battery).
 
-> 🎯 Run these after any change to the engine, the MCP tools, or the column support. They're the agent-level
-> companion to the unit battery (`python -m app.services.aa_qa`) and the pytest suite.
+> Run these after any change to the engine, the MCP tools, or the column support. They're the agent-level
+> companion to the pytest suite (`tests/test_access_automation.py`, run with `python3 -m pytest`).
 
 ---
 
@@ -31,7 +31,7 @@ Two ready-made n8n agents drive these rails over that same endpoint:
    for the lab Network layer (server **SMS**, layer **Network**) — substitute your own IPs/objects elsewhere.
 2. **MCP key**: generate an **mcp**-scope key on `/mcp-guide` and connect your agent (n8n / Cursor / VS Code /
    any MCP client). Paste the **Autopilot agent system prompt** from that page.
-3. **Autopilot (lab demo)**: Settings → *Access automation logic* → **⚡ Autopilot (lab demo)** (sets
+3. **Autopilot (lab demo)**: Settings → *Access automation logic* → **Autopilot (lab demo)** (sets
    Aggressive + agent publish + the one-turn autopilot toggle). This is what lets the agent **apply AND
    publish in one turn without asking**. Without it, the agent will decide + dry-run and ask you to confirm —
    also a valid test, just not the one-sentence demo.
@@ -88,7 +88,7 @@ Security zones: `InternalZone` / `DMZZone` / `ExternalZone` / `WirelessZone`. Pr
 - **Rule 12 (DMZ)** is `kali_linux → win_server` Any — the **sole exact grant**, so revoking it **disables** that rule in §5 #26.
 - **Rule 13 (Cleanup)** is the catch-all Drop — anything not matched above lands here, which is why a fresh create is needed for new access.
 
-> 🔁 **On a different environment:** keep the *shape* (a broad Accept like Outbound, one tight Accept like
+> **On a different environment:** keep the *shape* (a broad Accept like Outbound, one tight Accept like
 > Mail, a resolved Drop near the top, a stealth/cleanup Drop) and the prompt outcomes carry over — just swap
 > the IPs/object names for yours. Or pull your own policy first with **"Summarize the Network layer on SMS"**
 > (prompt #3) and adapt.
@@ -174,7 +174,7 @@ candidates — reuse-only, so a miss is reported, never invented):
 | 26 | "On SMS Network, revoke kali_linux's access to win_server and publish the changes." | `remove_access` → **DISABLE** (sole exact grant) | rule 12 (DMZ) disabled + published; recorded for rollback |
 | 27 | "On SMS Network, stop 10.1.1.222 from reaching Facebook and publish the changes." | `remove_access` (drop-above / review) | a Drop placed above, or a flagged review if not a sole-exact grant |
 
-> ⚖️ **remove_access vs. a Drop block — the agent must pick the right verb.** *Revoke / remove / take away
+> **remove_access vs. a Drop block — the agent must pick the right verb.** *Revoke / remove / take away
 > an existing allow* → **`remove_access`** (#26–#27: it disables the sole-exact grant or drops above a
 > broader one). *Block / deny new traffic* → **`apply_access` with `action=Drop`** (§3 #16, #17a, #17b) —
 > and only `apply_access` can attach a block **message** (`user_check`) or block **all** services
@@ -240,7 +240,7 @@ built-in demo target.
 | 46 | "Remove the last remaining rule from the DMZ layer and push the changes." | `remove_dynamic_rule` guardrail | **refused** — a dynamic layer must keep at least one rule; nothing pushed; agent explains |
 | 47 | *(With the layer-push gate OFF)* "Add a rule allowing 10.1.2.50 to reach 10.1.2.60 over SSH in the DMZ layer and push the changes to GW1." | layer-push gate (`mcp_allow_layer_push`) | the real-gateway push is **refused**; agent falls back to a **dry-run** (or `gateway='mock'`) and reports the push is admin-gated — a separate gate from SMS publish |
 
-> 🔁 **Substitute freely:** these prompts assume a saved dynamic layer called **DMZ** with at least one rule
+> **Substitute freely:** these prompts assume a saved dynamic layer called **DMZ** with at least one rule
 > (so #43/#45 have something to act on) and a saved gateway called **GW1**. Swap in your own — or run #39 /
 > #38 first to see what you have, then adapt.
 

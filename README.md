@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🧭 PolicyPilot
+# PolicyPilot
 
 ### Agentic Check Point access automation
 
@@ -22,18 +22,17 @@ LLM agent over MCP.*
 
 PolicyPilot connects to a **real Check Point R82.10 Management Server** (and/or gateways) and does exactly
 what its API account is permitted to — least privilege. You describe the access you want; the engine computes
-the **minimal** change, places it **first-match-safe**, previews it, and applies it on approval — with
-one-click rollback. No more hand-editing rulebases or guessing where a rule belongs.
+the **minimal** change, places it **first-match-safe**, previews it, and applies it on approval, with
+one-click rollback — no hand-editing rulebases or guessing where a rule belongs.
 
-> 💡 **One sentence → the right rule.** *"Allow 10.1.1.50 to the DNS servers and publish"* becomes a correct
-> Accept rule on your SMS — reusing existing objects, placed above the right deny, and published. That's the
-> whole pitch.
+> **One sentence, one rule.** *"Allow 10.1.1.50 to the DNS servers and publish"* becomes a correct Accept
+> rule on your SMS — reusing existing objects, placed above the right deny, and published.
 
 ---
 
-## 🛤 Two automation rails, one engine
+## Two automation rails, one engine
 
-The same decision brain drives two ways to apply a change — **both fully agent-drivable over the same `/mcp`
+The same decision engine drives two ways to apply a change — **both fully agent-drivable over the same `/mcp`
 endpoint** (29 tools total — 21 management + 8 dynamic-layer — mcp-scope key as `Authorization: Bearer`):
 
 | Rail | What it does | How | Publish gate |
@@ -42,62 +41,62 @@ endpoint** (29 tools total — 21 management + 8 dynamic-layer — mcp-scope key
 | **Dynamic Layers — Gateway** | Author an access rulebase and push it **straight to the gateway** as a dynamic layer, out-of-band of SmartConsole. | Gaia API (`set-dynamic-content`, sk182252) | `mcp_allow_layer_push` |
 
 The two rails carry **separate publish gates** — enabling agent writes to the SMS does not enable a live
-gateway push, and vice versa. dry-run and the built-in `mock` target are always allowed. The SMS engine
+gateway push, and vice versa. Dry-run and the built-in `mock` target are always allowed. The SMS engine
 deliberately treats the dynamic layer as **out-of-band** (skips it from matching), so the two rails are
-complementary halves of "automate access," never overlapping.
+complementary halves of access automation, never overlapping.
 
 ---
 
-## 🧠 The decision engine
+## The decision engine
 
-- **Reuse / widen / create** — finds whether the access already exists (no-op), can be granted by widening an
-  existing rule, or needs a new rule.
+- **Reuse / widen / create** — determines whether the access already exists (no-op), can be granted by
+  widening an existing rule, or needs a new rule.
 - **First-match-safe placement** — inserts above the right deny, below the right stealth/cleanup, in the right
   section — so the new rule is neither shadowed nor shadowing.
 - **Every access-rule column** — action (Accept / Drop / Reject / Ask / Inform / Apply Layer) with
   **Action Settings** (a UserCheck block message, or an Ask / Inform prompt with frequency), plus **content**
-  (data-types) + direction, **time**, **install-on** (gateways), **VPN** (communities) and a bandwidth
+  (data-types) and direction, **time**, **install-on** (gateways), **VPN** (communities) and a bandwidth
   **limit**. Any advanced column makes the request *restricted* — a precise rule is created above the broad
-  Accept so the new condition actually takes effect.
-- **Discovery / "did you mean"** — resolves a plain phrase (a service, application, time, data-type,
+  Accept so the new condition takes effect.
+- **Discovery ("did you mean")** — resolves a plain phrase (a service, application, time, data-type,
   access-role, security-zone, gateway, VPN community or UserCheck message) to the real Check Point object:
-  auto-matches a unique hit, else returns ranked candidates for the agent or user to pick.
+  auto-matches a unique hit, otherwise returns ranked candidates for the agent or user to choose.
 - **Reuse-only object resolution** — resolves a source/destination/service to an *existing* Check Point object
   by dedicated commands; never blindly creates duplicates.
-- **Revoke, not just grant** — `remove_access` takes away an existing allow (disables it when it can prove the
-  rule is sole + exact, otherwise inserts a Drop above); blocking traffic is a Drop/Reject via `apply_access`.
+- **Revoke, not just grant** — `remove_access` withdraws an existing allow (disabling it when it can prove the
+  rule is sole and exact, otherwise inserting a Drop above); blocking traffic is a Drop/Reject via `apply_access`.
 - **One-click rollback** — every published change records its inverse op-list; revert restores the prior state.
-- **Provably conservative analysis** — `analyze_policy` only flags a rule as shadowed when it can prove it,
+- **Provably conservative analysis** — `analyze_policy` flags a rule as shadowed only when it can prove it,
   and abstains on opaque/application cells rather than guessing.
 
-See the **[access-automation white paper](docs/access-automation-whitepaper.md)** for how it reasons about a
-rulebase.
+See the **[access-automation white paper](docs/access-automation-whitepaper.md)** for how the engine reasons
+about a rulebase.
 
 ---
 
-## 🎛 Drive it four ways
+## Interfaces
 
-- 🤖 **[MCP server](docs/mcp-n8n.md)** — both rails as **29 tools** an LLM agent (n8n, Claude Desktop, Cursor,
+- **[MCP server](docs/mcp-n8n.md)** — both rails as **29 tools** an LLM agent (n8n, Claude Desktop, Cursor,
   VS Code, any MCP client) calls over `/mcp`. Two ready-made n8n workflows ship in `docs/`:
   **[management access agent](docs/policypilot-management-agent.json)** and
-  **[dynamic-layer agent](docs/policypilot-dynamic-layer-agent.json)**, both connecting to the same `/mcp` with
-  an mcp-scope key. With the **Autopilot** preset, one sentence ending *"…and publish the changes"* resolves,
-  applies **and** publishes in a single turn (management rail). In-app onboarding at **`/mcp-guide`**.
-- 🌐 **REST API** — the same brain at **`/dbapi/v1`** for any HTTP client (api-scope key auth), mirroring the
-  tools across both rails (incl. `/access/correlate/*`, `/gateways`, `/dynamic-layers/*`), self-documented in
-  the in-app **PolicyPilot API** page and the portal OpenAPI (`/docs`).
-- 🎫 **Ticket webhook** — a ServiceNow / Jira / any webhook becomes a Check Point rule, with optional write-back.
+  **[dynamic-layer agent](docs/policypilot-dynamic-layer-agent.json)**, both connecting to the same `/mcp`
+  with an mcp-scope key. With the **Autopilot** preset, one sentence ending *"…and publish the changes"*
+  resolves, applies, and publishes in a single turn (management rail). In-app onboarding at **`/mcp-guide`**.
+- **REST API** — the same engine at **`/dbapi/v1`** for any HTTP client (api-scope key auth), mirroring the
+  tools across both rails (including `/access/correlate/*`, `/gateways`, `/dynamic-layers/*`), self-documented
+  in the in-app **PolicyPilot API** page and the portal OpenAPI (`/docs`).
+- **Ticket webhook** — a ServiceNow / Jira / any webhook becomes a Check Point rule, with optional write-back.
   Authenticated with the `X-PolicyPilot-Token` header.
-- 🖥 **The portal UI** — a **macOS-style desktop** (dock + draggable app windows): review a decision, see the
-  before/after rule and its placement, apply on approval — plus a live **API explorer** (Swagger) at
+- **Portal UI** — a macOS-style desktop (dock + draggable app windows): review a decision, see the
+  before/after rule and its placement, and apply on approval — plus a live **API explorer** (Swagger) at
   `/api-explorer` for testing Management / Gaia API calls directly.
 
-> 📓 The **[MCP-agent QA battery](docs/mcp-agent-qa.md)** is a standing set of one-sentence "…and publish"
+> The **[MCP-agent QA battery](docs/mcp-agent-qa.md)** is a standing set of one-sentence "…and publish"
 > prompts that exercise every tool, outcome, and column — the demo script and the regression check in one.
 
 ---
 
-## 🚀 Quick start (local dev)
+## Quick start (local dev)
 
 ```bash
 python3 -m venv .venv && source .venv/bin/activate
@@ -111,14 +110,14 @@ Open <http://localhost:8000>, sign in as `admin`, then:
 
 1. **Management Servers → add** your R82.10 SMS (host + API account).
 2. **Access automation** → describe an access request → preview the decision (no-op / widen / create) → apply.
-3. **MCP for agents** (`/mcp-guide`) → mint an mcp-scope key and connect n8n / your agent.
+3. **MCP for agents** (`/mcp-guide`) → mint an mcp-scope key and connect n8n or your agent.
 
-> The MCP protocol layer needs the official **`mcp`** SDK (installed from your Check Point Artifactory, not
-> public PyPI). Until it's present the `/mcp` endpoint is simply absent — the rest of PolicyPilot is unaffected.
+> The MCP protocol layer requires the official **`mcp`** SDK (installed from your Check Point Artifactory, not
+> public PyPI). Until it is present the `/mcp` endpoint is simply absent — the rest of PolicyPilot is unaffected.
 
 ---
 
-## ☁️ Deploy (Dokploy)
+## Deploy (Dokploy)
 
 Build from the **`Dockerfile`**, expose port **8000**, add a domain (Traefik handles Let's Encrypt TLS), mount
 **`/data`** for the SQLite DB, and set the `PILOT_*` env vars (`PILOT_SESSION_SECRET`, `PILOT_ENCRYPTION_KEY`,
@@ -126,24 +125,24 @@ Build from the **`Dockerfile`**, expose port **8000**, add a domain (Traefik han
 
 ---
 
-## 🔒 Security / org policy
+## Security
 
 - Portal endpoints require login; machine access uses named, scoped (`mcp` / `webhook` / `api`), revocable
   **API keys** with optional expiry (shown once, SHA-256-hashed at rest).
 - **Multiple users, least privilege.** Self-signup with admin approval; each account is an **Admin** or a
   **Standard** user carrying granular capabilities (preview / apply / publish / export / manage-users).
-  Inactive (pending / disabled) accounts can't authenticate. Password reset by email, with an admin fallback.
+  Inactive (pending / disabled) accounts cannot authenticate. Password reset by email, with an admin fallback.
 - **TLS to the SMS/gateway is always verified.** Self-signed lab boxes are handled by **cert pinning**
-  (trust-on-first-use or a pasted cert) — verification is never disabled.
+  (trust-on-first-use or a pasted certificate); verification is never disabled.
 - Saved management / gateway credentials are **AES-256-GCM encrypted at rest** (`PILOT_ENCRYPTION_KEY`).
 - **Publish is opt-in** — an agent cannot reach live policy unless an admin enables it; otherwise applies are
-  dry-runs (validate + discard). Parameterized queries throughout; defensive HTTP headers (anti-clickjacking,
+  dry-runs (validate and discard). Parameterized queries throughout; defensive HTTP headers (anti-clickjacking,
   nosniff, HSTS).
-- Use a **least-privilege API account** on the SMS — PolicyPilot only does what it's permitted to.
+- Use a **least-privilege API account** on the SMS — PolicyPilot only does what it is permitted to.
 
 ---
 
-## ✅ Tests
+## Tests
 
 ```bash
 pytest -q          # 842 tests, all green
@@ -151,16 +150,16 @@ pytest -q          # 842 tests, all green
 
 ---
 
-## 📚 More
+## Documentation
 
-- **[docs/mcp-n8n.md](docs/mcp-n8n.md)** — connect n8n / an LLM agent over MCP + the REST API.
+- **[docs/mcp-n8n.md](docs/mcp-n8n.md)** — connect n8n / an LLM agent over MCP, plus the REST API.
 - **[docs/policypilot-management-agent.json](docs/policypilot-management-agent.json)** — ready-made n8n agent for the management access rail.
 - **[docs/policypilot-dynamic-layer-agent.json](docs/policypilot-dynamic-layer-agent.json)** — ready-made n8n agent for the dynamic-layer rail.
 - **[docs/mcp-agent-qa.md](docs/mcp-agent-qa.md)** — the one-sentence "…and publish" QA battery (demo + regression).
 - **[docs/live-validation.md](docs/live-validation.md)** — the 15-minute post-deploy smoke test for both rails against a real lab.
 - **[docs/access-automation-whitepaper.md](docs/access-automation-whitepaper.md)** — how the engine reasons.
-- **[docs/integrations/access-automation.md](docs/integrations/access-automation.md)** — the ticket→rule flow.
-- **[docs/integrations/management-export.md](docs/integrations/management-export.md)** — pull & export policy as Terraform / Ansible / `mgmt_cli`.
+- **[docs/integrations/access-automation.md](docs/integrations/access-automation.md)** — the ticket-to-rule flow.
+- **[docs/integrations/management-export.md](docs/integrations/management-export.md)** — pull and export policy as Terraform / Ansible / `mgmt_cli`.
 - **[docs/integrations/gaia-export.md](docs/integrations/gaia-export.md)** — export a gateway's Gaia OS config.
 - **[docs/integrations/dynamic-layers.md](docs/integrations/dynamic-layers.md)** — the gateway-direct (dynamic-layer) rail.
 - **[docs/settings.md](docs/settings.md)** — secrets, API keys, the SMS session cache.

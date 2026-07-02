@@ -53,7 +53,7 @@ Paste into the **management** agent, in order:
 | `List the management servers.` | discovery |
 | `Summarize the Network layer on <SMS>.` | live read of the real rulebase |
 | `Allow 10.1.1.50 to the DNS servers in the Network layer.` | decide → **dry-run** (no publish yet) |
-| *(enable Settings → Access automation logic → ⚡ Autopilot)* `Allow 10.1.1.50 to the DNS servers and publish the changes.` | one-turn decide → apply → **publish**, then verify the rule in SmartConsole |
+| *(enable Settings → Access automation logic → Autopilot)* `Allow 10.1.1.50 to the DNS servers and publish the changes.` | one-turn decide → apply → **publish**, then verify the rule in SmartConsole |
 
 **Gate proof:** with publish OFF, the publish prompt is refused (the agent dry-runs and says it's admin-gated).
 

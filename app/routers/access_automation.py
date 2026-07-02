@@ -47,6 +47,12 @@ class AccessReqBody(BaseModel):
     inline_layer: str | None = None     # required iff action == "Apply Layer"
     action_limit: str | None = None     # action-settings QoS/limit object name
     captive_portal: bool = False        # action-settings enable-identity-captive-portal
+    # UserCheck (top-level user-check object) — Ask/Inform message + frequency + confirm; Drop/Reject block page
+    user_check: str | None = None       # UserCheck interaction object name
+    user_check_frequency: str | None = None   # once a day | once a week | once a month | custom frequency...
+    user_check_confirm: str | None = None     # per rule | per category | per application/site | per data type
+    user_check_custom_every: int = 0    # custom-frequency {every}
+    user_check_custom_unit: str | None = None  # custom-frequency {unit}: hours|days|weeks|months
     content: list[str] | None = None    # Content Awareness data-type names
     content_direction: str = "any"      # any | up | down
     content_negate: bool = False
@@ -212,7 +218,11 @@ def _req_snapshot(body: AccessReqBody) -> dict:
             "action_settings_limit": body.action_limit, "action_settings_captive_portal": body.captive_portal,
             "content": body.content,
             "content_direction": body.content_direction, "content_negate": body.content_negate,
-            "time_objects": body.time_objects, "install_on": body.install_on, "vpn": body.vpn}
+            "time_objects": body.time_objects, "install_on": body.install_on, "vpn": body.vpn,
+            "user_check": body.user_check, "user_check_frequency": body.user_check_frequency,
+            "user_check_confirm": body.user_check_confirm,
+            "user_check_custom_every": body.user_check_custom_every,
+            "user_check_custom_unit": body.user_check_custom_unit}
 
 
 def _record_change_safe(db, **kw) -> None:
@@ -247,7 +257,12 @@ def _run(db: Session, sid: int, user: User, body: AccessReqBody, *, do_apply: bo
                                       action_settings_captive_portal=body.captive_portal,
                                       content=body.content, content_direction=body.content_direction,
                                       content_negate=body.content_negate, time_objects=body.time_objects,
-                                      install_on=body.install_on, vpn=body.vpn)
+                                      install_on=body.install_on, vpn=body.vpn,
+                                      user_check=body.user_check or "",
+                                      user_check_frequency=body.user_check_frequency or "",
+                                      user_check_confirm=body.user_check_confirm or "",
+                                      user_check_custom_every=body.user_check_custom_every or 0,
+                                      user_check_custom_unit=body.user_check_custom_unit or "")
     except ValueError as exc:
         return JSONResponse({"error": str(exc)}, status_code=400)
     if not body.layer:

@@ -20,9 +20,12 @@ def test_matrix_is_complete_and_well_formed():
         assert r["level"] in fs.LEVELS
         for (_name, lvl, _note) in r["supported"]:
             assert lvl in fs.LEVELS
-    # the UserCheck row is honestly marked a GAP (deferred), not overclaimed
+    # UserCheck is now supported (interaction message + frequency + confirm + custom-frequency); the only
+    # honest gap left is that there's no discovery tool for the interaction object (pass it by name).
     uc = next(r for r in rows if r["field"] == "Action Settings · UserCheck")
-    assert uc["level"] == fs.GAP and not uc["supported"] and uc["gaps"]
+    assert uc["level"] == fs.REUSE and uc["supported"]
+    assert any("interaction" in n.lower() for (n, _l, _d) in uc["supported"])
+    assert any("discovery" in g.lower() for g in uc["gaps"])
     # the Limit row records the rate-not-volume gap
     lim = next(r for r in rows if r["field"] == "Action Settings · Limit")
     assert any("volume" in g.lower() or "gb" in g.lower() for g in lim["gaps"])

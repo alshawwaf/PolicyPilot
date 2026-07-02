@@ -127,11 +127,16 @@ def matrix() -> list[dict]:
             "notes": "Pass captive_portal=true. Stripped from Drop/Reject/Apply-Layer (meaningless there).",
         },
         {
-            "field": "Action Settings · UserCheck", "column": "Action Settings", "level": GAP,
+            "field": "Action Settings · UserCheck", "column": "Action Settings", "level": REUSE,
             "discovery": None,
-            "supported": [],
-            "gaps": ["UserCheck MESSAGE, frequency, and per-app/rule confirm are NOT modeled (deferred, v1) — a created Ask/Inform rule uses the server defaults for these fields."],
-            "notes": "The Limit + Captive-Portal settings ARE written; only the UserCheck message/frequency/confirm are deferred.",
+            "supported": [
+                ("interaction (the UserCheck message object)", REUSE, "Ask / Inform prompt, or the Drop / Reject blocked-message page. Reuse-only — the object must already exist (validated at publish)."),
+                ("frequency", FULL, "once a day | once a week | once a month | custom frequency… — Ask / Inform only."),
+                ("confirm", FULL, "per rule | per category | per application/site | per data type — Ask / Inform only."),
+                ("custom-frequency {every, unit}", FULL, "hours | days | weeks | months — only when frequency is 'custom frequency…'."),
+            ],
+            "gaps": ["No discovery tool yet for UserCheck interaction objects — pass the exact name (validated at publish). The API rejects an unknown one and the whole change is discarded (atomic)."],
+            "notes": "Written as the top-level user-check object (sibling of action / action-settings). Defaults match SmartConsole: frequency 'once a day', confirm 'per rule'.",
         },
         {
             "field": "Install On", "column": "Install On", "level": REUSE, "discovery": None,

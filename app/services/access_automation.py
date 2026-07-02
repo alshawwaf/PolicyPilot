@@ -522,7 +522,15 @@ class AccessRequest:
     # limit / captive-portal for an allowing action.
     inline_layer: str = ""                     # required iff action == "Apply Layer"
     action_settings_limit: str = ""            # a QoS/bandwidth "limit" object name (Accept/Ask/Inform)
-    action_settings_captive_portal: bool = False  # enable-identity-captive-portal (Ask/Inform)
+    action_settings_captive_portal: bool = False  # enable-identity-captive-portal (Accept/Ask/Inform)
+    # UserCheck (the top-level ``user-check`` rule object — sibling of action/action-settings, NOT nested).
+    # Ask/Inform carry an interaction message + frequency + confirm; Drop/Reject carry a block-message
+    # interaction only. Reuse-only — the interaction object must already exist (validated at publish).
+    user_check: str = ""                       # UserCheck interaction object NAME (e.g. "Access Notification")
+    user_check_frequency: str = ""             # once a day | once a week | once a month | custom frequency...
+    user_check_confirm: str = ""               # per rule | per category | per application/site | per data type
+    user_check_custom_every: int = 0           # custom-frequency {every} (only when frequency == custom)
+    user_check_custom_unit: str = ""           # custom-frequency {unit}: hours | days | weeks | months
     # MATCH-GATING columns (full-column support, all REUSE-ONLY object refs). A request that carries any of
     # these is "restricted" -> the engine forces CREATE (never a false NO_OP/widen against an unrestricted
     # rule). Apply writes each via the shared validate-by-name resolver.
@@ -2757,10 +2765,21 @@ def resolve_typed_object(session, kind: str, value: str) -> str:
     if existing:
         return existing
     if not _TYPED_OBJ[kind]["creatable"]:
+        # Match the Preview's helpfulness on the apply/dry-run path too: surface the closest existing
+        # objects ("did you mean …") so a typo like "Finanance" points straight at "Finance" instead of a
+        # dead end. Best-effort — a suggest failure just omits the hint.
+        hint = ""
+        try:
+            from . import typed_objects
+            near = [c["name"] for c in typed_objects.suggest(session, kind, value)][:5]
+            if near:
+                hint = f" Did you mean: {', '.join(near)}?"
+        except Exception:  # noqa: BLE001
+            pass
         raise MgmtError(
-            f"{kind} '{value}' was not found on this server. It can't be created from an access request — "
-            f"define it first (an access-role in Identity Awareness, a security-zone in the gateway "
-            f"topology, or an updatable-object from Check Point's repository), then re-run.")
+            f"{kind} '{value}' was not found on this server.{hint} It can't be created from an access "
+            f"request — define it first (an access-role in Identity Awareness, a security-zone in the "
+            f"gateway topology, or an updatable-object from Check Point's repository), then re-run.")
     session.call("add-dynamic-object", {"name": value})  # VERIFY
     return value
 
@@ -3271,7 +3290,7 @@ def _write_gating_columns(session, payload: dict, req: AccessRequest) -> None:
 def _action_settings_payload(action: str, req: AccessRequest) -> Optional[dict]:
     """The action-settings object for an ALLOWING action (Accept/Ask/Inform) when the request set a limit or
     captive portal — else None (omit, so a no-settings rule's payload is unchanged). Stripped from a Drop/
-    Reject/Apply-Layer (settings are meaningless there). UserCheck interaction is deferred (v1) — default used."""
+    Reject/Apply-Layer (settings are meaningless there)."""
     if action not in ("Accept", "Ask", "Inform"):
         return None
     out: dict = {}
@@ -3280,6 +3299,51 @@ def _action_settings_payload(action: str, req: AccessRequest) -> Optional[dict]:
     if req.action_settings_captive_portal:
         out["enable-identity-captive-portal"] = True
     return out or None
+
+
+# R82 web_api enum values for the top-level ``user-check`` object (verified against the CheckPointSW Ansible
+# collection schema + a live mgmt_cli example). Exact wire strings — lowercase, the literal "…" ellipsis on
+# custom, and the slash in "per application/site". A request supplies these (the UI selects them by value).
+_UC_FREQUENCY = ("once a day", "once a week", "once a month", "custom frequency...")
+_UC_CONFIRM = ("per rule", "per category", "per application/site", "per data type")
+_UC_UNITS = ("hours", "days", "weeks", "months")
+_UC_ACTIONS = ("Ask", "Inform", "Drop", "Reject")   # actions that can carry a UserCheck interaction
+
+
+def _user_check_payload(action: str, req: AccessRequest) -> Optional[dict]:
+    """The top-level ``user-check`` object for a UserCheck-capable action, or None.
+
+    Ask / Inform → an interaction (message) + frequency + confirm (+ custom-frequency when 'custom …').
+    Drop / Reject → the interaction alone (the blocked-message page); frequency/confirm aren't meaningful.
+    The interaction object is REUSE-ONLY (must already exist) and validated at publish by the atomic apply —
+    there is no reliable list command to pre-validate it against, so a bad name discards the whole session
+    with the SMS's own error. Enum values are validated here (fail loud) so we never write a bad payload."""
+    interaction = (req.user_check or "").strip()
+    if action not in _UC_ACTIONS or not interaction:
+        return None
+    uc: dict = {"interaction": interaction}
+    if action in ("Ask", "Inform"):
+        freq = (req.user_check_frequency or "once a day").strip().lower()
+        if freq not in _UC_FREQUENCY:
+            raise MgmtError(f"UserCheck frequency “{req.user_check_frequency}” is not one of: "
+                            f"{', '.join(_UC_FREQUENCY)}")
+        conf = (req.user_check_confirm or "per rule").strip().lower()
+        if conf not in _UC_CONFIRM:
+            raise MgmtError(f"UserCheck confirm “{req.user_check_confirm}” is not one of: "
+                            f"{', '.join(_UC_CONFIRM)}")
+        uc["frequency"] = freq
+        uc["confirm"] = conf
+        if freq == "custom frequency...":
+            unit = (req.user_check_custom_unit or "days").strip().lower()
+            if unit not in _UC_UNITS:
+                raise MgmtError(f"UserCheck custom-frequency unit “{req.user_check_custom_unit}” is not one "
+                                f"of: {', '.join(_UC_UNITS)}")
+            try:
+                every = max(1, int(req.user_check_custom_every or 1))
+            except (TypeError, ValueError):
+                raise MgmtError("UserCheck custom-frequency ‘every’ must be a positive integer")
+            uc["custom-frequency"] = {"every": every, "unit": unit}
+    return uc
 
 
 def _apply(session, decision: Decision, req: AccessRequest, layer: str,
@@ -3356,11 +3420,14 @@ def _apply(session, decision: Decision, req: AccessRequest, layer: str,
         # divert into an inline layer — the layer must exist (ordered OR dynamic; per directive we create the
         # divert either way). Resolve the name to a real layer; a missing layer fails loud, not a bad write.
         payload["inline-layer"] = _validate_inline_layer(session, req.inline_layer)
-    asettings = _action_settings_payload(action, req)        # UserCheck limit / captive-portal, allowing actions only
+    asettings = _action_settings_payload(action, req)        # limit / captive-portal, allowing actions only
     if asettings:
         if asettings.get("limit"):                           # validate the limit object reuse-only (like the other refs)
             _resolve_named_objects(session, [asettings["limit"]], "QoS/bandwidth limit", commands=_LIST_CMDS_LIMIT)
         payload["action-settings"] = asettings
+    ucheck = _user_check_payload(action, req)                # top-level user-check (Ask/Inform message+freq+confirm; Drop/Reject block page)
+    if ucheck:
+        payload["user-check"] = ucheck                       # interaction is reuse-only — the atomic publish validates it
     _write_gating_columns(session, payload, req)             # content / time / install-on / vpn (reuse-only)
     tags = naming.rule_tags()
     if tags:

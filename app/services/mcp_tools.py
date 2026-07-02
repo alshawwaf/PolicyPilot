@@ -38,6 +38,9 @@ def _apply_fingerprint(ms, req, layer, package) -> str:
         "content_direction": (req.content_direction or "").lower(),
         "action_limit": req.action_settings_limit or "",
         "captive_portal": bool(req.action_settings_captive_portal),
+        "user_check": req.user_check or "", "uc_freq": (req.user_check_frequency or "").lower(),
+        "uc_confirm": (req.user_check_confirm or "").lower(),
+        "uc_custom": f"{req.user_check_custom_every or 0}/{(req.user_check_custom_unit or '').lower()}",
         "time": sorted(req.time_objects or []), "install_on": sorted(req.install_on or []),
         "vpn": (sorted(req.vpn) if req.vpn else req.vpn),
     }
@@ -152,7 +155,9 @@ def list_access_layers(server_id: str) -> dict:
 def _build(source, destination, service, port, protocol, application,
            source_kind="ip", destination_kind="ip", action="Accept", inline_layer="",
            action_limit="", captive_portal=False, content=None, content_direction="any",
-           content_negate=False, time_objects=None, install_on=None, vpn=None):
+           content_negate=False, time_objects=None, install_on=None, vpn=None,
+           user_check="", user_check_frequency="", user_check_confirm="",
+           user_check_custom_every=0, user_check_custom_unit=""):
     from . import ticketing
     return ticketing.build_request(source, destination, protocol or "tcp", port or "",
                                    application=application, service=service,
@@ -163,7 +168,11 @@ def _build(source, destination, service, port, protocol, application,
                                    action_settings_captive_portal=bool(captive_portal),
                                    content=content, content_direction=content_direction or "any",
                                    content_negate=bool(content_negate), time_objects=time_objects,
-                                   install_on=install_on, vpn=vpn)
+                                   install_on=install_on, vpn=vpn,
+                                   user_check=user_check or "", user_check_frequency=user_check_frequency or "",
+                                   user_check_confirm=user_check_confirm or "",
+                                   user_check_custom_every=user_check_custom_every or 0,
+                                   user_check_custom_unit=user_check_custom_unit or "")
 
 
 def _autopilot(server=None, layer=None) -> bool:
@@ -188,7 +197,10 @@ def decide_access(server_id: str, source: str, destination: str, layer: str, ser
                   action_limit: str | None = None, captive_portal: bool = False,
                   content: list[str] | None = None, content_direction: str = "any",
                   content_negate: bool = False, time_objects: list[str] | None = None,
-                  install_on: list[str] | None = None, vpn: list[str] | None = None) -> dict:
+                  install_on: list[str] | None = None, vpn: list[str] | None = None,
+                  user_check: str | None = None, user_check_frequency: str | None = None,
+                  user_check_confirm: str | None = None, user_check_custom_every: int = 0,
+                  user_check_custom_unit: str | None = None) -> dict:
     """PREVIEW (read-only) what PolicyPilot would do for an access request: returns the outcome
     (no_op / widen / create / review), the reasoning, and — for an unknown service/app — `suggestions`.
     Writes nothing. This is the primary tool for an agent to reason about a change.
@@ -251,7 +263,10 @@ def decide_access(server_id: str, source: str, destination: str, layer: str, ser
                      source_kind, destination_kind, action=action, inline_layer=inline_layer,
                      action_limit=action_limit, captive_portal=captive_portal,
                      content=content, content_direction=content_direction, content_negate=content_negate,
-                     time_objects=time_objects, install_on=install_on, vpn=vpn)
+                     time_objects=time_objects, install_on=install_on, vpn=vpn,
+                     user_check=user_check, user_check_frequency=user_check_frequency,
+                     user_check_confirm=user_check_confirm, user_check_custom_every=user_check_custom_every,
+                     user_check_custom_unit=user_check_custom_unit)
     except ValueError as exc:
         return {"ok": False, "error": str(exc)}
     try:
@@ -290,11 +305,20 @@ def apply_access(server_id: str, source: str, destination: str, layer: str, serv
                  content: list[str] | None = None, content_direction: str = "any",
                  content_negate: bool = False, time_objects: list[str] | None = None,
                  install_on: list[str] | None = None, vpn: list[str] | None = None,
+                 user_check: str | None = None, user_check_frequency: str | None = None,
+                 user_check_confirm: str | None = None, user_check_custom_every: int = 0,
+                 user_check_custom_unit: str | None = None,
                  idempotency_key: str = "") -> dict:
     """APPLY an access request. ``action`` = the rule verdict: Accept (default) / Drop / Reject / Ask /
     Inform / Apply Layer (Apply Layer needs ``inline_layer``). Optional match-gating columns (all REUSE-ONLY
     object names): ``content`` (data-types) + ``content_direction`` (any/up/down) + ``content_negate``;
     ``time_objects`` (time / time-group); ``install_on`` (gateways/targets); ``vpn`` (communities; []=Any).
+    Action-settings + UserCheck: ``action_limit`` (bandwidth RATE object, Accept/Ask/Inform) + ``captive_portal``;
+    and ``user_check`` — the UserCheck interaction/message object (an Ask/Inform prompt, or a Drop/Reject
+    blocked-message page), with ``user_check_frequency`` (once a day | once a week | once a month | custom
+    frequency...) + ``user_check_confirm`` (per rule | per category | per application/site | per data type)
+    for Ask/Inform, and ``user_check_custom_every`` + ``user_check_custom_unit`` (hours/days/weeks/months)
+    when the frequency is custom. The interaction object is reuse-only (must already exist).
     With publish=false it DRY-RUNS (applies inside a session, then discards —
     nothing is committed) — always allowed. With publish=true it COMMITS to the live server — allowed ONLY
     when an admin has enabled the 'mcp_allow_publish' setting; otherwise it's refused (dry-run instead).
@@ -331,7 +355,10 @@ def apply_access(server_id: str, source: str, destination: str, layer: str, serv
                      source_kind, destination_kind, action=action, inline_layer=inline_layer,
                      action_limit=action_limit, captive_portal=captive_portal,
                      content=content, content_direction=content_direction, content_negate=content_negate,
-                     time_objects=time_objects, install_on=install_on, vpn=vpn)
+                     time_objects=time_objects, install_on=install_on, vpn=vpn,
+                     user_check=user_check, user_check_frequency=user_check_frequency,
+                     user_check_confirm=user_check_confirm, user_check_custom_every=user_check_custom_every,
+                     user_check_custom_unit=user_check_custom_unit)
     except ValueError as exc:
         return {"ok": False, "error": str(exc)}
     # Idempotency AFTER resolving the server + building the request, so the replay key is fingerprinted by

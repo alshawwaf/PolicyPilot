@@ -4337,3 +4337,47 @@ def test_webhook_bare_action_is_lenient_dedicated_field_strict():
     assert tr2.request.canon_action == "Drop"
     with pytest.raises(ValueError):                                   # a dedicated verdict field is strict
         t.parse_payload({**base, "verdict": "NotAVerdict"})
+
+
+# --- UserCheck + full action-settings (Ask/Inform/Drop/Reject) --------------------------------
+def _ucreq(action, **kw):
+    return tk.build_request("10.1.1.0/24", "Any", "tcp", "443", action=action, **kw)
+
+
+def test_user_check_payload_inform_message_frequency_confirm():
+    r = _ucreq("Inform", user_check="Company Policy", user_check_frequency="once a day",
+               user_check_confirm="per application/site")
+    assert aa._user_check_payload("Inform", r) == {
+        "interaction": "Company Policy", "frequency": "once a day", "confirm": "per application/site"}
+
+
+def test_user_check_payload_ask_custom_frequency():
+    r = _ucreq("Ask", user_check="Ask", user_check_frequency="custom frequency...",
+               user_check_custom_every="12", user_check_custom_unit="hours", user_check_confirm="per rule")
+    assert aa._user_check_payload("Ask", r) == {
+        "interaction": "Ask", "frequency": "custom frequency...", "confirm": "per rule",
+        "custom-frequency": {"every": 12, "unit": "hours"}}
+
+
+def test_user_check_payload_drop_is_block_message_only():
+    r = _ucreq("Drop", user_check="Blocked Message - Access Control")
+    assert aa._user_check_payload("Drop", r) == {"interaction": "Blocked Message - Access Control"}
+
+
+def test_user_check_payload_none_for_accept_or_no_interaction():
+    assert aa._user_check_payload("Accept", _ucreq("Accept")) is None
+    assert aa._user_check_payload("Inform", _ucreq("Inform")) is None   # no interaction set
+
+
+def test_user_check_bad_enum_fails_loud():
+    r = _ucreq("Inform", user_check="X", user_check_frequency="hourly")  # ticketing keeps freq; engine validates
+    with pytest.raises(aa.MgmtError):
+        aa._user_check_payload("Inform", r)
+
+
+def test_build_request_rejects_usercheck_on_accept_and_freq_on_drop():
+    with pytest.raises(ValueError):
+        tk.build_request("10.1.1.0/24", "1.2.3.4", "tcp", "443", action="Accept", user_check="X")
+    with pytest.raises(ValueError):
+        tk.build_request("10.1.1.0/24", "1.2.3.4", "tcp", "443", action="Drop",
+                         user_check="Blocked", user_check_frequency="once a day")

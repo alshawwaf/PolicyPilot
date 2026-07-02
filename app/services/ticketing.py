@@ -171,7 +171,9 @@ def build_request(source, destination, protocol, port, application=None, service
                   source_kind="ip", destination_kind="ip", action="Accept", inline_layer="",
                   action_settings_limit="", action_settings_captive_portal=False,
                   content=None, content_direction="any", content_negate=False,
-                  time_objects=None, install_on=None, vpn=None) -> AccessRequest:
+                  time_objects=None, install_on=None, vpn=None,
+                  user_check="", user_check_frequency="", user_check_confirm="",
+                  user_check_custom_every=0, user_check_custom_unit="") -> AccessRequest:
     """Validate + normalise a raw tuple into an AccessRequest. Shared by the UI and the webhook.
     Precedence: `application` (e.g. "Facebook") > `service` (a named non-port service, e.g. "icmp" /
     "GRE") > protocol+port. Source/destination may be an IP, a CIDR, 'Any', OR a typed (non-IP) object
@@ -199,6 +201,15 @@ def build_request(source, destination, protocol, port, application=None, service
                                                       or bool(action_settings_captive_portal)):
         raise ValueError(f"action-settings (limit / captive portal) are only valid with an allowing action "
                          f"(Accept/Ask/Inform), not '{canon}'.")
+    # UserCheck (top-level user-check object) — an interaction message is valid only on Ask/Inform (a prompt)
+    # or Drop/Reject (a blocked-message page), never Accept/Apply-Layer. frequency/confirm apply to Ask/Inform.
+    user_check = str(user_check or "").strip()
+    if user_check and canon not in ("Ask", "Inform", "Drop", "Reject"):
+        raise ValueError(f"a UserCheck interaction is only valid with Ask, Inform, Drop or Reject, not '{canon}'.")
+    if (user_check_frequency or user_check_confirm) and canon not in ("Ask", "Inform"):
+        raise ValueError("UserCheck frequency / confirm apply only to an Ask or Inform action.")
+    if (user_check_frequency or user_check_confirm) and not user_check:
+        raise ValueError("UserCheck frequency / confirm need a UserCheck interaction object to be set.")
     # MATCH-GATING columns (full-column support). Normalize string-or-list -> clean NAME list; validate the
     # content direction enum; collapse an Any/Policy-Targets install-on to [] (omit). All object refs are
     # reuse-only — existence is validated at apply time, not here.
@@ -238,7 +249,11 @@ def build_request(source, destination, protocol, port, application=None, service
                   action_settings_limit=str(action_settings_limit or "").strip(),
                   action_settings_captive_portal=bool(action_settings_captive_portal),
                   content=(content_l or None), content_direction=cdir, content_negate=content_negate,
-                  time_objects=time_l, install_on=install_l, vpn=vpn_l)
+                  time_objects=time_l, install_on=install_l, vpn=vpn_l,
+                  user_check=user_check, user_check_frequency=str(user_check_frequency or "").strip().lower(),
+                  user_check_confirm=str(user_check_confirm or "").strip().lower(),
+                  user_check_custom_every=int(user_check_custom_every or 0),
+                  user_check_custom_unit=str(user_check_custom_unit or "").strip().lower())
     if application:
         return AccessRequest(**common, application=application)
     service = str(service).strip() if service else ""

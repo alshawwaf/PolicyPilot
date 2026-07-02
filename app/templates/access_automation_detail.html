@@ -211,6 +211,34 @@
           <label class="aa-cpx"><input type="checkbox" id="aa-captive"> Enable Identity Captive Portal</label>
         </div>
       </div>
+      <div class="aa-asettings" id="aa-usercheck">
+        <div class="as-h" id="aa-uc-h">UserCheck — Ask / Inform prompt · Drop / Reject block message</div>
+        <div class="row endalign">
+          <div class="grow"><label>UserCheck interaction <span class="muted" id="aa-uc-hint">(the message object)</span>
+            <input id="aa-uc" placeholder="Access Notification" autocomplete="off"></label></div>
+        </div>
+        <div class="row endalign" id="aa-uc-freqrow" style="margin-top:10px;">
+          <div style="width:190px;"><label>Frequency
+            <select id="aa-uc-freq">
+              <option value="once a day">Once a day</option>
+              <option value="once a week">Once a week</option>
+              <option value="once a month">Once a month</option>
+              <option value="custom frequency...">Custom…</option>
+            </select></label></div>
+          <div style="width:220px;"><label>Confirm
+            <select id="aa-uc-confirm">
+              <option value="per rule">Per rule</option>
+              <option value="per category">Per category</option>
+              <option value="per application/site">Per application / site</option>
+              <option value="per data type">Per data type</option>
+            </select></label></div>
+          <div class="row" id="aa-uc-custom" style="gap:8px; flex-wrap:nowrap;" hidden>
+            <div style="width:82px;"><label>Every<input id="aa-uc-every" type="number" min="1" value="1"></label></div>
+            <div style="width:108px;"><label>Unit
+              <select id="aa-uc-unit"><option>hours</option><option>days</option><option>weeks</option><option>months</option></select></label></div>
+          </div>
+        </div>
+      </div>
       <p class="aa-field-note">Each name resolves to a REAL Check Point object on Preview — a typo fails loud, nothing is written. Setting any advanced field makes the request <b>restricted</b>: the engine CREATEs a precise rule <em>above</em> a broad Accept so the new condition takes effect (never a false reuse). Time / content / limit / VPN / install-on objects are <b>reused</b> (defined in the SMS), never created.</p>
     </div>
   </details>
@@ -314,18 +342,55 @@
       if (content) { b.content = content; b.content_direction = val('aa-content-dir') || 'any'; }
       var install = splitList(val('aa-install'));          if (install) b.install_on = install;
       var vpn = splitList(val('aa-vpn'));                  if (vpn) b.vpn = vpn;
-      // action-settings are meaningful only for an allowing action (Accept / Ask / Inform)
+      // action-settings (limit / captive portal) are meaningful only for an allowing action (Accept/Ask/Inform)
       if (action === 'Accept' || action === 'Ask' || action === 'Inform') {
         var limit = val('aa-limit');                       if (limit) b.action_limit = limit;
         if (document.getElementById('aa-captive') && document.getElementById('aa-captive').checked) b.captive_portal = true;
       }
+      // UserCheck — an interaction message on Ask/Inform (prompt) or Drop/Reject (block page); frequency +
+      // confirm apply only to Ask/Inform; custom-frequency only when frequency is "custom …".
+      var UC = { Ask: 1, Inform: 1, Drop: 1, Reject: 1 };
+      if (UC[action]) {
+        var uc = val('aa-uc');
+        if (uc) {
+          b.user_check = uc;
+          if (action === 'Ask' || action === 'Inform') {
+            b.user_check_frequency = val('aa-uc-freq') || 'once a day';
+            b.user_check_confirm = val('aa-uc-confirm') || 'per rule';
+            if (b.user_check_frequency === 'custom frequency...') {
+              b.user_check_custom_every = parseInt(val('aa-uc-every') || '1', 10) || 1;
+              b.user_check_custom_unit = val('aa-uc-unit') || 'days';
+            }
+          }
+        }
+      }
     }
-    // Hide the action-settings block for a blocking action (Drop / Reject) — settings don't apply there.
+    // Show only the settings that apply to the chosen action:
+    //   Accept        → action-settings (limit/captive); no UserCheck.
+    //   Ask / Inform  → action-settings + UserCheck (interaction + frequency + confirm).
+    //   Drop / Reject → UserCheck block message only (interaction); no action-settings, no frequency/confirm.
     (function () {
-      var actSel = document.getElementById('aa-action'), aset = document.getElementById('aa-asettings');
-      if (!actSel || !aset) return;
-      function sync() { var a = actSel.value; aset.style.display = (a === 'Drop' || a === 'Reject') ? 'none' : ''; }
-      actSel.addEventListener('change', sync); sync();
+      var actSel = document.getElementById('aa-action');
+      var aset = document.getElementById('aa-asettings'), uc = document.getElementById('aa-usercheck');
+      var freqRow = document.getElementById('aa-uc-freqrow'), custom = document.getElementById('aa-uc-custom');
+      var freqSel = document.getElementById('aa-uc-freq'), ucHint = document.getElementById('aa-uc-hint');
+      if (!actSel || !aset || !uc) return;
+      function sync() {
+        var a = actSel.value;
+        var allowing = (a === 'Accept' || a === 'Ask' || a === 'Inform');
+        var blocking = (a === 'Drop' || a === 'Reject');
+        var prompting = (a === 'Ask' || a === 'Inform');
+        aset.style.display = allowing ? '' : 'none';
+        uc.style.display = (prompting || blocking) ? '' : 'none';
+        if (freqRow) freqRow.style.display = prompting ? '' : 'none';
+        if (ucHint) ucHint.textContent = blocking ? '(the blocked-message page)' : '(the message object)';
+        // toggle via style.display (not the `hidden` attr): the `.row` class sets display:flex, which would
+        // otherwise beat the [hidden] UA rule and leave the custom-frequency fields always visible.
+        if (custom) custom.style.display = (prompting && freqSel && freqSel.value === 'custom frequency...') ? 'flex' : 'none';
+      }
+      actSel.addEventListener('change', sync);
+      if (freqSel) freqSel.addEventListener('change', sync);
+      sync();
     })();
     // show the input that matches the chosen service type; the predefined named protocols filter the
     // type-ahead to their Check Point object kind so the right object is suggested.

@@ -142,3 +142,14 @@ def test_mcp_correlate_access_role_and_zone_delegate(monkeypatch):
     monkeypatch.setattr(mcp_tools, "_server_secret",
                         lambda db, sid: (_ for _ in ()).throw(ValueError("no such server")))
     assert "error" in mcp_tools.correlate_access_role(9, "Finance_Users")
+
+
+def test_resolve_typed_object_missing_reuse_only_suggests_candidates():
+    # A missing access-role (reuse-only) error now includes "did you mean" candidates on the apply path,
+    # matching the Preview's helpfulness (the screenshot fix).
+    s = FakeSession([{"name": "Finance_Users", "uid": "r1", "type": "access-role"}])
+    try:
+        aa.resolve_typed_object(s, "access-role", "Finance")   # substring hit, not an exact object
+        assert False, "expected MgmtError for a missing reuse-only object"
+    except aa.MgmtError as exc:
+        assert "Finance_Users" in str(exc) and "Did you mean" in str(exc)

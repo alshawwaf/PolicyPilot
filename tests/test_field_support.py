@@ -25,7 +25,7 @@ def test_matrix_is_complete_and_well_formed():
     uc = next(r for r in rows if r["field"] == "Action Settings · UserCheck")
     assert uc["level"] == fs.REUSE and uc["supported"]
     assert any("interaction" in n.lower() for (n, _l, _d) in uc["supported"])
-    assert any("discovery" in g.lower() for g in uc["gaps"])
+    assert uc["discovery"] == "correlate_user_check"
     # the Limit row records the rate-not-volume gap
     lim = next(r for r in rows if r["field"] == "Action Settings · Limit")
     assert any("volume" in g.lower() or "gb" in g.lower() for g in lim["gaps"])

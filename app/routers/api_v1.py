@@ -175,6 +175,11 @@ def api_correlate_zone(body: CorrelateBody, _=_API):
     return _respond(mcp_tools.correlate_zone(body.server_id, body.name))
 
 
+@router.post("/access/correlate/user-check", summary="Resolve a UserCheck phrase to a CP UserCheck interaction object")
+def api_correlate_user_check(body: CorrelateBody, _=_API):
+    return _respond(mcp_tools.correlate_user_check(body.server_id, body.name))
+
+
 # --- dynamic layers (Rail B) — author + push an access rulebase to a gateway via the Gaia API -----
 class DynRuleBody(BaseModel):
     layer: str

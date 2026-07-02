@@ -215,7 +215,8 @@
         <div class="as-h" id="aa-uc-h">UserCheck — Ask / Inform prompt · Drop / Reject block message</div>
         <div class="row endalign">
           <div class="grow"><label>UserCheck interaction <span class="muted" id="aa-uc-hint">(the message object)</span>
-            <input id="aa-uc" placeholder="Access Notification" autocomplete="off"></label></div>
+            <input id="aa-uc" placeholder="Access Notification" autocomplete="off" list="aa-uclist">
+            <datalist id="aa-uclist"></datalist></label></div>
         </div>
         <div class="row endalign" id="aa-uc-freqrow" style="margin-top:10px;">
           <div style="width:190px;"><label>Frequency
@@ -765,6 +766,7 @@
     // search returns nothing (you type an address) — the datalist just stays empty.
     typeahead('aa-source', 'aa-srclist', 'object-search', function () { var k = document.getElementById('aa-srctype').value; return k === 'ip' ? '' : k; });
     typeahead('aa-dest', 'aa-dstlist', 'object-search', function () { var k = document.getElementById('aa-dsttype').value; return k === 'ip' ? '' : k; });
+    typeahead('aa-uc', 'aa-uclist', 'usercheck-search');   // Advanced options: UserCheck interaction object
 
     fetch('/management/' + id + '/layers').then(function (r) { return r.json(); })
       .then(function (data) {

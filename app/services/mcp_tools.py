@@ -714,6 +714,27 @@ def _correlate_typed(server_id: str, name: str, kind: str) -> dict:
         return {"error": str(exc)}
 
 
+def correlate_user_check(server_id: str, name: str) -> dict:
+    """Map a UserCheck phrase ("the blocked message", "company policy") to the real Check Point UserCheck
+    interaction object, or return candidates. Pass the returned ``match`` as ``user_check`` on an Ask / Inform
+    (the prompt) or a Drop / Reject (the blocked-message page). Reuse-only — the object is defined in
+    SmartConsole (UserCheck); if none matches, relay the candidates or say one must be created first."""
+    db = SessionLocal()
+    try:
+        ms, secret = _server_secret(db, server_id)
+    except ValueError as exc:
+        db.close()
+        return {"error": str(exc)}
+    db.close()
+    from . import usercheck
+    from .mgmt_api import MgmtError, read_session
+    try:
+        with read_session(ms, secret) as s:
+            return usercheck.resolve(s, name)
+    except MgmtError as exc:
+        return {"error": str(exc)}
+
+
 def correlate_access_role(server_id: str, name: str) -> dict:
     """Map an identity phrase ("the finance role", "Finance_Users") to the real Check Point ACCESS-ROLE
     object (Identity Awareness), or return candidates. This is the ZERO-TRUST source: pass the returned

@@ -128,14 +128,14 @@ def matrix() -> list[dict]:
         },
         {
             "field": "Action Settings · UserCheck", "column": "Action Settings", "level": REUSE,
-            "discovery": None,
+            "discovery": "correlate_user_check",
             "supported": [
-                ("interaction (the UserCheck message object)", REUSE, "Ask / Inform prompt, or the Drop / Reject blocked-message page. Reuse-only — the object must already exist (validated at publish)."),
+                ("interaction (the UserCheck message object)", REUSE, "Ask / Inform prompt, or the Drop / Reject blocked-message page. Reuse-only — resolve the name with correlate_user_check; validated at publish."),
                 ("frequency", FULL, "once a day | once a week | once a month | custom frequency… — Ask / Inform only."),
                 ("confirm", FULL, "per rule | per category | per application/site | per data type — Ask / Inform only."),
                 ("custom-frequency {every, unit}", FULL, "hours | days | weeks | months — only when frequency is 'custom frequency…'."),
             ],
-            "gaps": ["No discovery tool yet for UserCheck interaction objects — pass the exact name (validated at publish). The API rejects an unknown one and the whole change is discarded (atomic)."],
+            "gaps": ["A wrong UserCheck name is caught only at publish (atomic — the whole change is discarded); correlate_user_check resolves it first, but a server that doesn't index user-check objects returns no candidates (pass the exact name)."],
             "notes": "Written as the top-level user-check object (sibling of action / action-settings). Defaults match SmartConsole: frequency 'once a day', confirm 'per rule'.",
         },
         {

@@ -32,7 +32,7 @@ _INNER = None
 _TOOLS = ("list_management_servers", "list_access_layers", "decide_access", "apply_access",
           "remove_access", "amend_access_rule", "list_changes", "revert_change", "correlate_service",
           "correlate_application", "correlate_time", "correlate_content", "correlate_limit",
-          "correlate_access_role", "correlate_zone",
+          "correlate_access_role", "correlate_zone", "correlate_user_check",
           "summarize_layer", "analyze_policy", "coverage_lookup",
           # Dynamic Layers (Rail B) — author + push an access rulebase to a gateway via the Gaia API
           "list_gateways", "list_dynamic_layers", "get_dynamic_layer", "fetch_dynamic_layer",

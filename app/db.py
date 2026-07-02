@@ -78,6 +78,7 @@ _ADDED_COLUMNS = {
     "api_keys": {"expires_at": "DATETIME",                  # key-expiry, added after the table shipped
                  "can_write": "BOOLEAN DEFAULT 1"},          # read-only vs write capability (default: write)
     "applied_changes": {"resolution": "VARCHAR(16) DEFAULT ''"},   # rolled-back vs disabled-rule-deleted
+    "idempotency_records": {"fingerprint": "VARCHAR(64) DEFAULT ''"},   # request hash — refuse cross-request key reuse
     "management_servers": {"gaia_username": "VARCHAR(120) DEFAULT ''"},   # separate Gaia OS login for export
 }
 

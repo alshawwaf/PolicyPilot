@@ -363,6 +363,9 @@ def _layer_view(d: dict, queried_name: str = "") -> dict:
         "rulebase": rulebase,
         # Objects the rules reference but don't define here — resolved on the gateway.
         "referenced": referenced_object_names(objects, rulebase, d.get("referenced-objects")),
+        # Keep the RAW referenced-objects too (not just their names) so an import → edit → push round-trip
+        # preserves them rather than dropping the definitions.
+        "referenced_objects": d.get("referenced-objects") or {},
         "last_change": d.get("last-dynamic-content-change") or {},
     }
 
@@ -379,6 +382,7 @@ def _fetch_mock(db, owner_id: int) -> dict:
         objs, rb = c.get("objects", {}) or {}, c.get("rulebase", []) or []
         layers.append({"name": r.layer_name, "display_name": r.name, "objects": objs, "rulebase": rb,
                        "referenced": referenced_object_names(objs, rb, c.get("referenced_objects")),
+                       "referenced_objects": c.get("referenced_objects") or {},
                        "last_change": {}})
     trace = [
         {"step": "login", "method": "POST", "url": f"{base}/login",

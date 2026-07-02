@@ -66,6 +66,18 @@ def test_relation_subset_superset_disjoint_equal():
     assert aa.relation(_host("10.1.0.5"), _host("192.168.0.1")) == Relation.DISJOINT
 
 
+def test_svc_relation_multikind_equal_only_on_true_equality():
+    # A MULTI-kind request (tcp/443 + a named service) equal to the rule cell now reads EQUAL — which
+    # unlocks a WIDEN on another dimension. It must be EQUAL ONLY when the rule is EXACTLY the request:
+    # a broader rule stays SUBSET (a false EQUAL there would over-grant the broader service on a widen).
+    a = ServiceSet(by_proto={"tcp": aa._ports_to_iv("443")}, named={("icmp", "echo-request")})
+    same = ServiceSet(by_proto={"tcp": aa._ports_to_iv("443")}, named={("icmp", "echo-request")})
+    assert aa.svc_relation(a, same) == Relation.EQUAL
+    broader = ServiceSet(by_proto={"tcp": aa._ports_to_iv("443"), "udp": aa._ports_to_iv("53")},
+                         named={("icmp", "echo-request")})
+    assert aa.svc_relation(a, broader) == Relation.SUBSET      # covered but broader -> never a false EQUAL
+
+
 def test_service_set_covers_and_any():
     assert ServiceSet(any=True).covers(_tcp(443))
     assert not _tcp(443).covers(ServiceSet(any=True))
@@ -3068,7 +3080,7 @@ def test_widen_suppressed_when_target_is_above_an_opaque_deny():
 # --- Predefined "Internet" object (App Control / URL Filtering destination) ----------------------
 _INET_OD = {
     "any": {"uid": "any", "type": "CpmiAnyObject", "name": "Any"},
-    "inet": {"uid": "inet", "name": "Internet"},                      # predefined topology object (no IP)
+    "inet": {"uid": "inet", "type": "internet", "name": "Internet"},  # predefined topology object (no IP)
     "ws": {"uid": "ws", "type": "host", "name": "win_server", "ipv4-address": "10.1.2.250"},
     "gw": {"uid": "gw", "type": "simple-gateway", "name": "GW", "ipv4-address": "10.0.0.1"},  # -> approx
     "srv": {"uid": "srv", "type": "host", "name": "intranet", "ipv4-address": "172.16.5.10"},
@@ -3094,9 +3106,47 @@ def _blocked(d):
 
 
 def test_parse_net_detects_internet_object_no_ip():
-    iv, cx, groups, approx, typed = aa._parse_net([{"name": "Internet"}], {})
+    # the predefined Internet object is recognized by its type (or the fixed uid), NOT by name
+    iv, cx, groups, approx, typed = aa._parse_net([{"name": "Internet", "type": "internet"}], {})
     assert typed.internet == {"Internet"} and typed.any_members()
     assert iv == [] and not cx and not approx                        # no IP extent, not opaque/REVIEW
+    # and by the fixed predefined uid even when it can't be dereferenced (bare uid, not in objdict)
+    _iv, _cx, _g, _ap, t2 = aa._parse_net([aa._INTERNET_UID], {})
+    assert t2.internet == {"Internet"}
+
+
+def test_group_with_exclusion_typed_except_is_not_a_false_noop():
+    # HIGH (review): a group-with-exclusion whose EXCEPT half carries a TYPED object (dns-domain / role)
+    # must never let the EXCLUDED identity read as covered. Fail closed: the cell is unknown -> CREATE.
+    od = {
+        "inc": {"uid": "inc", "type": "dns-domain", "name": ".example.com"},
+        "exc": {"uid": "exc", "type": "dns-domain", "name": ".sub.example.com"},
+        "gwe": {"uid": "gwe", "type": "group-with-exclusion", "name": "gwe", "include": "inc", "except": "exc"},
+        "acc": {"uid": "acc", "name": "Accept"}, "drp": {"uid": "drp", "name": "Drop"},
+    }
+    R1 = aa._parse_rule({"uid": "r1", "rule-number": 1, "name": "r1", "enabled": True, "action": "acc",
+                         "source": ["any"], "destination": ["gwe"], "service": ["any"]},
+                        {**od, "any": {"uid": "any", "type": "CpmiAnyObject", "name": "Any"}})
+    C = aa._parse_rule({"uid": "rc", "rule-number": 9, "name": "rc", "enabled": True, "action": "drp",
+                        "source": ["any"], "destination": ["any"], "service": ["any"]},
+                       {"any": {"uid": "any", "type": "CpmiAnyObject", "name": "Any"}})
+    # The EXCLUDED domain is NOT granted (R1 excludes it, cleanup drops it) -> must CREATE, not NO_OP.
+    excluded = aa.decide(AccessRequest(["10.0.0.1/32"], [], "tcp", "443", dst_kind="domain",
+                                       dst_value=".sub.example.com"), [R1, C])
+    assert excluded.outcome is Outcome.CREATE
+    # (a NON-excluded domain fails closed to CREATE too — safe over-conservatism, never a wrong grant)
+    included = aa.decide(AccessRequest(["10.0.0.1/32"], [], "tcp", "443", dst_kind="domain",
+                                       dst_value=".other.example.com"), [R1, C])
+    assert included.outcome is not Outcome.NO_OP
+
+
+def test_parse_net_object_named_internet_is_not_the_global_object():
+    # a customer GROUP literally named "Internet" must resolve by its members, never be captured as the
+    # predefined topology object (the old name fallback silently dropped its member IPs).
+    od = {"g": {"uid": "g", "type": "group", "name": "Internet",
+                "members": [{"uid": "h", "type": "host", "name": "h", "ipv4-address": "203.0.113.5"}]}}
+    iv, cx, groups, approx, typed = aa._parse_net(["g"], od)
+    assert not typed.internet and iv == _host("203.0.113.5") and "g" in groups
 
 
 def test_parse_net_host_named_internet_still_resolves_by_ip():

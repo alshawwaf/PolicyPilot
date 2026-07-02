@@ -21,9 +21,14 @@ def _as_aware(value: dt.datetime) -> dt.datetime:
     return value if value.tzinfo else value.replace(tzinfo=dt.timezone.utc)
 
 
-def replay(key: str):
+def replay(key: str, fingerprint: str | None = None):
     """The stored result for ``key`` if it was recorded within the TTL (with ``idempotent_replay: true``),
-    else None. Never raises."""
+    else None. Never raises.
+
+    When ``fingerprint`` is provided and the stored record was committed for a DIFFERENT request (a
+    fingerprint mismatch), return a CONFLICT marker dict (``idempotency_conflict: true``) instead of the
+    cached result — so the caller fails loud rather than falsely reporting the first change as applied.
+    (A record with no stored fingerprint — pre-migration — replays as before, never conflicts.)"""
     if not key:
         return None
     try:
@@ -34,6 +39,11 @@ def replay(key: str):
                 return None
             if (utcnow() - _as_aware(row.created_at)) > _TTL:
                 return None
+            if fingerprint and (getattr(row, "fingerprint", "") or "") and row.fingerprint != fingerprint:
+                return {"ok": False, "applied": False, "published": False, "idempotency_conflict": True,
+                        "error": "idempotency_key was already used for a DIFFERENT request — refusing to "
+                                 "replay (that would report the earlier change's result for this one). Use a "
+                                 "new idempotency_key for a new change."}
             res = json.loads(row.result)
             return {**res, "idempotent_replay": True} if isinstance(res, dict) else res
         finally:
@@ -42,9 +52,9 @@ def replay(key: str):
         return None
 
 
-def remember(key: str, result) -> None:
-    """Store ``result`` under ``key`` for replay within the TTL. Call only for a result that actually
-    committed. Best-effort; never raises."""
+def remember(key: str, result, fingerprint: str | None = None) -> None:
+    """Store ``result`` (and the request ``fingerprint``) under ``key`` for replay within the TTL. Call only
+    for a result that actually committed. Best-effort; never raises."""
     if not key or not isinstance(result, dict):
         return
     try:
@@ -53,9 +63,12 @@ def remember(key: str, result) -> None:
             payload = json.dumps(result)
             row = db.get(IdempotencyRecord, key)
             if row is None:
-                db.add(IdempotencyRecord(key=key, result=payload, created_at=utcnow()))
+                db.add(IdempotencyRecord(key=key, result=payload,
+                                         fingerprint=fingerprint or "", created_at=utcnow()))
             else:
                 row.result, row.created_at = payload, utcnow()
+                if fingerprint is not None:
+                    row.fingerprint = fingerprint
             db.commit()
         finally:
             db.close()

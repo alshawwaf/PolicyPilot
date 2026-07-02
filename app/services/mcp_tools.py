@@ -9,6 +9,8 @@ HTTP request lifecycle), mirroring the webhook. Reads/preview/correlate/coverage
 from __future__ import annotations
 
 import functools
+import hashlib
+import json
 import logging
 
 from ..db import SessionLocal
@@ -16,6 +18,27 @@ from ..models import DynamicLayer, Gateway, ManagementServer
 from . import authz
 
 logger = logging.getLogger("policypilot.mcp_tools")
+
+
+def _apply_fingerprint(ms, req, layer, package) -> str:
+    """A stable hash of the ACTUAL change an apply_access request commits — server + normalized
+    source/destination/service/action/layer/package + the match-gating columns. Bound to the idempotency
+    key so reusing a key for a DIFFERENT request is detected (conflict) rather than falsely replayed."""
+    payload = {
+        "server": getattr(ms, "id", None),
+        "src_kind": req.src_kind,
+        "src": sorted(req.src_cidrs) if req.src_kind == "ip" else (req.src_value or ""),
+        "dst_kind": req.dst_kind,
+        "dst": sorted(req.dst_cidrs) if req.dst_kind == "ip" else (req.dst_value or ""),
+        "protocol": (req.protocol or "").lower(), "ports": req.ports or "",
+        "application": req.application or "", "service": req.service or "",
+        "action": req.canon_action, "layer": (layer or "").lower(), "package": (package or "").lower(),
+        "inline_layer": req.inline_layer or "",
+        "content": sorted(req.content or []), "content_negate": bool(req.content_negate),
+        "time": sorted(req.time_objects or []), "install_on": sorted(req.install_on or []),
+        "vpn": (sorted(req.vpn) if req.vpn else req.vpn),
+    }
+    return hashlib.sha256(json.dumps(payload, sort_keys=True, default=str).encode()).hexdigest()
 
 
 def _write_tool(fn):
@@ -265,11 +288,6 @@ def apply_access(server_id: str, source: str, destination: str, layer: str, serv
     NEVER invent or default it (not "localhost", "127.0.0.1", a hostname, or any guess — a fabricated value
     just fails to resolve). If the user named no management server: call list_management_servers — if exactly
     one exists, use it; if more than one, ASK the user which management server to use. Do not assume."""
-    if idempotency_key and publish:
-        from . import idempotency
-        cached = idempotency.replay(idempotency_key)
-        if cached is not None:
-            return cached
     if publish:
         from . import app_settings
         try:
@@ -297,6 +315,15 @@ def apply_access(server_id: str, source: str, destination: str, layer: str, serv
                      time_objects=time_objects, install_on=install_on, vpn=vpn)
     except ValueError as exc:
         return {"ok": False, "error": str(exc)}
+    # Idempotency AFTER resolving the server + building the request, so the replay key is fingerprinted by
+    # the ACTUAL change (server + normalized src/dst/svc/action/layer/columns). A key reused for a DIFFERENT
+    # request returns a conflict marker (fail loud) instead of falsely replaying the earlier change's result.
+    fp = _apply_fingerprint(ms, req, layer, package) if (idempotency_key and publish) else None
+    if idempotency_key and publish:
+        from . import idempotency
+        cached = idempotency.replay(idempotency_key, fp)
+        if cached is not None:
+            return cached
     try:
         result = aa.execute(ms, secret, req, layer, package=package, ticket_id=ticket_id, publish=publish)
     except Exception as exc:  # noqa: BLE001 — never surface an uncaught raise as a generic "Internal error";
@@ -307,7 +334,7 @@ def apply_access(server_id: str, source: str, destination: str, layer: str, serv
     _record_applied(ms, result, req, layer, package, ticket_id)
     if idempotency_key and publish and isinstance(result, dict) and result.get("published"):
         from . import idempotency
-        idempotency.remember(idempotency_key, result)
+        idempotency.remember(idempotency_key, result, fp)
     return result
 
 
@@ -857,17 +884,24 @@ def push_dynamic_layer(layer: str, gateway: str = "", dry_run: bool = False,
     REPLAYS the first successful result (adds ``idempotent_replay: true``) instead of pushing again. Returns
     the change summary + task id."""
     use_mock = (not (gateway or "").strip()) or gateway.strip().lower() == "mock"
-    if idempotency_key and not dry_run and not use_mock:
-        from . import idempotency
-        cached = idempotency.replay(idempotency_key)
-        if cached is not None:
-            return cached
+    push_fp = None
     db = SessionLocal()
     try:
         try:
             L = _resolve_layer(db, layer)
         except ValueError as exc:
             return {"ok": False, "error": str(exc), "autopilot": _autopilot()}
+        # Fingerprint the push by target gateway + layer identity + the exact content being pushed, so a
+        # reused idempotency_key that now targets a different gateway/layer, or the same layer with CHANGED
+        # content, conflicts instead of silently replaying the earlier push's result.
+        if idempotency_key and not dry_run and not use_mock:
+            push_fp = hashlib.sha256(json.dumps(
+                {"target": (gateway or "").strip().lower(), "layer_id": L.id,
+                 "content": L.content or {}}, sort_keys=True, default=str).encode()).hexdigest()
+            from . import idempotency
+            cached = idempotency.replay(idempotency_key, push_fp)
+            if cached is not None:
+                return cached
         if not use_mock and not dry_run:
             from . import app_settings
             try:
@@ -930,7 +964,7 @@ def push_dynamic_layer(layer: str, gateway: str = "", dry_run: bool = False,
               "error": None if ok else (prog.get("error") or "push failed"), "autopilot": _autopilot()}
     if idempotency_key and result["pushed"]:
         from . import idempotency
-        idempotency.remember(idempotency_key, result)
+        idempotency.remember(idempotency_key, result, push_fp)
     if result["pushed"]:
         try:                                          # governance audit — metadata only, never breaks the push
             from . import audit

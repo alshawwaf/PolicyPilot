@@ -224,6 +224,11 @@ class IdempotencyRecord(Base):
 
     key: Mapped[str] = mapped_column(String(200), primary_key=True)
     result: Mapped[str] = mapped_column(Text, default="")
+    # A hash of the request the key committed (server + src/dst/svc/action/layer/columns). A reused key
+    # carrying a DIFFERENT request is a caller bug (e.g. an LLM deriving the key from a ticket number that
+    # spans several distinct changes); we refuse to replay across a fingerprint mismatch instead of falsely
+    # reporting the first change's rule as applied. Empty for records written before this column existed.
+    fingerprint: Mapped[str] = mapped_column(String(64), default="")
     created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 

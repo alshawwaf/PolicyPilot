@@ -233,6 +233,16 @@ def gateways_import_layer(gid: int, request: Request, layer: str = Form(...),
         _flash(request, msg, "error")
         return RedirectResponse(f"/gateways/{gid}", status_code=303)
     content = {"operation": "replace", "objects": src.get("objects") or {}, "rulebase": src.get("rulebase") or []}
+    # Carry the layer's full fidelity through the import so an import → edit → push round-trip isn't lossy:
+    # the raw referenced-objects (definitions, not just names) and any layer-level comments/tags the fetch
+    # captured. (Per-rule comments/tags already round-trip inside each rulebase entry.)
+    ref = src.get("referenced_objects") or src.get("referenced-objects")
+    if ref:
+        content["referenced_objects"] = ref
+    if src.get("comments"):
+        content["comments"] = src.get("comments")
+    if src.get("tags"):
+        content["tags"] = src.get("tags")
     from ..schemas.dynamic_layer import validate_layer_content
     try:
         validate_layer_content(content)

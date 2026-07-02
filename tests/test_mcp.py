@@ -102,6 +102,32 @@ def test_apply_idempotency_key_replays_committed_result(monkeypatch, idemdb):
     assert calls["n"] == 1                                                # the SMS was NOT hit again
 
 
+def test_apply_idempotency_key_conflicts_on_a_different_request(monkeypatch, idemdb):
+    # Review MEDIUM: a key reused for a genuinely DIFFERENT request must NOT replay the first result — it
+    # must CONFLICT (fail loud), so the tool never reports the earlier change's rule as applied for a change
+    # that never actually ran. The SAME request under the same key still replays cleanly.
+    monkeypatch.setattr(app_settings, "get", lambda k: True if k == "mcp_allow_publish" else None)
+    _fake_server(monkeypatch)
+    calls = {"n": 0}
+
+    def _execute(srv, sec, req, layer, package=None, ticket_id="", publish=False):
+        calls["n"] += 1
+        return {"ok": True, "published": True, "rule_name": f"r{calls['n']}"}
+
+    monkeypatch.setattr(aa, "execute", _execute)
+    a = mcp_tools.apply_access(1, "10.0.0.1", "10.0.0.2", "Network", port="443",
+                              publish=True, idempotency_key="chg-1")
+    assert a["published"] is True and calls["n"] == 1
+    # same key, DIFFERENT request -> conflict, and execute() is NOT called again
+    b = mcp_tools.apply_access(1, "10.0.0.9", "10.0.0.99", "Network", port="22",
+                              publish=True, idempotency_key="chg-1")
+    assert b.get("idempotency_conflict") is True and b["ok"] is False and calls["n"] == 1
+    # same key, SAME request -> clean replay (not a conflict)
+    c = mcp_tools.apply_access(1, "10.0.0.1", "10.0.0.2", "Network", port="443",
+                              publish=True, idempotency_key="chg-1")
+    assert c.get("idempotent_replay") is True and calls["n"] == 1
+
+
 def test_apply_idempotency_dry_run_is_not_cached(monkeypatch, idemdb):
     # publish=false never commits, so an idempotency_key on a dry-run must not short-circuit later calls.
     _fake_server(monkeypatch)

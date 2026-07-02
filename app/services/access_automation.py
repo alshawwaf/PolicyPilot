@@ -385,6 +385,19 @@ def _svc_single(req: ServiceSet, rule: ServiceSet) -> Relation:
     return Relation.OVERLAP if _portset_overlaps(req.by_proto, rule.by_proto) else Relation.DISJOINT
 
 
+def _svc_sets_equal(a: ServiceSet, b: ServiceSet) -> bool:
+    """True iff two service sets denote the SAME service — identical apps / categories / named / opaque, and
+    mutually-covering (i.e. identical) port intervals. Used to promote a MULTI-kind request to EQUAL (which
+    unlocks a safe WIDEN) ONLY when the rule is EXACTLY the request. Must never be loose: a rule that is
+    BROADER than the request read as EQUAL would let a widen on another dimension grant that broader service
+    to the added object (an over-grant)."""
+    if a.any or b.any:
+        return bool(a.any) and bool(b.any)
+    return (a.apps == b.apps and a.categories == b.categories and a.named == b.named
+            and bool(a.opaque) == bool(b.opaque)
+            and _portset_covers(a.by_proto, b.by_proto) and _portset_covers(b.by_proto, a.by_proto))
+
+
 def svc_relation(req: ServiceSet, rule: ServiceSet) -> Relation:
     """Relate a request's service to a rule's 'Services & Applications' cell. A request may be port-based
     (by_proto), application-based (apps), or named (icmp/GRE/…) — and a real Check Point service-GROUP can
@@ -412,10 +425,11 @@ def svc_relation(req: ServiceSet, rule: ServiceSet) -> Relation:
         rels.append(_svc_single(leg, rule))
     covered = (Relation.SUBSET, Relation.EQUAL)
     if all(r in covered for r in rels):
-        rule_kinds = sum(1 for v in (rule.apps, rule.named, rule.by_proto, rule.opaque) if v)
-        # EQUAL only if every leg is exactly EQUAL AND the rule holds nothing beyond these kinds; otherwise
-        # the rule covers the request but is broader -> SUBSET (still a valid no-op, never an over-claim).
-        if all(r == Relation.EQUAL for r in rels) and rule_kinds == len(present):
+        # EQUAL only when the rule denotes EXACTLY the request (structural equality) — never merely because
+        # each leg is covered (per-leg comparison against the whole multi-kind rule can't yield EQUAL, so the
+        # old all-EQUAL test never fired and a genuine reuse downgraded to a redundant CREATE). A broader rule
+        # stays SUBSET (still a valid no-op, never an over-claim, and never a widen that could over-grant).
+        if _svc_sets_equal(req, rule):
             return Relation.EQUAL
         return Relation.SUBSET
     if all(r == Relation.DISJOINT for r in rels):
@@ -828,14 +842,13 @@ def _parse_net(cell, objdict: dict):
         name = (o.get("name") or "").lower()
         raw_name = o.get("name") or ""
         # Check Point's predefined topology-based "Internet" object — captured in its own identity space.
-        # Recognize it ROBUSTLY: by its FIXED predefined uid (it lives in the "Check Point Data" domain and
-        # is NOT in a rulebase's objects-dictionary, so a destination reference usually can't be dereferenced
-        # to a name — only the bare uid is available), by its type "Internet", or (fallback) by its reserved
-        # name for a non-address type. Checked BEFORE the Any check. A customer host/network *named* "Internet"
-        # (a concrete address type) still resolves by its IP.
-        if (o.get("uid") == _INTERNET_UID or t == "internet"
-                or (name == "internet" and t not in
-                    ("host", "network", "address-range", "multicast-address-range", "wildcard"))):
+        # Recognize it ONLY by its FIXED predefined uid (it lives in the "Check Point Data" domain and is NOT
+        # in a rulebase's objects-dictionary, so a destination reference is typically the bare uid — caught
+        # here) or its explicit type "Internet". The name "internet" is deliberately NOT a trigger: it is not
+        # reserved, so a customer object literally named "Internet" — a group / access-role / dynamic-object /
+        # zone / dns-domain, or a host/network — must resolve by its own kind below. (The old name fallback
+        # silently dropped a customer group's member IPs and could mis-match a DROP whose cell was so named.)
+        if o.get("uid") == _INTERNET_UID or t == "internet":
             typed.internet.add("Internet")
             continue
         if t == "cpmianyobject" or name == "any":
@@ -864,16 +877,25 @@ def _parse_net(cell, objdict: dict):
                 cx = True                            # can't see both halves -> unknown extent -> REVIEW
                 continue
             b_iv, b_cx, _, b_ap, b_typed = _parse_net([inc], objdict)   # the included set
-            e_iv, e_cx, _, e_ap, _ = _parse_net([exc], objdict)         # the excluded set
-            typed.merge(b_typed)                     # surface typed objects from the included half
-            # Subtract EXACTLY only when the excluded set is provably exact: an under-stated 'except'
-            # (approx/unknown) would OVER-state include∖except -> over-grant. The base may be approx (an
-            # under-approximation stays an under-approximation after subtraction -> safe).
+            e_iv, e_cx, _, e_ap, e_typed = _parse_net([exc], objdict)   # the excluded set (typed too!)
+            # IP reach: subtract EXACTLY only when the excluded IP set is provably exact — an under-stated
+            # 'except' (approx/unknown) would OVER-state include∖except -> over-grant. The base may be approx
+            # (an under-approximation stays an under-approximation after subtraction -> safe).
             if b_cx or e_cx or e_ap:
                 cx = True
             else:
                 iv.extend(_subtract(b_iv, e_iv))
                 approx = approx or b_ap
+            # TYPED reach: there is NO typed-set subtraction, so if the 'except' half carries TYPED members
+            # (a dns-domain / access-role / zone / dynamic exclusion), the included half's typed reach is NOT
+            # provably exact — an EXCLUDED identity must never read as covered. Fail closed: mark the cell
+            # unknown (-> typed_relation returns unknown=True -> never a false NO_OP / never provably-disjoint,
+            # so a covering DROP still floors placement) and DO NOT surface the included typed objects. Only a
+            # pure-IP exclusion leaves the included typed reach intact.
+            if e_typed.any_members():
+                cx = True
+            else:
+                typed.merge(b_typed)                 # surface typed objects from the included half
             continue
         # A typed (non-IP) object — a domain / access-role / dynamic-object / updatable-object /
         # security-zone. Capture its name in its identity space rather than discarding it as 'complex'.
@@ -938,7 +960,11 @@ def _parse_port(spec):
     try:
         if "-" in spec:
             lo, hi = spec.split("-", 1)
-            return [(int(lo), int(hi))]
+            lo, hi = int(lo), int(hi)
+            if lo > hi:
+                return None   # inverted/degenerate range (e.g. "443-1") -> unparsable -> mark svc complex
+                #               -> the rule stays in path -> REVIEW (fail closed; mirrors _ports_to_iv)
+            return [(lo, hi)]
         if spec.isdigit():
             return [(int(spec), int(spec))]
     except ValueError:
@@ -1256,12 +1282,13 @@ def _widen_mixes_internet(field: str, req: "AccessRequest", r: ParsedRule) -> bo
 
 def _more_specific_deny_below(req: "AccessRequest", req_src, req_dst, req_svc,
                               rules: list, i: int) -> Optional["ParsedRule"]:
-    """Scan rules BELOW index ``i`` for an enabled, fully-resolved DROP strictly MORE SPECIFIC than the
-    request (request ⊋ rule). When we CREATE an allow ABOVE an overridden/partial deny, such a lower deny is
-    SHADOWED — it no longer matches its (overlapping) scope. First-match can't both override the upper deny
-    AND preserve this lower one, so the placement is by design; the gap this closes is the missing ADVISORY.
-    Returns the first such rule, else None. The catch-all cleanup is excluded (it's the floor); approx /
-    unresolved denies are skipped (not provably narrower, so not provably shadowed)."""
+    """Scan rules BELOW index ``i`` for an enabled, fully-resolved DROP that PROVABLY INTERSECTS the request
+    (not disjoint on any dimension — so it is narrower than, equal to, or overlaps the request's scope). When
+    we CREATE an allow ABOVE an overridden/partial deny, first-match makes that allow win for the request's
+    scope, so any lower deny sharing that scope is (fully or partially) SHADOWED — it no longer matches the
+    overlap. The placement is by design; the gap this closes is the missing ADVISORY. Returns the first such
+    rule, else None. The catch-all cleanup is excluded (it's the floor); approx / unresolved denies are
+    skipped (their true reach isn't provable, so not provably shadowed)."""
     for r2 in rules[i + 1:]:
         if not r2.enabled or not r2.is_drop or _is_catchall(r2):
             continue
@@ -1269,7 +1296,11 @@ def _more_specific_deny_below(req: "AccessRequest", req_src, req_dst, req_svc,
         rel_d, du, da = _dim_relation(req.dst_kind, req.dst_value, req_dst, r2, "destination")
         if su or du or sa or da or r2.svc_unknown:
             continue
-        if _is_proper_superset(rel_s, rel_d, svc_relation(req_svc, r2.svc)):
+        # Provably intersects iff no dimension is disjoint (covers EQUAL, SUBSET, SUPERSET and OVERLAP) —
+        # broader than the old "strictly more specific (request ⊋ rule)", which missed an EQUAL / overlapping
+        # lower deny that is equally shadowed by the allow placed above.
+        rel_svc = svc_relation(req_svc, r2.svc)
+        if rel_s != Relation.DISJOINT and rel_d != Relation.DISJOINT and rel_svc != Relation.DISJOINT:
             return r2
     return None
 
@@ -1998,10 +2029,17 @@ def _decide(req: AccessRequest, rules: list[ParsedRule], options: "DecideOptions
     if widen_target is not None and (not uncertain_deny or widen_below_uncertain):
         others = {"source": "destination + service", "destination": "source + service",
                   "service": "source + destination"}[widen_field]
+        # When the widen was allowed only because its target sits BELOW an opaque possible-deny
+        # (widen_below_uncertain under uncertain_deny), the cell edit itself is exact — but a rule above whose
+        # reach we couldn't resolve may still block this traffic. Say so on the widen line so the reason isn't
+        # read as an unconditional grant (the possible-deny note is already attached separately).
+        caveat = ("" if not uncertain_deny else
+                  " — note: an unresolved rule above this one may still block the traffic (see the review "
+                  "note); the widen edits the cell exactly but does not override that rule")
         return Decision(
             Outcome.WIDEN,
             f"rule {widen_target.number} ({widen_target.name}) matches the request's {others} exactly; "
-            f"add the {widen_field} to that rule",
+            f"add the {widen_field} to that rule{caveat}",
             target_rule=widen_target, widen_field=widen_field,
         )
 
@@ -2264,6 +2302,13 @@ def decide_removal(req: AccessRequest, rules: list[ParsedRule], options: "Decide
             if is_app_req and r.is_accept:
                 if enabling_accept is None:
                     enabling_accept = r
+                continue
+            if is_app_req and r.is_drop and enabling_accept is not None:
+                # A web-bearing (indeterminate) DROP sitting BELOW an enabling ACCEPT is shadowed for this
+                # app — first-match hits the accept above, so the drop is not the effective verdict. Step
+                # past it (mirroring the resolved shadowed-drop path below); the block we create lands ABOVE
+                # the enabling accept. Without this the removal bailed to REVIEW even though a clean DENY is
+                # provable.
                 continue
             return RemovalDecision(RemovalOutcome.REVIEW,
                                    f"rule {r.number} ({r.name}) lies in the path with an indeterminate "
@@ -3262,9 +3307,15 @@ def _apply(session, decision: Decision, req: AccessRequest, layer: str,
     out.update(source_object=src_name, destination_object=dst_name, service_object=svc_name,
                position=_position_human(decision.position, _rules_for_layer(decision, rules)),
                created_uid=created_uid)
+    if (decision.position or {}).get("_anomaly"):       # mirror build_preview: a placement anomaly (this
+        out["anomaly"] = True                           # allow neutralizes/shadows a deny) survives to apply
     out["ops"].append("add-access-rule")
     # the exact inverse: delete the rule we just added (rollback/undo). Reused/created objects are left
     # in place — they may now be referenced elsewhere, and deleting them is a separate, riskier action.
+    # NOTE (by design): if placement auto-created the provisioned grouping SECTION (_floor_position), it is
+    # deliberately NOT in the inverse — the section is a persistent, REUSED container (every later floored
+    # rule lands in it), so deleting it on a single rule's revert could orphan other rules. A revert may
+    # therefore leave an empty provisioned section; that is intended tidiness, not a leak.
     if created_uid:
         out["inverse"] = [{"op": "delete-access-rule", "uid": created_uid, "layer": target_layer}]
     return out
@@ -3735,9 +3786,12 @@ def _apply_removal(session, decision: RemovalDecision, req: AccessRequest, layer
         out.update(source_object=src_name, destination_object=dst_name, service_object=svc_name,
                    created_uid=created_uid)
         out["ops"].append("add-access-rule (Drop)")
-        # the exact inverse: delete the Drop we just added (rollback/undo) -> the broad rule grants again.
+        # Build the inverse INCREMENTALLY so every committed sub-op is revertable independently. Start with
+        # the Drop delete (when the SMS returned its uid). The narrow's re-add is appended below even if the
+        # Drop's uid is missing — otherwise a committed source-narrowing would be silently un-revertable.
+        inverse: list = []
         if created_uid:
-            out["inverse"] = [{"op": "delete-access-rule", "uid": created_uid, "layer": layer}]
+            inverse.append({"op": "delete-access-rule", "uid": created_uid, "layer": layer})
         # SECONDARY (app block best practice): the Drop above the enabler shadows an explicit grant that also
         # lists this host. If that host is a SAFELY-removable direct source member, narrow the grant's source
         # so the rulebase isn't left with a redundant shadowed entry. Proven at apply time; else just noted.
@@ -3748,14 +3802,21 @@ def _apply_removal(session, decision: RemovalDecision, req: AccessRequest, layer
                              {"uid": decision.narrow_rule.uid, "layer": layer, "source": {"remove": member}})
                 out["ops"].append(f"set-access-rule {decision.narrow_rule.uid} source.remove {member}")
                 out["narrowed"] = {"rule_uid": decision.narrow_rule.uid, "member": member}
-                if out.get("inverse"):                # extend the inverse: re-add the member we removed (rollback)
-                    out["inverse"].append({"op": "set-access-rule", "uid": decision.narrow_rule.uid,
-                                           "layer": layer, "field": "source", "add": member})
+                # Always record the re-add inverse for the member we removed — independent of the Drop's uid.
+                inverse.append({"op": "set-access-rule", "uid": decision.narrow_rule.uid,
+                                "layer": layer, "field": "source", "add": member})
+                if not created_uid:
+                    out.setdefault("notes", []).append(
+                        "the new Drop rule's uid was not returned by the SMS, so a revert can re-add the "
+                        "narrowed source member but cannot auto-delete the Drop — remove it manually if you "
+                        "roll back")
             else:
                 out.setdefault("notes", []).append(
                     f"left rule {decision.narrow_rule.number} ({decision.narrow_rule.name}) unchanged — this "
                     f"host isn't a safely-removable direct source member (it may be inside a group, or the "
                     f"rule's only source); narrow it manually if needed")
+        if inverse:
+            out["inverse"] = inverse
         return out
     return out
 

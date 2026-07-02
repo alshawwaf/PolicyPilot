@@ -50,6 +50,14 @@ def test_search_type_ahead_returns_usercheck_candidates():
     assert all("host" != c.get("kind") for c in cands)   # host filtered out
 
 
+def test_search_browses_on_empty_term():
+    # focus (empty term) -> the first page of UserCheck objects, so the menu has options before typing;
+    # non-UserCheck objects (the host) are still excluded.
+    cands = uc.search(FakeSession(_OBJS), "")
+    assert {c["name"] for c in cands} == {"Blocked Message - Access Control", "Company Policy", "Access Notification"}
+    assert all(c.get("kind") != "host" for c in cands)
+
+
 def test_mcp_correlate_user_check_delegates(monkeypatch):
     from app.services import mcp_tools
     monkeypatch.setattr(mcp_tools, "_server_secret",

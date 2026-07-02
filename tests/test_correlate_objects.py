@@ -150,3 +150,33 @@ def test_search_server_dispatches_gateway_and_vpn(monkeypatch):
     monkeypatch.setattr("app.services.mgmt_api.read_session", lambda ms, secret: _RS())
     cands = co.search_server(object(), "secret", "GW", "gateway")
     assert any(c["name"] == "GW1" for c in cands)
+
+
+def test_search_server_browses_time_and_content_on_empty_term(monkeypatch):
+    # focus (empty term) -> the first page of that object kind (type-filtered), so the menu shows options
+    # BEFORE anything is typed. A non-matching type (host) is still excluded.
+    s = _Sess(objs=[_obj("Work-Hours", "time"), _obj("Off-Hours", "time"),
+                    _obj("SQL Queries", "data-type-patterns"), _obj("win_server", "host")])
+
+    class _RS:
+        def __enter__(self): return s
+        def __exit__(self, *a): return False
+    monkeypatch.setattr("app.services.mgmt_api.read_session", lambda ms, secret: _RS())
+    assert {c["name"] for c in co.search_server(object(), "sec", "", "time")} == {"Work-Hours", "Off-Hours"}
+    assert [c["name"] for c in co.search_server(object(), "sec", "", "content")] == ["SQL Queries"]
+
+
+def test_search_server_browses_limit_gateway_vpn_on_empty_term(monkeypatch):
+    s = _CmdSess({"show-limits": [_obj("Upload_10Mbps", "limit"), _obj("Download_50Mbps", "limit")],
+                  "show-gateways-and-servers": [_obj("perimeter-gw", "simple-gateway"),
+                                                _obj("dmz-cluster", "simple-cluster")],
+                  "show-vpn-communities-star": [_obj("Site2Site", "vpn-community-star")]})
+
+    class _RS:
+        def __enter__(self): return s
+        def __exit__(self, *a): return False
+    monkeypatch.setattr("app.services.mgmt_api.read_session", lambda ms, secret: _RS())
+    assert {c["name"] for c in co.search_server(object(), "sec", "", "limit")} == {"Upload_10Mbps", "Download_50Mbps"}
+    assert {c["name"] for c in co.search_server(object(), "sec", "", "gateway")} == {"perimeter-gw", "dmz-cluster"}
+    # VPN browse includes the built-in All_GwToGw literal alongside the enumerated communities
+    assert {c["name"] for c in co.search_server(object(), "sec", "", "vpn")} == {"Site2Site", "All_GwToGw"}

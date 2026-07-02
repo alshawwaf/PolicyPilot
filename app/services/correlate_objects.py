@@ -179,10 +179,22 @@ def resolve_vpn(session, term: str) -> dict:
 
 
 # --- UI type-ahead helpers (parallel to services.search_server / applications) ------------------------
+def _browse_typed(session, allow_types: tuple, limit: int = 40) -> list[dict]:
+    """The first page of objects of ``allow_types`` (empty filter = all) — for the menu shown on FOCUS,
+    before anything is typed. Best-effort; an empty list just means the menu prompts you to type."""
+    objs, _ = _query_typed(session, "", limit, allow_types)
+    return _candidates(objs)
+
+
+def _browse_names(names, kind: str, limit: int = 40) -> list[dict]:
+    """First ``limit`` enumerated names (limit/gateway/vpn) as candidate rows for the focus menu."""
+    return [{"name": n, "kind": kind} for n in sorted(set(names or []), key=str.lower)[:limit]]
+
+
 def _search_typed(session, term: str, allow_types: tuple, limit: int = 40) -> list[dict]:
     term = (term or "").strip()
-    if len(term) < 2:
-        return []
+    if not term:
+        return _browse_typed(session, allow_types, limit)
     key = (_server_key(session), term.lower(), tuple(allow_types), limit)
     now = _time.monotonic()
     hit = _cache.get(key)
@@ -195,20 +207,33 @@ def _search_typed(session, term: str, allow_types: tuple, limit: int = 40) -> li
 
 
 def search_server(server, secret: str, term: str, kind: str) -> list[dict]:
-    """Candidate objects of ``kind`` (time | content | limit) matching ``term`` — for a UI type-ahead."""
+    """Candidate objects of ``kind`` (time | content | limit | gateway | vpn) for a UI type-ahead. An empty
+    ``term`` BROWSES (the first page of that object kind, shown when the field is focused before typing); a
+    non-empty term filters. Best-effort — a failure/absent index just yields []."""
     from .mgmt_api import read_session
+    term = (term or "").strip()
+    browse = not term
     with read_session(server, secret) as s:
         if kind == "time":
-            return _search_typed(s, term, _TIME_TYPES)
+            return _search_typed(s, term, _TIME_TYPES)          # _search_typed browses on empty term
         if kind == "content":
             return _search_typed(s, term, _CONTENT_TYPES)
         if kind == "limit":
+            if browse:
+                return _browse_names(_list_limits(s), "limit")
             r = resolve_limit(s, term)
             return [{"name": c["name"], "kind": "limit"} for c in r.get("candidates", [])]
         if kind in ("gateway", "install_on", "install-on"):
+            if browse:
+                from .access_automation import _known_object_names, _LIST_CMDS_INSTALL_ON
+                return _browse_names(_known_object_names(s, _LIST_CMDS_INSTALL_ON), "gateway")
             r = resolve_gateway(s, term)
             return [{"name": c["name"], "kind": "gateway"} for c in r.get("candidates", [])]
         if kind == "vpn":
+            if browse:
+                from .access_automation import _known_object_names, _LIST_CMDS_VPN
+                names = list(_known_object_names(s, _LIST_CMDS_VPN) or []) + ["All_GwToGw"]
+                return _browse_names(names, "vpn")
             r = resolve_vpn(s, term)
             return [{"name": c["name"], "kind": "vpn"} for c in r.get("candidates", [])]
         return []

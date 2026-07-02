@@ -57,10 +57,9 @@ def _candidates(objects: list) -> list:
 
 
 def search(session, term: str, limit: int = 40) -> list:
-    """Candidate UserCheck objects matching ``term`` (for the form type-ahead). Cached ~60s per (server, term)."""
+    """Candidate UserCheck objects for the form type-ahead. An empty ``term`` BROWSES the first page (shown on
+    focus, before typing); a non-empty term filters. Cached ~60s per (server, term)."""
     term = (term or "").strip()
-    if len(term) < 2:
-        return []
     key = (_server_key(session), term.lower(), limit)
     now = time.monotonic()
     hit = _cache.get(key)

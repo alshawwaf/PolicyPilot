@@ -56,6 +56,19 @@
   .rc-a { width:1%; }
   .rc-act { font-size:11px; font-weight:700; border-radius:7px; padding:4px 11px; white-space:nowrap; }
   .rc-cap { padding:8px 13px; font-size:12px; color:var(--muted); background:var(--surface-2); border-top:1px solid var(--line-soft); }
+  /* Advanced options — a collapsed disclosure so the core form stays clean; reveals the full column set. */
+  .aa-adv { margin-top:14px; border:1px solid var(--line-soft); border-radius:var(--r); background:var(--surface-1); overflow:hidden; }
+  .aa-adv > summary { list-style:none; cursor:pointer; padding:11px 15px; display:flex; align-items:center; gap:9px;
+    font-size:13.5px; font-weight:640; user-select:none; }
+  .aa-adv > summary::-webkit-details-marker { display:none; }
+  .aa-adv > summary .chev { transition:transform .16s ease; color:var(--accent); display:inline-flex; }
+  .aa-adv[open] > summary .chev { transform:rotate(90deg); }
+  .aa-adv > summary .muted { font-weight:400; }
+  .aa-adv-body { padding:4px 15px 15px; border-top:1px solid var(--line-soft); display:flex; flex-direction:column; gap:12px; }
+  .aa-asettings { border:1px solid var(--line-soft); border-radius:11px; padding:11px 13px; background:var(--surface-2); }
+  .aa-asettings .as-h { font-size:11.5px; font-weight:700; letter-spacing:.03em; text-transform:uppercase; color:var(--muted); margin-bottom:9px; }
+  .aa-cpx { display:flex; align-items:center; gap:8px; font-size:13px; white-space:nowrap; align-self:flex-end; padding-bottom:8px; }
+  .aa-cpx input { width:16px; height:16px; }
 </style>
 <div class="page-head">
   <span class="icon-chip lg"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></span>
@@ -159,6 +172,48 @@
   </div>
   <p class="aa-field-note">Check Point isn’t only TCP/UDP. Port-based (TCP/UDP/SCTP) takes a <b>port</b>; ICMP, RPC, DCE-RPC, GTP, Compound/Citrix TCP, “Other” (an IP protocol) and a services group are matched by <b>name</b> against the real predefined object; Application/Site matches an app. The engine reasons about each kind on its own, so distinct protocols never falsely overlap a port.</p>
   <p class="aa-field-note">Source and destination aren’t only IPs either. Switch either <b>type</b> to a <b>Domain</b> (<code>alshawwaf.ca</code>, or <code>.alshawwaf.ca</code> for sub-domains), <b>Access role</b>, <b>Dynamic object</b>, <b>Updatable object</b> or <b>Security zone</b> — so you can ask, say, “does host <code>10.1.1.222</code> have access to the domain <code>alshawwaf.ca</code>?”. Each object kind is its own match space, so the engine reasons in <em>identity</em> terms — a domain matches a rule’s domain object (exact or a parent), never an IP cell. Domains and dynamic objects are created if missing; access-roles, security-zones and updatable-objects are reused (defined in Identity Awareness, topology, or Check Point’s repository).</p>
+  <details class="aa-adv" id="aa-adv">
+    <summary><span class="chev"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></span>Advanced options <span class="muted">— action, time, content, limit, targets (all optional)</span></summary>
+    <div class="aa-adv-body">
+      <div class="row endalign">
+        <div style="width:200px;"><label>Action
+          <select id="aa-action">
+            <option value="Accept">Accept</option>
+            <option value="Drop">Drop</option>
+            <option value="Reject">Reject</option>
+            <option value="Ask">Ask</option>
+            <option value="Inform">Inform</option>
+          </select></label></div>
+        <div class="grow"><label>Time <span class="muted">(time object / group)</span>
+          <input id="aa-time" placeholder="Work-Hours" autocomplete="off"></label></div>
+      </div>
+      <div class="row endalign">
+        <div class="grow"><label>Content <span class="muted">(data types — comma-separated)</span>
+          <input id="aa-content" placeholder="SQL Queries, Credit Card Numbers" autocomplete="off"></label></div>
+        <div style="width:150px;"><label>Direction
+          <select id="aa-content-dir">
+            <option value="any">Any</option>
+            <option value="up">Upload</option>
+            <option value="down">Download</option>
+          </select></label></div>
+      </div>
+      <div class="row endalign">
+        <div class="grow"><label>Install on <span class="muted">(gateways — comma-separated)</span>
+          <input id="aa-install" placeholder="Policy Targets" autocomplete="off"></label></div>
+        <div class="grow"><label>VPN <span class="muted">(communities — comma-separated)</span>
+          <input id="aa-vpn" placeholder="All_GwToGw" autocomplete="off"></label></div>
+      </div>
+      <div class="aa-asettings" id="aa-asettings">
+        <div class="as-h">Action settings — Accept / Ask / Inform</div>
+        <div class="row endalign">
+          <div class="grow"><label>Bandwidth limit <span class="muted">(a rate, e.g. Upload_10Mbps — not a volume)</span>
+            <input id="aa-limit" placeholder="Upload_10Mbps" autocomplete="off"></label></div>
+          <label class="aa-cpx"><input type="checkbox" id="aa-captive"> Enable Identity Captive Portal</label>
+        </div>
+      </div>
+      <p class="aa-field-note">Each name resolves to a REAL Check Point object on Preview — a typo fails loud, nothing is written. Setting any advanced field makes the request <b>restricted</b>: the engine CREATEs a precise rule <em>above</em> a broad Accept so the new condition takes effect (never a false reuse). Time / content / limit / VPN / install-on objects are <b>reused</b> (defined in the SMS), never created.</p>
+    </div>
+  </details>
   <div class="aa-actions">
     <button type="button" class="btn" id="aa-preview">Preview decision</button>
     <button type="button" class="btn secondary" id="aa-validate" disabled>Dry-run apply (validate)</button>
@@ -242,8 +297,36 @@
       else { b.service = document.getElementById('aa-svc').value.trim(); }
       // the Internet object is a fixed predefined singleton (its input is pinned + disabled)
       if (b.destination_kind === 'internet') { b.destination = 'Internet'; }
+      addAdvanced(b);   // action + the optional gating columns (time / content / install-on / vpn / limit)
       return b;
     }
+    // Comma-separated -> a clean list of names (trimmed, blanks dropped). Empty -> undefined (column omitted).
+    function splitList(v) {
+      var out = (v || '').split(',').map(function (x) { return x.trim(); }).filter(Boolean);
+      return out.length ? out : undefined;
+    }
+    function val(id) { var el = document.getElementById(id); return el ? el.value.trim() : ''; }
+    function addAdvanced(b) {
+      var action = val('aa-action') || 'Accept';
+      b.action = action;
+      var time = splitList(val('aa-time'));               if (time) b.time_objects = time;
+      var content = splitList(val('aa-content'));
+      if (content) { b.content = content; b.content_direction = val('aa-content-dir') || 'any'; }
+      var install = splitList(val('aa-install'));          if (install) b.install_on = install;
+      var vpn = splitList(val('aa-vpn'));                  if (vpn) b.vpn = vpn;
+      // action-settings are meaningful only for an allowing action (Accept / Ask / Inform)
+      if (action === 'Accept' || action === 'Ask' || action === 'Inform') {
+        var limit = val('aa-limit');                       if (limit) b.action_limit = limit;
+        if (document.getElementById('aa-captive') && document.getElementById('aa-captive').checked) b.captive_portal = true;
+      }
+    }
+    // Hide the action-settings block for a blocking action (Drop / Reject) — settings don't apply there.
+    (function () {
+      var actSel = document.getElementById('aa-action'), aset = document.getElementById('aa-asettings');
+      if (!actSel || !aset) return;
+      function sync() { var a = actSel.value; aset.style.display = (a === 'Drop' || a === 'Reject') ? 'none' : ''; }
+      actSel.addEventListener('change', sync); sync();
+    })();
     // show the input that matches the chosen service type; the predefined named protocols filter the
     // type-ahead to their Check Point object kind so the right object is suggested.
     var SVC_HINTS = { icmp: 'icmp / icmp6', rpc: 'RPC', 'dce-rpc': 'DCE-RPC', gtp: 'GTP',

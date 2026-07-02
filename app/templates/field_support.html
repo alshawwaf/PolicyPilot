@@ -29,6 +29,9 @@
   .fs-gaps { margin-top:11px; padding:11px 13px; border-radius:11px; background:var(--danger-bg); border:1px solid var(--danger-line); }
   .fs-gaps.none { background:rgba(52,211,153,.10); border-color:rgba(52,211,153,.3); }
   .fs-gaps .gh { font-size:11px; font-weight:800; letter-spacing:.04em; text-transform:uppercase; color:var(--danger); margin-bottom:5px; display:flex; align-items:center; gap:6px; }
+  /* bare <svg viewBox> with no width/height blows up to its default replaced size inside a flex box — the
+     giant-triangle bug. Clamp the gaps-header glyph (the only unconstrained SVG on the page). */
+  .fs-gaps .gh svg { width:14px; height:14px; flex:none; }
   .fs-gaps.none .gh { color:var(--ok); }
   .fs-gaps ul { margin:0; padding-left:18px; } .fs-gaps li { font-size:12px; margin:3px 0; }
   .fs-note { margin-top:10px; font-size:12px; color:var(--muted); display:flex; gap:8px; align-items:flex-start; }

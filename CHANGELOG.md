@@ -3,11 +3,10 @@
 All notable changes to **PolicyPilot** are documented here. This project follows
 [Semantic Versioning](https://semver.org/).
 
-## Unreleased
+## 1.1.0 — 2026-07-02
 
-Post-1.0.0 work: multi-user RBAC, full access-rule column + UserCheck support, the discovery / correlate
-tool family (**29 MCP tools**), a macOS-style desktop, and agent-surface hardening — ahead of broader live
-validation.
+Adds multi-user RBAC, full access-rule column + UserCheck / Action Settings support, the discovery /
+correlate tool family (**29 MCP tools**), a macOS-style desktop, and a round of agent-surface hardening.
 
 ### Full column support + UserCheck / Action Settings
 - Every access-rule column is now writable end-to-end (portal form + MCP + ticket). **Action Settings /

@@ -13,7 +13,7 @@ dynamic-layer rail ships covered by unit + mock tests only, so this is its first
    ```bash
    curl -s https://<your-host>/healthz   # {"status":"ok"}
    curl -s https://<your-host>/readyz    # {"status":"ready"}  (DB reachable)
-   curl -s https://<your-host>/version   # {"version":"1.0.0","build":"…","built_at":"…","mcp_tools":29,"mcp_ready":…}
+   curl -s https://<your-host>/version   # {"version":"1.1.0","build":"…","built_at":"…","mcp_tools":29,"mcp_ready":…}
    ```
    `mcp_tools` should be **29** (21 management + 8 dynamic-layer). Confirm **`build`** matches the commit you
    just deployed (it's the short git SHA baked at image build; `built_at` is its timestamp — also in the

@@ -8,7 +8,7 @@
 **R82.10 management server** or pushed straight to the **gateway** as a dynamic layer — and drivable by an
 LLM agent over MCP.*
 
-![Version](https://img.shields.io/badge/version-1.0.0-3b82f6)
+![Version](https://img.shields.io/badge/version-1.1.0-3b82f6)
 ![Validated](https://img.shields.io/badge/validated-R82.10-7b3ff2)
 ![Tests](https://img.shields.io/badge/tests-842%20passing-34d399)
 ![MCP tools](https://img.shields.io/badge/MCP%20tools-29-7b3ff2)

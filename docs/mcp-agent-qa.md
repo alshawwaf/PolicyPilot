@@ -107,6 +107,20 @@ Security zones: `InternalZone` / `DMZZone` / `ExternalZone` / `WirelessZone`. Pr
 | 6 | "On SMS, what application object matches ‘Facebook’?" | `correlate_application` | the Facebook application-site |
 | 7 | "Does Terraform support the management host object?" | `coverage_lookup` | `checkpoint_management_host` support + field diff |
 
+**The correlate / "did you mean" family** (each resolves a plain phrase → the real CP object, or returns
+candidates — reuse-only, so a miss is reported, never invented):
+
+| # | Prompt | Exercises | Expect |
+|---|--------|-----------|--------|
+| 7a | "On SMS, which time object matches ‘work hours’?" | `correlate_time` | the matching time object, or the "did you mean" candidates / none-found |
+| 7b | "On SMS, which data type matches ‘source code’?" | `correlate_content` | the `Source Code` data-type object (or candidates) |
+| 7c | "On SMS, which bandwidth limit matches ‘10 Mbps upload’?" | `correlate_limit` | a rate limit object like `Upload_10Mbps`, or candidates (a Limit is a RATE, not a volume) |
+| 7d | "On SMS, which access role matches ‘finance’?" | `correlate_access_role` | candidates / none — *no access-roles exist in this lab*, so it should honestly report none, never fabricate |
+| 7e | "On SMS, which security zone matches ‘DMZ’?" | `correlate_zone` | the `DMZZone` security-zone (or candidates) |
+| 7f | "On SMS, which UserCheck message matches ‘blocked message’?" | `correlate_user_check` | the matching UserCheck interaction object, or candidates |
+| 7g | "On SMS, which gateway matches ‘GW’ for install-on?" | `correlate_gateway` | the `GW` gateway/target object (or candidates) |
+| 7h | "On SMS, which VPN community matches ‘gateway to gateway’?" | `correlate_vpn` | the built-in `All_GwToGw` community (or candidates) |
+
 ---
 
 ## 2. The headline — decide → apply → **publish** in one sentence (every outcome)
@@ -128,9 +142,13 @@ Security zones: `InternalZone` / `DMZZone` / `ExternalZone` / `WirelessZone`. Pr
 
 | # | Prompt | Exercises | Expect |
 |---|--------|-----------|--------|
-| 16 | "On SMS Network, block 10.1.1.222 from reaching Facebook and publish the changes." | action **Drop** (app carve-out) | Drop placed to take effect; published |
+| 16 | "On SMS Network, block 10.1.1.222 from reaching Facebook and publish the changes." | action **Drop** (app carve-out) via `apply_access` — *block, not `remove_access`* | Drop placed to take effect; published |
 | 17 | "On SMS Network, reject Telnet (TCP 23) from 10.1.1.0/24 to win_server and publish the changes." | action **Reject** | Reject rule created + published |
+| 17a | "On SMS Network, block ALL traffic from 203.0.113.5 to win_server and publish the changes." | **serviceless block** — `apply_access` action=Drop, **service=Any** | Drop on Any-service created + published (the agent passes `service=Any`, does **not** try to correlate "Any") |
+| 17b | "On SMS Network, block 10.1.1.0/24 from Facebook and show the ‘blocked message’ page, and publish the changes." | **Drop + UserCheck block message** | `apply_access` action=Drop with `user_check` resolved via `correlate_user_check`; block page attached; published |
+| 17c | "On SMS Network, reject 10.1.1.0/24 to win_server on Telnet and show the company block page, and publish the changes." | **Reject + UserCheck block message** | `apply_access` action=Reject with a `user_check` message object; published |
 | 18 | "On SMS Network, add an Ask (UserCheck) rule for 10.1.1.0/24 to Facebook and publish the changes." | action **Ask** | Ask rule created + published (UserCheck default) |
+| 18a | "On SMS Network, ask 10.1.1.0/24 browsing to Facebook to confirm with the company-policy message, once a day, and publish the changes." | **Ask + UserCheck + frequency/confirm** | Ask rule with `user_check` (resolved via `correlate_user_check`), `user_check_frequency=once a day`, `user_check_confirm=per rule`; published |
 | 19 | "On SMS Network, add an Inform rule for 10.1.1.0/24 browsing to the Internet and publish the changes." | action **Inform** | Inform rule created + published |
 | 20 | "On SMS Network, divert 10.1.1.0/24 DNS traffic into the DNS_Layer inline layer and publish the changes." | action **Apply Layer** | divert rule into the existing inline layer (validated reuse-only) + published |
 
@@ -144,6 +162,7 @@ Security zones: `InternalZone` / `DMZZone` / `ExternalZone` / `WirelessZone`. Pr
 | 22 | "On SMS Network, allow 10.1.1.50 to reach win_server on RDP only during the Off-Work time object and publish the changes." | **time** column | rule scoped to the time object + published *(create the `Off-Work` time object first, or expect a clean reuse-only “not found”)* |
 | 23 | "On SMS Network, allow 10.1.1.50 to reach win_server on SSH, installed only on the GW gateway, and publish the changes." | **install-on** | rule with Install-On = GW + published |
 | 24 | "On SMS Network, allow 10.1.2.0/24 to reach 10.1.1.0/24 on SMB and assign it to the All_GwToGw VPN community, and publish the changes." | **vpn** column | rule with the VPN community set + published |
+| 24a | "On SMS Network, allow 10.1.1.222 to the Internet over HTTPS but cap it at 10 Mbps upload, and publish the changes." | **bandwidth Limit** (Action Settings) | `apply_access` with `action_limit` resolved via `correlate_limit` to a RATE object like `Upload_10Mbps` (a Limit is a RATE, **not** a volume/quota); Accept created above a broad Accept so the cap takes effect; published *(create/have the rate object first, else a clean reuse-only "not found")* |
 | 25 | "On SMS Network, allow 10.1.1.222 to the Internet over HTTPS with the captive-portal UserCheck and publish the changes." | **action-settings** (captive portal) | Ask/Accept + captive-portal enabled; published |
 
 ---
@@ -154,6 +173,13 @@ Security zones: `InternalZone` / `DMZZone` / `ExternalZone` / `WirelessZone`. Pr
 |---|--------|-----------|--------|
 | 26 | "On SMS Network, revoke kali_linux's access to win_server and publish the changes." | `remove_access` → **DISABLE** (sole exact grant) | rule 12 (DMZ) disabled + published; recorded for rollback |
 | 27 | "On SMS Network, stop 10.1.1.222 from reaching Facebook and publish the changes." | `remove_access` (drop-above / review) | a Drop placed above, or a flagged review if not a sole-exact grant |
+
+> ⚖️ **remove_access vs. a Drop block — the agent must pick the right verb.** *Revoke / remove / take away
+> an existing allow* → **`remove_access`** (#26–#27: it disables the sole-exact grant or drops above a
+> broader one). *Block / deny new traffic* → **`apply_access` with `action=Drop`** (§3 #16, #17a, #17b) —
+> and only `apply_access` can attach a block **message** (`user_check`) or block **all** services
+> (`service=Any`). Firing #26 and §3 #17b back to back proves the router sends "revoke" to `remove_access`
+> and "block … with a message" to `apply_access` — never the reverse.
 
 ---
 
@@ -222,15 +248,19 @@ built-in demo target.
 
 ## Coverage checklist (what a full pass proves)
 
-- **Management tools:** list_management_servers · list_access_layers · summarize_layer · analyze_policy ·
-  correlate_service · correlate_application · coverage_lookup · decide_access · apply_access ·
-  remove_access · amend_access_rule · list_changes · revert_change.
-- **Dynamic-layer tools:** list_gateways · list_dynamic_layers · get_dynamic_layer · fetch_dynamic_layer ·
+- **Management tools (21):** list_management_servers · list_access_layers · summarize_layer ·
+  analyze_policy · coverage_lookup · decide_access · apply_access · remove_access · amend_access_rule ·
+  list_changes · revert_change · **correlate_service · correlate_application · correlate_time ·
+  correlate_content · correlate_limit · correlate_access_role · correlate_zone · correlate_user_check ·
+  correlate_gateway · correlate_vpn**.
+- **Dynamic-layer tools (8):** list_gateways · list_dynamic_layers · get_dynamic_layer · fetch_dynamic_layer ·
   import_dynamic_layer · add_dynamic_rule · remove_dynamic_rule · push_dynamic_layer.
 - **Outcomes:** no_op · widen · create (clean-floor / above-deny / app-Internet / typed-source / named-proto)
   · review.
-- **Action column:** Accept · Drop · Reject · Ask · Inform · Apply Layer · action-settings (captive/limit).
-- **Match-gating columns:** content (+direction/negate) · time · install-on · vpn.
+- **Action column:** Accept · Drop · Reject · Ask · Inform · Apply Layer · **serviceless block (service=Any)** ·
+  **block message (Drop/Reject + UserCheck)** · action-settings (captive / bandwidth **limit**).
+- **Match-gating columns:** content (+direction/negate) · time · install-on · vpn · **limit (rate)**.
+- **Verb routing:** block (apply_access action=Drop/Reject) ≠ remove_access (revoke an existing allow).
 - **Lifecycle:** create → amend → revert; remove → disable; idempotency; publish-gate refusal.
 - **Dynamic-layer rail:** read (list/get) → edit (add/remove) → push (dry-run · `mock` · named gateway);
   keep-≥1-rule guardrail; **layer-push-gate refusal** (`mcp_allow_layer_push`, separate from `mcp_allow_publish`).

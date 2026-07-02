@@ -5,7 +5,55 @@ All notable changes to **PolicyPilot** are documented here. This project follows
 
 ## Unreleased
 
-Post-1.0.0 hardening of the agent surface, ahead of broader live validation.
+Post-1.0.0 work: multi-user RBAC, full access-rule column + UserCheck support, the discovery / correlate
+tool family (**29 MCP tools**), a macOS-style desktop, and agent-surface hardening — ahead of broader live
+validation.
+
+### Full column support + UserCheck / Action Settings
+- Every access-rule column is now writable end-to-end (portal form + MCP + ticket). **Action Settings /
+  UserCheck** for non-Accept actions: attach a UserCheck interaction object as a **block message** (Drop /
+  Reject) or an **Ask / Inform** prompt, with frequency / confirm / custom-every options — matching the
+  SmartConsole "Action Settings" dialog. Plus a **bandwidth Limit** (a *rate* object such as `Upload_10Mbps`,
+  never a volume / quota) and **Enable Identity Captive Portal** for Accept / Ask / Inform.
+- Setting any advanced column makes the request **restricted** — the engine CREATEs a precise rule above the
+  broad Accept so the new condition actually takes effect (never a false reuse). Time / content / limit / VPN /
+  install-on objects are **reused** (must already exist on the SMS), never created.
+- **Serviceless block** — a Drop / Reject with no service defaults to `service=Any` (block all), and the
+  service literals `any` / `all` / `*` map to Any. Clarified **block ≠ remove**: to block traffic use
+  `apply_access` with a Drop / Reject action; `remove_access` revokes an *existing* allow.
+
+### Discovery / "did you mean" — the correlate family (now 29 MCP tools)
+- Eight new **correlate** tools resolve a plain phrase to the real Check Point object, drift-safe (they query
+  the same object classes the apply-side validator uses): `correlate_time`, `correlate_content`,
+  `correlate_limit`, `correlate_user_check`, `correlate_access_role`, `correlate_zone`, `correlate_gateway`,
+  `correlate_vpn` — joining `correlate_service` / `correlate_application`. Each auto-matches a unique exact hit,
+  else returns ranked candidates (the "did you mean" path). Exposed on MCP and REST
+  (`POST /dbapi/v1/access/correlate/*`). This takes the **management rail to 21 tools and the total to 29**
+  (8 dynamic-layer).
+- **Zero-trust source discovery** — `correlate_access_role` (identity) and `correlate_zone` (security-zone) let
+  an agent state access in identity terms and resolve the real object, not just an IP.
+- **Form parity** — every "pick a real Check Point object" field is a search menu that **opens on focus**
+  (browses the first page of that object kind) and filters as you type; multi-value columns (Time, Content,
+  Install-on, VPN) render **removable chips**, single-value fields (Bandwidth limit, UserCheck) fill in place,
+  arrow keys + Enter navigate.
+
+### Multi-user & granular RBAC
+- PolicyPilot is now **multi-user**. Each account is an **Admin** (all permissions) or a **Standard** user
+  carrying granular capabilities — **preview / apply / publish / export / manage-users** (plus admin-only
+  **settings**); "view" is implicit for any active user. Enforced across the portal, MCP, and REST.
+- **Self-signup → admin approval**: new users register and land in a `pending` state; an admin approves or
+  disables them from the new **Users & Groups** app. Inactive (pending / disabled) accounts can't
+  authenticate, so they hold no permission. **Password reset by email** (SMTP-gated) with an admin fallback,
+  plus an admin-forced "change password on next login".
+
+### Self-documenting API + table export
+- **PolicyPilot API** app — the `/dbapi/v1` REST surface is now documented in-app on its own page (a filtered
+  FastAPI OpenAPI with Bearer auth), alongside the live `/api-explorer` Swagger.
+- **Export any list** — every table in the portal exports to CSV and print-to-PDF (browser print).
+
+### Build identity
+- The git build SHA is baked at image build (`Dockerfile ARG GIT_SHA`) and surfaced in the Apple-style
+  **About** menu and `GET /version` (`build`, `built_at`), so ops can confirm exactly which commit is deployed.
 
 ### Desktop polish + a System app + OS login
 - **System app** (new): a desktop "System" tool (`/system`) showing live service health — DB/service
@@ -154,7 +202,7 @@ and no confirmed majors; the verified items were closed:
 - **`import_dynamic_layer`** (MCP + `POST /dbapi/v1/dynamic-layers/import`) — bring a gateway's live layer INTO
   a portal layer, so the safe fetch → import → edit → push flow replaces with *live + your edits* and never
   wipes out-of-band policy. The gateway-detail page gains an **Import to portal** button for the same flow.
-- Dynamic-layer rail is now **8 tools** (21 MCP tools total).
+- Dynamic-layer rail is now **8 tools**.
 
 ### Per-key RBAC — read-only vs write API keys
 - An API key now carries a **read-only / read-write** capability (alongside its scope). A **read-only** key

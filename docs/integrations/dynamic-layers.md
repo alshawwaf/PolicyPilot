@@ -15,8 +15,8 @@ MCP/agent path (see [MCP / agent path](#mcp--agent-path)) drive the same apply.
 
 ## Use it
 
-1. Portal → **Layers & Gateways → New Dynamic Layer**. Build the rulebase: define **referenced
-   objects** (hosts, networks, services) first, then **rules** that use them.
+1. Portal → **Dynamic Layers** (`/layers`) → **+ New dynamic layer**. Build the rulebase: define
+   **referenced objects** (hosts, networks, services) first, then **rules** that use them.
 2. **Apply** to a target:
    - **Real gateway** (default): enter the Gaia API host + credentials (or prefill from a saved
      **Gateway**). The portal logs in, calls `set-dynamic-content`, polls `show-task`, logs out.
@@ -27,16 +27,26 @@ MCP/agent path (see [MCP / agent path](#mcp--agent-path)) drive the same apply.
 ## MCP / agent path
 
 The same build-and-push flow is fully agent-drivable over the shared `/mcp` endpoint (an MCP-scope API
-key as `Authorization: Bearer`), so an LLM agent can manage dynamic layers from one sentence. Six tools
-cover this rail (the other 13 cover the Management rail):
+key as `Authorization: Bearer`), so an LLM agent can manage dynamic layers from one sentence. **Eight
+tools** cover this rail (the other **21** cover the Management rail — 29 MCP tools in total):
 
 - **`list_gateways`** — the saved gateways an agent can push to.
 - **`list_dynamic_layers`** — the dynamic layers defined in the portal.
-- **`get_dynamic_layer`** — read one layer's rulebase and referenced objects.
+- **`get_dynamic_layer`** — read one portal layer's rulebase and referenced objects.
 - **`add_dynamic_rule`** / **`remove_dynamic_rule`** — edit a layer's rulebase (these only edit the
-  layer; call `push_dynamic_layer` afterwards to apply the change to a gateway).
+  layer; call `push_dynamic_layer` afterwards to apply the change to a gateway). Actions: Accept / Drop /
+  Reject / Ask / Inform. A layer must keep at least one rule.
 - **`push_dynamic_layer`** — apply a layer to a gateway via `set-dynamic-content`. `gateway` blank (or
-  `'mock'`) pushes to the built-in demo target; `dry_run=true` validates without applying.
+  `'mock'`) pushes to the built-in demo target; `dry_run=true` validates without applying. A push
+  **REPLACES the layer's entire rulebase** on the gateway (`operation: replace`), and it accepts a stable
+  `idempotency_key` so a retried real-gateway push replays rather than double-applies.
+- **`fetch_dynamic_layer`** — read-only (no gate): pull the dynamic-layer content **currently on** a
+  gateway (`show-dynamic-layers` + `show-dynamic-layer`), including policy pushed outside this portal.
+  Because a push is a replace, fetch first when a layer may hold rules you didn't author here.
+- **`import_dynamic_layer`** — fetch a gateway's live layer and **save it into a portal layer** (create or
+  overwrite). Writes to the portal only (never the gateway), so the safe append pattern is
+  import → `add_dynamic_rule` → `push_dynamic_layer` (the push then replaces with the live rules **plus**
+  your edits, wiping nothing).
 
 A ready-made n8n agent ships in
 [`docs/policypilot-dynamic-layer-agent.json`](../policypilot-dynamic-layer-agent.json); it connects to

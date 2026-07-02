@@ -7,9 +7,19 @@ least-privilege rule placed correctly, or **REVIEW** when it can't safely decide
 "ServiceNow ticket → firewall rule, with no fat-fingering and no over-grant" story — the FireMon /
 Tufin / AlgoSec demo, driven straight off the customer's own policy.
 
+**Full-column support.** A request isn't limited to source/destination/service + Accept — the engine
+writes **every access-rule column**: the **Action** (Accept / Drop / Reject / Ask / Inform / Apply Layer),
+**Action Settings / UserCheck** (an Ask/Inform prompt *or* a Drop/Reject block-message page, with
+frequency / confirm / custom-every), a **bandwidth Limit** (a RATE object, e.g. `Upload_10Mbps`) and
+Identity Captive Portal, **Content** (data-types) + **Direction**, **Time**, **Install-on** (targets), and
+**VPN** (communities). Every "pick a real Check Point object" value is first *correlated* — a plain phrase
+resolves to the real object, with "did you mean" candidates when it's ambiguous (see
+[The correlate step](#the-correlate-step-resolve-a-phrase-to-a-real-object)).
+
 - UI + JSON + webhook router: [`app/routers/access_automation.py`](../../app/routers/access_automation.py)
 - The pure decision engine (`decide()`) + apply I/O: [`app/services/access_automation.py`](../../app/services/access_automation.py)
 - Ticket payload parsing + result write-back: [`app/services/ticketing.py`](../../app/services/ticketing.py)
+- Column-object correlators (time / content / limit / gateway / vpn): [`app/services/correlate_objects.py`](../../app/services/correlate_objects.py); typed source/dest objects: [`app/services/typed_objects.py`](../../app/services/typed_objects.py); UserCheck: [`app/services/usercheck.py`](../../app/services/usercheck.py)
 - Decision-tree diagram export (single source of truth): [`app/services/decision_tree.py`](../../app/services/decision_tree.py)
 - Reuses the Management client + encrypted creds: [`app/services/mgmt_api.py`](../../app/services/mgmt_api.py), [`app/services/mgmt_creds.py`](../../app/services/mgmt_creds.py)
 
@@ -28,8 +38,11 @@ Tufin / AlgoSec demo, driven straight off the customer's own policy.
 3. **Preview** (`POST /access-automation/{sid}/preview`) — read-only. The engine pulls the layer, runs
    `decide()`, and shows the minimal change: *already allowed (no-op)* / *widen rule N's source-or-dest
    cell* / *create a rule, placed `above`/`below` rule N* / *REVIEW* with the reason it couldn't decide.
-   Type-ahead chips (`/{sid}/app-search`, `/{sid}/svc-search`) correlate a fuzzy app/service name to a
-   real Check Point object before you commit to it.
+   Every "pick a real object" field is a **type-ahead search menu** that opens on focus and filters as you
+   type, backed by a per-field endpoint: `/{sid}/app-search`, `/{sid}/svc-search`,
+   `/{sid}/object-search` (typed source/dest), `/{sid}/usercheck-search`, and `/{sid}/field-search`
+   (`kind` = `time` | `content` | `limit` | `gateway` | `vpn`) — see
+   [The correlate step](#the-correlate-step-resolve-a-phrase-to-a-real-object).
 4. **Apply** (`POST /access-automation/{sid}/apply`). With `publish:false` (the default) the change is
    made then **discarded** — a true dry-run that validates against the SMS with zero commit. With
    `publish:true` it commits. A "locked for editing" conflict can be resolved with
@@ -106,6 +119,59 @@ that object's own space — the same way it already treats a service request as 
   — they can't be fabricated from an access request (define them in Identity Awareness / the gateway
   topology / Check Point's repository first), so a missing one is reported, not invented.
 
+## Rule columns (full-column support)
+
+The request carries **every** access-rule column, validated in `ticketing.build_request` and written on
+apply. Each object-valued column is **reuse-only** (the named object must already exist on the SMS) unless
+noted — the engine never invents a Time / Content / Limit / VPN / Install-on object.
+
+- **Action** — `Accept` (default) / `Drop` / `Reject` / `Ask` / `Inform` / `Apply Layer`. `Apply Layer`
+  requires an `inline_layer` (the layer to divert into). Setting a non-Accept action means the request is a
+  block/prompt: the engine **creates** the rule (placed first-match-safe), it never reuses an Accept.
+- **Action Settings / UserCheck** — attach a UserCheck interaction object, matching SmartConsole's
+  "Action Settings" dialog:
+  - On **Ask / Inform** it's the *prompt*; `user_check_frequency` (`once a day` | `once a week` |
+    `once a month` | `custom frequency…`) and `user_check_confirm` (`per rule` | `per category` |
+    `per application/site` | `per data type`) apply, with `user_check_custom_every` +
+    `user_check_custom_unit` (`hours`/`days`/`weeks`/`months`) when the frequency is custom.
+  - On **Drop / Reject** it's the *blocked-message page*. (`remove_access` has no action / message — a
+    block-with-message must go through an apply with `action=Drop`, not a removal.)
+- **Bandwidth Limit** — an optional QoS **rate** object (e.g. `Upload_10Mbps`) plus **Enable Identity
+  Captive Portal**, valid only on an allowing action (`Accept` / `Ask` / `Inform`). A Limit is a **RATE,
+  not a volume/quota** — there is no "max N GB total" control, so a volume ask maps to an existing rate
+  object or is declined.
+- **Content** — one or more data-type object names + a **Direction** (`any` / `up` / `down`), optionally
+  **negated**. `Any`/`All` is stripped (no restriction); `content_negate` over only `Any` is rejected.
+- **Time** — a list of time / time-group object names.
+- **Install-on** — a list of gateway / target names (an `Any` / `Policy Targets` value is omitted).
+- **VPN** — a list of community names (incl. the built-in `All_GwToGw`); `Any`/`[]` means the `Any`
+  VPN column. Directional pairs (`{from, to}`) are **rejected** rather than guessed.
+
+**Setting any of these makes the request "restricted."** To guarantee the new condition actually takes
+effect under first-match, the engine **CREATEs a precise rule above a broad Accept** (never a false
+no-op / widen). Serviceless intent is handled too: a **`Drop`/`Reject` with no service named defaults to
+`service=Any`** (block everything from the source), while `Accept`/`Ask`/`Inform` still require an explicit
+service/port (you don't allow "everything" by omission).
+
+## The correlate step (resolve a phrase to a real object)
+
+Before a column is written, the plain phrase the user typed is **correlated** to a real Check Point object.
+In the UI each field is a search menu (the endpoints in step 3); an agent calls the matching `correlate_*`
+tool. Each returns `{term, match, confidence, candidates, note}`: `match` is set **only** for a confident,
+unique hit the apply path will accept; otherwise it returns **candidates** ("did you mean") to choose from,
+and a missing object is reported (never fabricated). The family:
+
+- `correlate_service` / `correlate_application` — a service (`icmp`, `GRE`, …) or application-site
+  (`Facebook`) → its object.
+- `correlate_time` — "work hours" → a Time object; `correlate_content` — "SQL Queries" → a data-type;
+  `correlate_limit` — "10 Mbps upload" → a rate object.
+- `correlate_access_role` — "the finance role" → an Identity-Awareness access-role (zero-trust source);
+  `correlate_zone` — "DMZ" → a security-zone. Both are reuse-only.
+- `correlate_user_check` — "the blocked message" → a UserCheck object (a loose phrase auto-resolves when
+  it's the *only* match, since the message is cosmetic, not access-determining).
+- `correlate_gateway` — "the perimeter gateway" → an Install-on target; `correlate_vpn` — "the
+  site-to-site community" → a VPN community.
+
 ## Inbound webhook (end-to-end automation)
 
 `POST /access-automation/webhook` lets any ticketing system (ServiceNow, Jira, Remedy, curl …) POST an
@@ -118,7 +184,12 @@ access request and get back the decision — and, optionally, have it applied an
   `source`/`src`, `destination`/`dst`, `protocol`+`port` (or `service` / `application`), optional
   `source_kind`/`destination_kind` (default `ip`; or `domain` / `access-role` / `dynamic-object` /
   `updatable-object` / `security-zone` — then the value is the object identity, e.g. an FQDN), optional
-  `package`, `ticket_id`, and `apply` (`true` → apply + publish; default → preview only).
+  `package`, `ticket_id`, and `apply` (`true` → apply + publish; default → preview only). The full-column
+  fields ride along too: a dedicated **verdict** field (`verdict` / `u_action` / `cp_action`) for the
+  action (a bare `action` is honoured only when it names a real verdict, so a ServiceNow record's own
+  `action` field doesn't hijack it), plus `inline_layer`, `action_limit`, `captive_portal`,
+  `content` + `content_direction` + `content_negate`, `time`, `install_on`, and `vpn` (each with common
+  aliases). A serviceless `Drop`/`Reject` defaults to `service=Any`.
 - **Scope:** an optional allowlist (`PILOT_WEBHOOK_SERVER_IDS` / Settings) restricts the token to
   specific server ids. A *malformed* allowlist **fails closed** (500) rather than degrading to allow-all.
 - **Write-back:** the result is pushed to the caller's `callback_url` if supplied, else the built-in
@@ -137,32 +208,26 @@ access request and get back the decision — and, optionally, have it applied an
   a covering drop it never loaded). New objects materialize at the full requested scope — a CIDR wider
   than one address becomes a **network** object, never silently narrowed to a `/32` host.
 
-## QA — the regression battery
+## QA — testing the engine
 
-The decision engine is the crown jewel, so it ships with a **declarative, manually-runnable QA battery**
-that covers every supported object / site / port / protocol against the Check-Point-correct outcome.
+The decision engine is the crown jewel, so it's exercised through the **real** code path (`_parse_rule` +
+`decide` / `decide_removal`, the same path `web_api` uses) against small lab-shaped rulebases with a known
+Check-Point-correct outcome.
 
-- **Where:** [`app/services/aa_qa.py`](../../app/services/aa_qa.py). Each scenario is *data* — a small
-  lab-shaped rulebase (objects + rules), one access request, and the expected verdict — fed through the
-  **real** engine (`_parse_rule` + `decide` / `decide_removal`, the same path `web_api` uses). It
-  exercises actual object resolution, the layer where the Internet-object, Dynamic-Layer and
-  disabled-rule bugs hid.
-- **Run it standalone (no pytest):**
-
-  ```
-  python -m app.services.aa_qa                 # full report, exits non-zero on any failure
-  python -m app.services.aa_qa --list          # list every scenario id + description
-  python -m app.services.aa_qa --category placement   # run one category
-  python -m app.services.aa_qa --verbose       # show the engine's reason for each
-  ```
-
-- **Run it in the suite:** `pytest tests/test_aa_scenarios.py` parametrizes over the *same*
-  `SCENARIOS` table, so the CLI, the docs, and CI never drift — a regression turns both red.
-- **Categories:** `ip` · `typed` (domain / access-role / security-zone / dynamic / updatable / Internet) ·
-  `services-l4` (tcp/udp/sctp ports + ranges, service-groups) · `services-named` (icmp / icmp6, GRE,
-  opaque) · `apps` (application-site / category / app-group, app-vs-L4 carve-out) · `placement`
-  (floor / provisioned-section / above-deny / partial / shadowed-deny anomaly / Stealth / Dynamic-Layer /
-  disabled / conditional) · `removal` (disable / deny / no_op / review).
-
-Adding a scenario is one entry in the `SCENARIOS` list — derive the `expect` from first-match semantics
-**independently** of the code, so the battery stays an oracle and not an echo of the implementation.
+- **Regression tests:** [`tests/test_access_automation.py`](../../tests/test_access_automation.py) —
+  `python3 -m pytest tests/test_access_automation.py` (part of the full **842-passing** suite,
+  `python3 -m pytest -q`). Coverage spans the outcomes and object kinds the engine handles: IP / CIDR;
+  typed source-dest (domain / access-role / security-zone / dynamic / updatable / Internet); L4 services
+  (tcp/udp/sctp ports + ranges, service-groups); named services (icmp / icmp6, GRE, opaque); applications
+  (application-site / category / app-group, app-vs-L4 carve-out); placement (floor / provisioned-section /
+  above-deny / partial / shadowed-deny anomaly / Stealth / Dynamic-Layer / disabled / conditional); and
+  removal (disable / deny / no_op / review).
+- **Quick smoke demo (no pytest):** `python3 -m app.services.access_automation` prints a handful of
+  outcomes (already-allowed / widen / over-grant-guarded / create / explicit-deny) against a built-in
+  sample rulebase — a fast eyeball check that the engine loads and decides.
+- **Field-support matrix:** [`app/services/field_support.py`](../../app/services/field_support.py) is the
+  authoritative, drift-safe map of exactly which Check Point object types the engine handles in each rule
+  column, at what support level (full / reuse-only / partial / gap) and how each is discovered. It pulls
+  its type lists from the live engine constants and a test (`verify_against_engine()`) fails if the table
+  ever diverges from the code — rendered in-app on the **Field support** page, so there is no guessing
+  about what the engine can and can't do.

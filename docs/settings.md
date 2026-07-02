@@ -3,13 +3,19 @@
 The **Settings** page is where an admin tunes the portal at runtime — no code, no env edit, no
 redeploy. For a PoV that matters: you set the MCP/webhook/ServiceNow secrets, mint scoped API keys,
 and dial in how the portal talks to a Check Point SMS, all from the browser while the demo is live.
-Three things live here: portal-configurable integration secrets, named API keys, and the SMS
-session-reuse + policy-cache knobs.
+Four things are documented here: portal-configurable integration secrets, named API keys, the SMS
+session-reuse + policy-cache knobs, and the **RBAC / Users & Groups** model that decides who may reach
+Settings (and every other privileged action) in the first place.
 
 - Settings router (page + save + key create/revoke): [`app/routers/settings.py`](../app/routers/settings.py)
 - Setting definitions + secret store (AES-256-GCM, env fallback): [`app/services/app_settings.py`](../app/services/app_settings.py)
 - Named API keys (SHA-256 hashed, scoped, revocable): [`app/services/api_keys.py`](../app/services/api_keys.py)
+- RBAC — roles & granular capabilities: [`app/services/permissions.py`](../app/services/permissions.py) +
+  the `User` model in [`app/models.py`](../app/models.py); Users & Groups app: [`app/routers/users.py`](../app/routers/users.py)
 - Env-var fallbacks (`PILOT_*`): [`app/config.py`](../app/config.py)
+
+> Settings itself is **administrator-only** (`SETTINGS` is not a grantable capability) — the RBAC section
+> below explains what other roles can do.
 
 ## Use it
 
@@ -100,3 +106,47 @@ workers):
 > Storage & retention, Access-automation object-naming, and the Portal **`base_url`** also live on
 > this page; `base_url` restamps every emitted endpoint URL (the `/mcp` and webhook URLs) with no
 > redeploy (the cookie `Secure` flag is still decided at startup from `PILOT_BASE_URL`).
+
+## 4. RBAC — roles, capabilities & the Users & Groups app
+
+PolicyPilot is multi-user with granular permissions. The model (`app/services/permissions.py`) is the single
+source of truth for "who can do what", enforced at every mutating chokepoint (publish / apply / export / user
+management / settings); templates hide controls the user can't use, so UI and server never disagree.
+
+**Two roles:**
+
+- **Administrator** — implicitly holds **every** permission, always. Superuser; the role is **not grantable**
+  as a set of flags. The env-seeded admin (`PILOT_ADMIN_USERNAME`) is structurally protected — it can't be
+  demoted, disabled, or deleted, and you can never disable the last active admin or your own account.
+- **Standard** — carries individual capability flags (below). **View is implicit** for any *active* account —
+  signing in is the view grant, so there is no `perm_view`.
+
+**Grantable capabilities** (`permissions.GRANTABLE`, the `perm_*` flags on the `User` model):
+
+| Capability | Flag | Grants | Default (new standard user) |
+|---|---|---|---|
+| Preview decisions | `preview` | Run access decisions / previews — read-only reasoning. | on |
+| Apply changes | `apply` | Stage & dry-run a change (build objects/rules) against the SMS session. | off |
+| Publish to management | `publish` | Commit staged changes to the SMS — **irreversible**. | off |
+| Export IaC / Gaia | `export` | Generate Terraform / Ansible / clish for policy and Gaia OS config. | on |
+| Manage users | `manage_users` | Create, approve, edit, reset and disable other user accounts. | off |
+
+Plus one **admin-only, non-grantable** capability: **`settings`** — change portal settings + secrets (this
+page). It's never assignable to a standard user; `require_admin` is literally `require("settings")`.
+
+> A user still on a temporary/forced password (`must_change_password`) holds **no** capability until they
+> change it — the forced-change gate stops action, not just redirects the login.
+
+**Account lifecycle** (`User.status`): `pending` → `active` → `disabled`.
+
+- **Self-signup → approval.** Anyone can self-register (public sign-up route in `app/routers/ui.py`); the
+  account lands **`pending`** and can't authenticate until an admin approves it in Users & Groups. A `pending`
+  or `disabled` account holds no permission and can't sign in.
+- **Managed in the Users & Groups app** (`app/routers/users.py`, `manage_users` capability): create / approve
+  / edit role & flags / change status / reset password / delete. A standard *manager* (holds `manage_users`
+  but isn't admin) can edit profiles and activate/disable **non-admin** users only — never role/permission
+  changes, and only an admin may approve or reset another **admin**.
+- **Password reset** is email-based (SMTP-gated): the admin issues a reset that emails a one-hour,
+  single-use link (`reset_token_hash` / `reset_token_expires`). **Admin fallback** when SMTP isn't
+  configured: set a temporary password (`mode=temp`) shown once, with `must_change_password` forced on so the
+  user must set their own on next login.

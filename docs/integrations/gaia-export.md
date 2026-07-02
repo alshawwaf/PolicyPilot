@@ -41,6 +41,13 @@ Over the Gaia REST API (`/gaia_api/v1.9`, `login` → `show-*` → `logout`):
 `show-vlan-interfaces`, `show-bond-interfaces`, `show-bridge-interfaces`, `show-loopback-interfaces`,
 `show-static-routes`, `show-proxy` (interface/route calls paginate at `limit: 500`).
 
+It also pulls a set of **additional singleton sections** — `show-snmp`, `show-syslog`,
+`show-message-of-the-day`, `show-banner`, `show-password-policy`, `show-ssh-server-settings`,
+`show-lldp`, `show-router-id` — each **guarded**: a command this appliance/version doesn't expose (or that
+returns an error) is simply skipped, never aborting the export. These render from the bundled R82.10
+coverage catalogue's per-field map, so a target that can't represent a section gets an inline
+"not supported — see the web_api tab" note instead of being silently dropped.
+
 ## Export targets
 
 - **Terraform** — `CheckPointSW/checkpoint` provider in `context = "gaia_api"` mode, emitting

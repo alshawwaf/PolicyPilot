@@ -44,12 +44,15 @@ All under `/management`, owner-scoped, behind auth:
 ## What the export covers
 
 `pull_for_export` pulls the layer's rulebase **and** its object dictionary with full details
-(`dereference-group-members` so a group resolves to members), then `mgmt_export.generate` renders it.
-Per object type it emits **all publicly-settable fields** using each tool's exact argument names
-(`checkpoint_management_*` for Terraform, `cp_mgmt_*` for Ansible, the `mgmt_cli add-*` names).
+(`details-level: full` + `dereference-group-members` so a group resolves to its members), then
+`mgmt_export.generate` renders it to four targets. Per object type it emits **all publicly-settable
+fields** using each tool's exact argument names: `checkpoint_management_*` (Terraform,
+`CheckPointSW/checkpoint`), `cp_mgmt_*` (Ansible, the `check_point.mgmt` collection), the `mgmt_cli add-*`
+names, and the replayable **web_api** `add-*` bodies (an ordered JSON op-list ending in `publish`).
 **Predefined** objects (`Any`, predefined services, `Accept`/`Drop`, the `Log` track) are referenced by
-name, never re-emitted. Order is preserved; Terraform also wires a `depends_on` chain. Unsupported object
-types are **counted and commented**, never dropped silently or crashed on (see `stats.skipped`).
+name, never re-emitted. Group membership comes from the group's `members`. Order is preserved; Terraform
+also wires a `depends_on` chain. Unsupported object types are **counted and commented**, never dropped
+silently or crashed on (see `stats.skipped`).
 
 ## Security notes
 

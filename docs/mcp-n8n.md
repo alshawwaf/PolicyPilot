@@ -1,11 +1,11 @@
 # MCP server — connect PolicyPilot to n8n / an LLM agent
 
-PolicyPilot exposes its access-automation brain as **21 MCP tools** an LLM agent (via n8n's *MCP Client
+PolicyPilot exposes its access-automation brain as **29 MCP tools** an LLM agent (via n8n's *MCP Client
 Tool* node, or any MCP client) can call over a single endpoint, `/mcp`. The tools cover **two rails**:
 
-- **Management access policy** — decide/apply changes on an SMS via the Management web_api (correlate a
-  service/app name, list servers/layers, analyze a policy, check Terraform/Ansible coverage, apply,
-  remove, amend, revert).
+- **Management access policy** (21 tools) — decide/apply changes on an SMS via the Management web_api
+  (correlate a service/app/time/content/limit/access-role/zone/UserCheck/gateway/VPN name, list
+  servers/layers, analyze a policy, check Terraform/Ansible coverage, apply, remove, amend, revert).
 - **Dynamic Layers** — author an access rulebase and push it straight to a gateway via the Gaia API
   (`set-dynamic-content`), out-of-band of SmartConsole.
 
@@ -73,9 +73,12 @@ Endpoints (thin wrappers over the same `services.mcp_tools`, so behaviour + safe
 `GET /dbapi/v1/servers`, `GET /dbapi/v1/layers?server_id=`, `GET /dbapi/v1/layers/summary`,
 `GET /dbapi/v1/layers/analyze`, `GET /dbapi/v1/coverage`, `GET /dbapi/v1/conformance` (post-deploy
 self-check: surface wired + safe, no live SMS/gateway touched), `POST /dbapi/v1/access/decide`,
-`POST /dbapi/v1/access/apply` (publish admin-gated), `POST /dbapi/v1/access/correlate/{service,application}`.
-The `correlate/*` endpoints take a body of `{"server_id":1,"name":"dns"}` (a fuzzy name → matching Check
-Point service / application objects).
+`POST /dbapi/v1/access/apply` (publish admin-gated; also the block path — `action=Drop/Reject`), and the
+full correlate family
+`POST /dbapi/v1/access/correlate/{service,application,time,content,limit,access-role,zone,user-check,gateway,vpn}`.
+Each `correlate/*` endpoint takes a body of `{"server_id":1,"name":"dns"}` (a fuzzy name → the matching
+Check Point object: a service / application / time / data-type / limit / access-role / security-zone /
+UserCheck / gateway / VPN-community object, respectively).
 
 **Dynamic Layers:**
 `GET /dbapi/v1/gateways` (the saved push targets), `GET /dbapi/v1/dynamic-layers` (list),
@@ -96,22 +99,22 @@ In the **AI Agent** → add an **MCP Client Tool** node:
 
 n8n discovers the tools automatically (`tools/list`). The agent can then call them by name. Both rails
 live on the **same** `/mcp` endpoint and the same mcp-scope key — a single MCP Client Tool node sees all
-21 tools.
+29 tools.
 
 **Starter workflows** — import either of the two ready-made n8n agents from `docs/` (each is one rail with
 a tuned system prompt, the MCP Client Tool node, and a chat trigger), then point its credential at your
 `/mcp` URL + mcp-scope key:
 - **[`docs/policypilot-management-agent.json`](policypilot-management-agent.json)** — the management access
-  automation agent (the 13 SMS tools; decide/apply/remove/amend/revert on the management policy).
+  automation agent (the 21 SMS tools; decide/apply/remove/amend/revert on the management policy).
 - **[`docs/policypilot-dynamic-layer-agent.json`](policypilot-dynamic-layer-agent.json)** — the Dynamic
   Layers agent (author a rulebase and push it to a gateway via the Gaia API).
 
 ## 3. Tools
 
-21 tools across two rails. The **Writes?** column notes which gate (if any) controls live writes — the two
+29 tools across two rails. The **Writes?** column notes which gate (if any) controls live writes — the two
 rails have **separate** gates (see §4).
 
-### Management access policy (13 tools — SMS via the Management web_api)
+### Management access policy (21 tools — SMS via the Management web_api)
 
 | Tool | Does | Writes? |
 |------|------|---------|
@@ -120,14 +123,32 @@ rails have **separate** gates (see §4).
 | `decide_access(server_id, source, destination, layer, service?/port?/application?, …)` | **preview** the decision (no_op/widen/create/review) + reasoning + suggestions | no |
 | `correlate_service(server_id, name)` | service/protocol name → real CP object, or candidates | no |
 | `correlate_application(server_id, name)` | app/site name → real CP object, or candidates | no |
+| `correlate_time(server_id, name)` | time phrase ("work hours") → CP **time** object for the Time column, or candidates | no |
+| `correlate_content(server_id, name)` | content phrase ("SQL Queries") → CP **data-type** for the Content column, or candidates | no |
+| `correlate_user_check(server_id, name)` | UserCheck phrase ("the blocked message") → CP **UserCheck** interaction object (Ask/Inform prompt or Drop/Reject block page), or candidates | no |
+| `correlate_access_role(server_id, name)` | identity phrase ("the finance role") → CP **access-role** (Identity Awareness) for a zero-trust source, or candidates | no |
+| `correlate_zone(server_id, name)` | zone phrase ("DMZ") → CP **security-zone** for a typed source/dest, or candidates | no |
+| `correlate_limit(server_id, name)` | bandwidth phrase ("10 Mbps upload") → CP **limit** RATE object for Action Settings, or candidates | no |
+| `correlate_gateway(server_id, name)` | gateway phrase ("the perimeter gateway") → CP **gateway/target** for the Install-On column, or candidates | no |
+| `correlate_vpn(server_id, name)` | VPN phrase ("the site-to-site community") → CP **VPN community** for the VPN column, or candidates | no |
 | `summarize_layer(server_id, layer)` | rule counts, Accept/Drop split, Any-dimension counts, inline layers, cleanup-drop presence | no |
 | `analyze_policy(server_id, layer)` | summary + shadowed rules (covered by an earlier broader Accept/Drop) + overly-permissive Accepts | no |
 | `coverage_lookup(api, name?, version?)` | object/field support across API / Terraform / Ansible | no |
-| `apply_access(server_id, …, publish)` | `publish=false` **dry-run** (validate + discard); `publish=true` **commit** | gated — `mcp_allow_publish` |
-| `remove_access(server_id, …, publish)` | revoke an access — disable an exact-grant rule, or drop-above a broader one | gated — `mcp_allow_publish` |
+| `apply_access(server_id, …, action?/content?/time_objects?/install_on?/vpn?/user_check?…, publish)` | create/widen with any access-rule column; `publish=false` **dry-run** (validate + discard); `publish=true` **commit**. **Also the way to _block_** (`action=Drop/Reject`; `service` defaults to `Any` for a serviceless block; add `user_check` for a block message) | gated — `mcp_allow_publish` |
+| `remove_access(server_id, …, publish)` | **revoke an existing allow** — disable an exact-grant rule, or drop-above a broader one. *Not* how you block new traffic (that's `apply_access` with `action=Drop`) | gated — `mcp_allow_publish` |
 | `amend_access_rule(change_id \| rule_uid+layer, name?/comment?/tags?/track?, publish)` | edit a rule's **metadata only** (name/comment/tags/track-logging) — never its match columns | gated — `mcp_allow_publish` |
 | `list_changes(limit?)` | recent **published** changes (id/what/when/reverted?) for audit + undo | no |
 | `revert_change(change_id, publish, disable_instead_of_delete?)` | surgically undo one published change (delete/re-enable/restore) | gated — `mcp_allow_publish` |
+
+**Block ≠ remove_access.** To *block* traffic, use `apply_access` with `action=Drop` (or `Reject`) — a
+serviceless block passes `service=Any`, and a block that shows a page passes a `user_check` message object.
+`remove_access` is only for taking away an **existing** allow (it has no action / service=Any / UserCheck).
+
+The **`correlate_*`** family is pure discovery — each resolves a plain phrase to the real Check Point object
+(unique-exact auto-match, else "did you mean" candidates, drift-safe) so the agent names an object that
+actually exists before it decides/applies. Time / content / limit / access-role / zone / UserCheck /
+gateway / VPN objects are all **reuse-only** (they must already exist on the SMS — the engine never creates
+them); on no match, relay the candidates.
 
 `summarize_layer` / `analyze_policy` are read-only and **provably conservative** — `analyze_policy` only
 flags a rule as shadowed when it can prove an earlier rule fully covers it under first-match (it abstains

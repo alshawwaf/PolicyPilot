@@ -10,8 +10,8 @@ LLM agent over MCP.*
 
 ![Version](https://img.shields.io/badge/version-1.0.0-3b82f6)
 ![Validated](https://img.shields.io/badge/validated-R82.10-7b3ff2)
-![Tests](https://img.shields.io/badge/tests-696%20passing-34d399)
-![MCP tools](https://img.shields.io/badge/MCP%20tools-21-7b3ff2)
+![Tests](https://img.shields.io/badge/tests-842%20passing-34d399)
+![MCP tools](https://img.shields.io/badge/MCP%20tools-29-7b3ff2)
 ![Python](https://img.shields.io/badge/python-3.12%2B-3b82f6)
 ![TLS](https://img.shields.io/badge/TLS-always%20verified-15935a)
 ![License](https://img.shields.io/badge/license-proprietary-5b6678)
@@ -34,7 +34,7 @@ one-click rollback. No more hand-editing rulebases or guessing where a rule belo
 ## 🛤 Two automation rails, one engine
 
 The same decision brain drives two ways to apply a change — **both fully agent-drivable over the same `/mcp`
-endpoint** (21 tools total, mcp-scope key as `Authorization: Bearer`):
+endpoint** (29 tools total — 21 management + 8 dynamic-layer — mcp-scope key as `Authorization: Bearer`):
 
 | Rail | What it does | How | Publish gate |
 |---|---|---|---|
@@ -54,10 +54,18 @@ complementary halves of "automate access," never overlapping.
   existing rule, or needs a new rule.
 - **First-match-safe placement** — inserts above the right deny, below the right stealth/cleanup, in the right
   section — so the new rule is neither shadowed nor shadowing.
-- **Every access-rule column** — action (Accept / Drop / Reject / Ask / Inform / Apply Layer) plus **content**
-  (data-types), **time**, **install-on** (gateways) and **VPN** (communities).
+- **Every access-rule column** — action (Accept / Drop / Reject / Ask / Inform / Apply Layer) with
+  **Action Settings** (a UserCheck block message, or an Ask / Inform prompt with frequency), plus **content**
+  (data-types) + direction, **time**, **install-on** (gateways), **VPN** (communities) and a bandwidth
+  **limit**. Any advanced column makes the request *restricted* — a precise rule is created above the broad
+  Accept so the new condition actually takes effect.
+- **Discovery / "did you mean"** — resolves a plain phrase (a service, application, time, data-type,
+  access-role, security-zone, gateway, VPN community or UserCheck message) to the real Check Point object:
+  auto-matches a unique hit, else returns ranked candidates for the agent or user to pick.
 - **Reuse-only object resolution** — resolves a source/destination/service to an *existing* Check Point object
   by dedicated commands; never blindly creates duplicates.
+- **Revoke, not just grant** — `remove_access` takes away an existing allow (disables it when it can prove the
+  rule is sole + exact, otherwise inserts a Drop above); blocking traffic is a Drop/Reject via `apply_access`.
 - **One-click rollback** — every published change records its inverse op-list; revert restores the prior state.
 - **Provably conservative analysis** — `analyze_policy` only flags a rule as shadowed when it can prove it,
   and abstains on opaque/application cells rather than guessing.
@@ -69,19 +77,20 @@ rulebase.
 
 ## 🎛 Drive it four ways
 
-- 🤖 **[MCP server](docs/mcp-n8n.md)** — both rails as **21 tools** an LLM agent (n8n, Claude Desktop, Cursor,
+- 🤖 **[MCP server](docs/mcp-n8n.md)** — both rails as **29 tools** an LLM agent (n8n, Claude Desktop, Cursor,
   VS Code, any MCP client) calls over `/mcp`. Two ready-made n8n workflows ship in `docs/`:
   **[management access agent](docs/policypilot-management-agent.json)** and
   **[dynamic-layer agent](docs/policypilot-dynamic-layer-agent.json)**, both connecting to the same `/mcp` with
   an mcp-scope key. With the **Autopilot** preset, one sentence ending *"…and publish the changes"* resolves,
   applies **and** publishes in a single turn (management rail). In-app onboarding at **`/mcp-guide`**.
 - 🌐 **REST API** — the same brain at **`/dbapi/v1`** for any HTTP client (api-scope key auth), mirroring the
-  tools across both rails (incl. `/gateways`, `/dynamic-layers`, `/dynamic-layers/push`), auto-documented in
-  the portal OpenAPI (`/docs`).
+  tools across both rails (incl. `/access/correlate/*`, `/gateways`, `/dynamic-layers/*`), self-documented in
+  the in-app **PolicyPilot API** page and the portal OpenAPI (`/docs`).
 - 🎫 **Ticket webhook** — a ServiceNow / Jira / any webhook becomes a Check Point rule, with optional write-back.
   Authenticated with the `X-PolicyPilot-Token` header.
-- 🖥 **The portal UI** — review a decision, see the placement, apply on approval — plus a live **API explorer**
-  (Swagger) at `/api-explorer` for testing Management / Gaia API calls directly.
+- 🖥 **The portal UI** — a **macOS-style desktop** (dock + draggable app windows): review a decision, see the
+  before/after rule and its placement, apply on approval — plus a live **API explorer** (Swagger) at
+  `/api-explorer` for testing Management / Gaia API calls directly.
 
 > 📓 The **[MCP-agent QA battery](docs/mcp-agent-qa.md)** is a standing set of one-sentence "…and publish"
 > prompts that exercise every tool, outcome, and column — the demo script and the regression check in one.
@@ -121,6 +130,9 @@ Build from the **`Dockerfile`**, expose port **8000**, add a domain (Traefik han
 
 - Portal endpoints require login; machine access uses named, scoped (`mcp` / `webhook` / `api`), revocable
   **API keys** with optional expiry (shown once, SHA-256-hashed at rest).
+- **Multiple users, least privilege.** Self-signup with admin approval; each account is an **Admin** or a
+  **Standard** user carrying granular capabilities (preview / apply / publish / export / manage-users).
+  Inactive (pending / disabled) accounts can't authenticate. Password reset by email, with an admin fallback.
 - **TLS to the SMS/gateway is always verified.** Self-signed lab boxes are handled by **cert pinning**
   (trust-on-first-use or a pasted cert) — verification is never disabled.
 - Saved management / gateway credentials are **AES-256-GCM encrypted at rest** (`PILOT_ENCRYPTION_KEY`).
@@ -134,7 +146,7 @@ Build from the **`Dockerfile`**, expose port **8000**, add a domain (Traefik han
 ## ✅ Tests
 
 ```bash
-pip install pytest && pytest -q          # 626 tests, all green
+pytest -q          # 842 tests, all green
 ```
 
 ---

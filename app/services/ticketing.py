@@ -258,6 +258,11 @@ def build_request(source, destination, protocol, port, application=None, service
     if application:
         return AccessRequest(**common, application=application)
     service = str(service).strip() if service else ""
+    # A BLOCK with no service named = block ALL traffic (the natural intent of "block X from Y"). Default a
+    # serviceless Drop/Reject to Service=Any so it can't fail with "port is required". (Accept/Ask/Inform
+    # still require an explicit service/port — you don't allow or prompt "everything" by omission.)
+    if not service and not str(port or "").strip() and canon in ("Drop", "Reject"):
+        service = "Any"
     if service:
         return AccessRequest(**common, service=service)
     protocol = str(protocol or "tcp").lower()

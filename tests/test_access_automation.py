@@ -4398,3 +4398,15 @@ def test_block_all_traffic_creates_drop_above_the_covering_accept():
     req = tk.build_request("10.1.0.50", "172.16.5.10", "tcp", "", service="Any", action="Drop")
     d = aa.decide(req, [WEB, CLEANUP])
     assert d.outcome is Outcome.CREATE and d.position == {"above": "r8"} and "ABOVE rule 8" in d.reason
+
+
+def test_serviceless_block_defaults_to_block_all():
+    # "block X from Y" with no service = block ALL traffic (Service=Any) — never "port is required".
+    for act in ("Drop", "Reject"):
+        r = tk.build_request("10.1.1.222", "10.1.2.250", "tcp", "", action=act)
+        assert r.svc().any is True, act
+    # but a serviceless Accept/Ask/Inform still errors — you don't allow/prompt "everything" by omission
+    for act in ("Accept", "Ask", "Inform"):
+        with pytest.raises(ValueError):
+            tk.build_request("10.1.1.222", "10.1.2.250", "tcp", "", action=act,
+                             user_check=("m" if act in ("Ask", "Inform") else ""))

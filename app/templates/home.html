@@ -275,6 +275,7 @@
     access:      { label: 'Access automation', href: '/access-automation', ic: I.access,  grad: 'linear-gradient(135deg,#3b82f6,#22d3ee)' },
     decisionmap:  { label: 'Decision map',      href: '/decision-map',      ic: I.map,     grad: 'linear-gradient(135deg,#6366f1,#a855f7)' },
     decisiontree: { label: 'Decision tree',     href: '/decision-tree',     ic: I.branch,  grad: 'linear-gradient(135deg,#7b3ff2,#22d3ee)' },
+    fieldsupport: { label: 'Field support',      href: '/field-support',     ic: I.check,   grad: 'linear-gradient(135deg,#0ea5b7,#22d3ee)' },
     changelog:   { label: 'Change log',         href: '/changes',           ic: I.history, grad: 'linear-gradient(135deg,#14b8a6,#0ea5e9)' },
     webhook:     { label: 'Ticketing webhook',  href: '/ticketing-webhook', ic: I.webhook, grad: 'linear-gradient(135deg,#f59e0b,#ef4444)' },
     layers:      { label: 'Dynamic Layers',     href: '/layers',            ic: I.layers,  grad: 'linear-gradient(135deg,#1d9e75,#34d399)' },
@@ -299,7 +300,7 @@
     if (key === 'settings') return !!window.PP_ADMIN;
     return true;
   }
-  var ORDER = ['access', 'decisionmap', 'decisiontree', 'changelog', 'layers', 'management', 'policymanager', 'iacexporter', 'gateways', 'agents', 'apidocs', 'webhook', 'apiexplorer', 'settings', 'activity', 'system', 'users', 'account']
+  var ORDER = ['access', 'decisionmap', 'decisiontree', 'fieldsupport', 'changelog', 'layers', 'management', 'policymanager', 'iacexporter', 'gateways', 'agents', 'apidocs', 'webhook', 'apiexplorer', 'settings', 'activity', 'system', 'users', 'account']
     .filter(appVisible);
   var wins = {}, z = 100, openCount = 0;
 

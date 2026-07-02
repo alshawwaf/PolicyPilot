@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+{% block title %}Field support{% endblock %}
+{% block content %}
+<style>
+  .fs-legend { display:flex; gap:10px; flex-wrap:wrap; margin:2px 0 18px; }
+  .fs-lg { display:flex; align-items:center; gap:8px; font-size:12px; color:var(--muted);
+    border:1px solid var(--line); border-radius:999px; padding:5px 11px 5px 8px; }
+  .lvl { font-size:10px; font-weight:800; letter-spacing:.04em; text-transform:uppercase; padding:2px 8px; border-radius:999px; white-space:nowrap; }
+  .lvl.full { color:var(--ok); background:rgba(52,211,153,.15); }
+  .lvl.reuse { color:var(--info); background:var(--info-bg); }
+  .lvl.partial { color:var(--warn); background:var(--warn-bg); }
+  .lvl.gap { color:var(--danger); background:var(--danger-bg); }
+  .fs-grid { display:flex; flex-direction:column; gap:14px; }
+  .fs-row { border:1px solid var(--line-soft); border-radius:var(--r); overflow:hidden; background:var(--surface-1); }
+  .fs-head { display:flex; align-items:center; gap:12px; padding:13px 16px; background:var(--surface-2); border-bottom:1px solid var(--line-soft); flex-wrap:wrap; }
+  .fs-head .fic { width:34px; height:34px; border-radius:10px; flex:none; display:flex; align-items:center; justify-content:center;
+    background:var(--accent-grad); color:#fff; box-shadow:0 2px 8px rgba(123,63,242,.24); }
+  .fs-head .fic svg { width:18px; height:18px; }
+  .fs-title { font-size:15px; font-weight:700; letter-spacing:-.1px; }
+  .fs-col { font-size:11.5px; color:var(--muted); } .fs-col code { font-size:11px; }
+  .fs-tool { margin-left:auto; font-size:11.5px; display:inline-flex; align-items:center; gap:6px; color:var(--accent); font-weight:600;
+    background:var(--accent-soft); border-radius:999px; padding:4px 11px; }
+  .fs-tool svg { width:13px; height:13px; }
+  .fs-body { padding:6px 16px 14px; }
+  .fs-obj { display:flex; gap:11px; align-items:flex-start; padding:9px 2px; border-bottom:1px solid var(--line-soft); }
+  .fs-obj:last-child { border-bottom:0; }
+  .fs-obj .ot { flex:1; min-width:0; } .fs-obj .ot b { font-size:13px; font-weight:620; }
+  .fs-obj .ot span { display:block; font-size:11.5px; color:var(--muted); margin-top:2px; }
+  .fs-gaps { margin-top:11px; padding:11px 13px; border-radius:11px; background:var(--danger-bg); border:1px solid var(--danger-line); }
+  .fs-gaps.none { background:rgba(52,211,153,.10); border-color:rgba(52,211,153,.3); }
+  .fs-gaps .gh { font-size:11px; font-weight:800; letter-spacing:.04em; text-transform:uppercase; color:var(--danger); margin-bottom:5px; display:flex; align-items:center; gap:6px; }
+  .fs-gaps.none .gh { color:var(--ok); }
+  .fs-gaps ul { margin:0; padding-left:18px; } .fs-gaps li { font-size:12px; margin:3px 0; }
+  .fs-note { margin-top:10px; font-size:12px; color:var(--muted); display:flex; gap:8px; align-items:flex-start; }
+  .fs-note svg { width:14px; height:14px; flex:none; margin-top:2px; color:var(--faint); }
+  .fs-review { margin-top:20px; }
+  .fs-review .card { border-left:3px solid var(--warn); }
+  .fs-review h2 { font-size:15px; margin:0 0 4px; display:flex; align-items:center; gap:10px; }
+  .fs-review ul { margin:8px 0 0; padding-left:20px; } .fs-review li { font-size:13px; margin:5px 0; line-height:1.5; }
+</style>
+
+{% macro lvlbadge(l) %}<span class="lvl {{ l }}" title="{{ levels[l][1] }}">{{ levels[l][0] }}</span>{% endmacro %}
+
+<div class="page-head">
+  <span class="icon-chip lg"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></span>
+  <div class="ph-main">
+    <h1>Field support</h1>
+    <p class="ph-sub">Exactly which Check Point object types the Access Automation engine handles in each rule
+      column — the support level, how to discover the object, and the known gaps. No guessing.</p>
+  </div>
+  <div class="ph-actions"><a class="btn secondary" href="/access-automation">← Access automation</a></div>
+</div>
+
+<div class="fs-legend">
+  {% for key, meta in levels.items() %}
+  <span class="fs-lg"><span class="lvl {{ key }}">{{ meta[0] }}</span>{{ meta[1] }}</span>
+  {% endfor %}
+</div>
+
+<div class="fs-grid">
+  {% for row in matrix %}
+  <div class="fs-row">
+    <div class="fs-head">
+      <span class="fic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg></span>
+      <div>
+        <div class="fs-title">{{ row.field }}</div>
+        <div class="fs-col">Rule column: <code>{{ row.column }}</code></div>
+      </div>
+      {{ lvlbadge(row.level) }}
+      {% if row.discovery %}
+      <span class="fs-tool"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>{{ row.discovery }}()</span>
+      {% endif %}
+    </div>
+    <div class="fs-body">
+      {% if row.supported %}
+      {% for name, lvl, note in row.supported %}
+      <div class="fs-obj">
+        {{ lvlbadge(lvl) }}
+        <span class="ot"><b>{{ name }}</b>{% if note %}<span>{{ note }}</span>{% endif %}</span>
+      </div>
+      {% endfor %}
+      {% else %}
+      <div class="fs-obj"><span class="ot muted small">Not supported by the engine.</span></div>
+      {% endif %}
+
+      {% if row.gaps %}
+      <div class="fs-gaps">
+        <div class="gh"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4M12 17h.01M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/></svg>Gaps &amp; caveats</div>
+        <ul>{% for g in row.gaps %}<li>{{ g }}</li>{% endfor %}</ul>
+      </div>
+      {% else %}
+      <div class="fs-gaps none"><div class="gh"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>No gaps</div></div>
+      {% endif %}
+
+      {% if row.notes %}
+      <div class="fs-note"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg><span>{{ row.notes }}</span></div>
+      {% endif %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+<div class="fs-review">
+  <div class="card">
+    <h2><span class="icon-chip"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg></span> When the engine defers to human REVIEW</h2>
+    <p class="muted small" style="margin:0;">Safety-first: rather than guess, the engine routes these to review (never a wrong rule).</p>
+    <ul>{% for t in review_triggers %}<li>{{ t }}</li>{% endfor %}</ul>
+  </div>
+</div>
+{% endblock %}

@@ -36,6 +36,20 @@ templates.env.globals["can"] = permissions.can
 templates.env.globals["perms"] = permissions.effective
 
 
+@router.get("/field-support", response_class=HTMLResponse)
+def field_support_page(request: Request, db: Session = Depends(get_db)):
+    """The authoritative Access-Automation field support matrix: exactly which Check Point object types the
+    engine handles in each rule column, at what support level, how to discover the object, and the gaps."""
+    if get_user_or_none(request, db) is None:
+        return RedirectResponse("/login", status_code=303)
+    from ..services import field_support
+    return templates.TemplateResponse(request, "field_support.html", {
+        "matrix": field_support.matrix(),
+        "levels": field_support.LEVELS,
+        "review_triggers": field_support.REVIEW_TRIGGERS,
+    })
+
+
 @router.get("/mcp-guide", response_class=HTMLResponse)
 def mcp_guide_page(request: Request, db: Session = Depends(get_db)):
     """Onboarding for the MCP server: the tool catalog + copy-paste connect config for the common
@@ -485,7 +499,7 @@ def update_profile(
 # Server-side allowlist of app keys (anything else in a saved layout is dropped — no junk/injection).
 DESKTOP_APP_KEYS = {"access", "decisionmap", "decisiontree", "changelog", "webhook", "layers", "management",
                     "policymanager", "iacexporter", "gateways", "agents", "apiexplorer", "apidocs",
-                    "settings", "activity", "account", "system", "users"}
+                    "settings", "activity", "account", "system", "users", "fieldsupport"}
 # Toggleable desktop widgets (the right-hand rail on the OS Home). Each is backed by real, DB-side data.
 DESKTOP_WIDGET_KEYS = {"decisions", "activity", "last", "connections", "coverage",
                        "errors", "latency", "recent", "clock", "quick", "system"}

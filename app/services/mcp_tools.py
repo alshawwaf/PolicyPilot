@@ -770,6 +770,20 @@ def correlate_limit(server_id: str, name: str) -> dict:
     return _correlate_object(server_id, name, "resolve_limit")
 
 
+def correlate_gateway(server_id: str, name: str) -> dict:
+    """Map a gateway phrase ("the perimeter gateway", "GW1") to the real Check Point gateway/server object for
+    a rule's Install-On column, or return candidates ('did you mean'). Pass the returned ``match`` as
+    install_on=[…]. Reuse-only (the gateway exists in the topology); if none matches, relay the candidates."""
+    return _correlate_object(server_id, name, "resolve_gateway")
+
+
+def correlate_vpn(server_id: str, name: str) -> dict:
+    """Map a VPN phrase ("the site-to-site community", "All_GwToGw") to the real Check Point VPN community for
+    a rule's VPN column, or return candidates. Pass the returned ``match`` as vpn=[…]. Reuse-only (communities
+    are defined in the VPN configuration); if none matches, relay the candidates."""
+    return _correlate_object(server_id, name, "resolve_vpn")
+
+
 def _load_layer_rules(server_id: str, layer: str):
     db = SessionLocal()
     try:

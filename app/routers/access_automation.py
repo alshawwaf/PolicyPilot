@@ -353,6 +353,25 @@ def aa_usercheck_search(sid: int, request: Request, q: str = "", db: Session = D
         return JSONResponse({"candidates": []})
 
 
+@router.get("/access-automation/{sid}/field-search")
+def aa_field_search(sid: int, request: Request, q: str = "", kind: str = "", db: Session = Depends(get_db)):
+    """Type-ahead for the Advanced-options columns — ``kind`` = time | content | limit | gateway | vpn —
+    so those fields recommend real Check Point objects like Source/Service/Application already do.
+    Best-effort -> [] (never errors the UI)."""
+    user = get_user_or_none(request, db)
+    if user is None:
+        return JSONResponse({"error": "Not authenticated"}, status_code=401)
+    ms = _owned(db, sid, user)
+    secret, err = _secret_or_error(db, ms)
+    if err:
+        return JSONResponse({"candidates": []})
+    try:
+        from ..services import correlate_objects
+        return JSONResponse({"candidates": correlate_objects.search_server(ms, secret, q, kind)})
+    except Exception:  # noqa: BLE001
+        return JSONResponse({"candidates": []})
+
+
 @router.post("/access-automation/{sid}/preview")
 def aa_preview(sid: int, body: AccessReqBody, request: Request, db: Session = Depends(get_db)):
     """JSON: load → decide → describe what would happen. Read-only, commits nothing."""

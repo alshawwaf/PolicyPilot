@@ -110,3 +110,43 @@ def test_mcp_correlate_tools_delegate_after_resolving_server(monkeypatch):
     monkeypatch.setattr(mcp_tools, "_server_secret",
                         lambda db, sid: (_ for _ in ()).throw(ValueError("no such server")))
     assert "error" in mcp_tools.correlate_content(999, "SQL Queries")
+
+
+class _CmdSess:
+    """Responds to the dedicated list commands (show-gateways-and-servers / show-vpn-communities-*) that the
+    gateway/VPN resolvers enumerate through access_automation._known_object_names."""
+    def __init__(self, by_cmd):
+        self._c = by_cmd
+        self.server = types.SimpleNamespace(host="h", port=443, domain="")
+
+    def call(self, cmd, payload=None):
+        items = self._c.get(cmd, [])
+        return {"objects": items, "total": len(items)}
+
+
+def test_resolve_gateway_unique_exact_and_ambiguous():
+    s = _CmdSess({"show-gateways-and-servers": [_obj("GW1", "simple-gateway"), _obj("GW2", "simple-gateway")]})
+    assert co.resolve_gateway(s, "GW1")["match"] == "GW1"
+    amb = _CmdSess({"show-gateways-and-servers": [_obj("Perimeter-A", "simple-gateway"),
+                                                  _obj("Perimeter-B", "simple-gateway")]})
+    r = co.resolve_gateway(amb, "Perimeter")
+    assert r["match"] is None and len(r["candidates"]) == 2 and r["note"]
+
+
+def test_resolve_vpn_matches_enumerated_and_the_all_gwtogw_literal():
+    s = _CmdSess({"show-vpn-communities-star": [_obj("Site2Site", "vpn-community-star")]})
+    assert co.resolve_vpn(s, "Site2Site")["match"] == "Site2Site"
+    # the built-in All_GwToGw is matchable even though it isn't returned by the community list commands
+    assert co.resolve_vpn(s, "All_GwToGw")["match"] == "All_GwToGw"
+
+
+def test_search_server_dispatches_gateway_and_vpn(monkeypatch):
+    # the form's field-search endpoint routes kind=gateway/vpn through search_server
+    s = _CmdSess({"show-gateways-and-servers": [_obj("GW1", "simple-gateway")]})
+
+    class _RS:
+        def __enter__(self): return s
+        def __exit__(self, *a): return False
+    monkeypatch.setattr("app.services.mgmt_api.read_session", lambda ms, secret: _RS())
+    cands = co.search_server(object(), "secret", "GW", "gateway")
+    assert any(c["name"] == "GW1" for c in cands)

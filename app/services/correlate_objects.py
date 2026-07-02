@@ -145,6 +145,39 @@ def resolve_limit(session, term: str) -> dict:
     return _finish(out, scored, False, "limit object")
 
 
+# --- Install-on (gateways/targets) + VPN communities: NOT in the generic show-objects index -> enumerated
+# via their dedicated list commands, the SAME ones access_automation._resolve_named_objects validates
+# against (imported so the command set can't drift). A complete enumeration -> a unique exact hit auto-matches.
+def _resolve_enumerated(session, term: str, commands: tuple, label: str, kind: str, extra=()) -> dict:
+    term = (term or "").strip()
+    out = {"term": term, "match": None, "match_kind": kind, "confidence": "", "candidates": [], "note": ""}
+    if not term:
+        return out
+    from .access_automation import _known_object_names
+    names = _known_object_names(session, commands)
+    if names is None:
+        out["note"] = f"Couldn't enumerate {label}s on this server ({', '.join(commands)} unavailable)."
+        return out
+    allnames = set(names) | set(extra)
+    scored = sorted(((_score(term, n), {"name": n, "kind": kind}) for n in allnames),
+                    key=lambda x: x[0][1], reverse=True)
+    return _finish(out, scored, False, label)
+
+
+def resolve_gateway(session, term: str) -> dict:
+    """Map ``term`` (e.g. "the perimeter gateway") to a Check Point gateway/server object for the Install-On
+    column, or return candidates. Enumerated via show-gateways-and-servers (the apply-side list command)."""
+    from .access_automation import _LIST_CMDS_INSTALL_ON
+    return _resolve_enumerated(session, term, _LIST_CMDS_INSTALL_ON, "gateway/target", "gateway")
+
+
+def resolve_vpn(session, term: str) -> dict:
+    """Map ``term`` (e.g. "the site-to-site community") to a Check Point VPN community for the VPN column, or
+    return candidates. Enumerated via the show-vpn-communities-* commands; includes the built-in All_GwToGw."""
+    from .access_automation import _LIST_CMDS_VPN
+    return _resolve_enumerated(session, term, _LIST_CMDS_VPN, "VPN community", "vpn", extra=("All_GwToGw",))
+
+
 # --- UI type-ahead helpers (parallel to services.search_server / applications) ------------------------
 def _search_typed(session, term: str, allow_types: tuple, limit: int = 40) -> list[dict]:
     term = (term or "").strip()
@@ -172,4 +205,10 @@ def search_server(server, secret: str, term: str, kind: str) -> list[dict]:
         if kind == "limit":
             r = resolve_limit(s, term)
             return [{"name": c["name"], "kind": "limit"} for c in r.get("candidates", [])]
+        if kind in ("gateway", "install_on", "install-on"):
+            r = resolve_gateway(s, term)
+            return [{"name": c["name"], "kind": "gateway"} for c in r.get("candidates", [])]
+        if kind == "vpn":
+            r = resolve_vpn(s, term)
+            return [{"name": c["name"], "kind": "vpn"} for c in r.get("candidates", [])]
         return []

@@ -139,22 +139,22 @@ def matrix() -> list[dict]:
             "notes": "Written as the top-level user-check object (sibling of action / action-settings). Defaults match SmartConsole: frequency 'once a day', confirm 'per rule'.",
         },
         {
-            "field": "Install On", "column": "Install On", "level": REUSE, "discovery": None,
+            "field": "Install On", "column": "Install On", "level": REUSE, "discovery": "correlate_gateway",
             "supported": [
-                ("Gateway / cluster / server (by name)", REUSE, "Enumerated via show-gateways-and-servers."),
+                ("Gateway / cluster / server (by name)", REUSE, "Resolve with correlate_gateway (show-gateways-and-servers)."),
                 ("Group of gateways", REUSE, "Validated via a typed fallback."),
                 ("Policy Targets / Any", FULL, "The default (no restriction)."),
             ],
-            "gaps": ["Reuse-only (targets must exist). No dedicated correlate tool yet — pass the exact gateway/group name."],
+            "gaps": ["Reuse-only (targets must exist). A wrong name is caught at publish (atomic)."],
             "notes": "Restricting to specific gateways makes the request ‘restricted’ → precise CREATE.",
         },
         {
-            "field": "VPN", "column": "VPN", "level": REUSE, "discovery": None,
+            "field": "VPN", "column": "VPN", "level": REUSE, "discovery": "correlate_vpn",
             "supported": [
-                ("VPN community (meshed / star / remote-access)", REUSE, "Enumerated via the show-vpn-communities-* commands."),
+                ("VPN community (meshed / star / remote-access)", REUSE, "Resolve with correlate_vpn (show-vpn-communities-*)."),
                 ("All_GwToGw / Any", FULL, "The traffic-agnostic defaults."),
             ],
-            "gaps": ["Reuse-only (communities must exist). No dedicated correlate tool yet — pass the exact community name."],
+            "gaps": ["Reuse-only (communities must exist). A wrong name is caught at publish (atomic)."],
             "notes": "A specific community makes the request ‘restricted’ → precise CREATE.",
         },
         {

@@ -185,11 +185,13 @@
             <option value="Inform">Inform</option>
           </select></label></div>
         <div class="grow"><label>Time <span class="muted">(time object / group)</span>
-          <input id="aa-time" placeholder="Work-Hours" autocomplete="off"></label></div>
+          <input id="aa-time" placeholder="Work-Hours" autocomplete="off" list="aa-timelist">
+          <datalist id="aa-timelist"></datalist></label></div>
       </div>
       <div class="row endalign">
         <div class="grow"><label>Content <span class="muted">(data types — comma-separated)</span>
-          <input id="aa-content" placeholder="SQL Queries, Credit Card Numbers" autocomplete="off"></label></div>
+          <input id="aa-content" placeholder="SQL Queries, Credit Card Numbers" autocomplete="off" list="aa-contentlist">
+          <datalist id="aa-contentlist"></datalist></label></div>
         <div style="width:150px;"><label>Direction
           <select id="aa-content-dir">
             <option value="any">Any</option>
@@ -199,15 +201,18 @@
       </div>
       <div class="row endalign">
         <div class="grow"><label>Install on <span class="muted">(gateways — comma-separated)</span>
-          <input id="aa-install" placeholder="Policy Targets" autocomplete="off"></label></div>
+          <input id="aa-install" placeholder="Policy Targets" autocomplete="off" list="aa-installlist">
+          <datalist id="aa-installlist"></datalist></label></div>
         <div class="grow"><label>VPN <span class="muted">(communities — comma-separated)</span>
-          <input id="aa-vpn" placeholder="All_GwToGw" autocomplete="off"></label></div>
+          <input id="aa-vpn" placeholder="All_GwToGw" autocomplete="off" list="aa-vpnlist">
+          <datalist id="aa-vpnlist"></datalist></label></div>
       </div>
       <div class="aa-asettings" id="aa-asettings">
         <div class="as-h">Action settings — Accept / Ask / Inform</div>
         <div class="row endalign">
           <div class="grow"><label>Bandwidth limit <span class="muted">(a rate, e.g. Upload_10Mbps — not a volume)</span>
-            <input id="aa-limit" placeholder="Upload_10Mbps" autocomplete="off"></label></div>
+            <input id="aa-limit" placeholder="Upload_10Mbps" autocomplete="off" list="aa-limitlist">
+            <datalist id="aa-limitlist"></datalist></label></div>
           <label class="aa-cpx"><input type="checkbox" id="aa-captive"> Enable Identity Captive Portal</label>
         </div>
       </div>
@@ -767,6 +772,12 @@
     typeahead('aa-source', 'aa-srclist', 'object-search', function () { var k = document.getElementById('aa-srctype').value; return k === 'ip' ? '' : k; });
     typeahead('aa-dest', 'aa-dstlist', 'object-search', function () { var k = document.getElementById('aa-dsttype').value; return k === 'ip' ? '' : k; });
     typeahead('aa-uc', 'aa-uclist', 'usercheck-search');   // Advanced options: UserCheck interaction object
+    // Advanced options type-ahead — Time / Content / Install-on / VPN / Limit recommend real CP objects too.
+    typeahead('aa-time', 'aa-timelist', 'field-search', function () { return 'time'; });
+    typeahead('aa-content', 'aa-contentlist', 'field-search', function () { return 'content'; });
+    typeahead('aa-install', 'aa-installlist', 'field-search', function () { return 'gateway'; });
+    typeahead('aa-vpn', 'aa-vpnlist', 'field-search', function () { return 'vpn'; });
+    typeahead('aa-limit', 'aa-limitlist', 'field-search', function () { return 'limit'; });
 
     fetch('/management/' + id + '/layers').then(function (r) { return r.json(); })
       .then(function (data) {

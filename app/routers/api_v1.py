@@ -180,6 +180,16 @@ def api_correlate_user_check(body: CorrelateBody, _=_API):
     return _respond(mcp_tools.correlate_user_check(body.server_id, body.name))
 
 
+@router.post("/access/correlate/gateway", summary="Resolve a gateway phrase to a CP gateway/target (rule Install-On)")
+def api_correlate_gateway(body: CorrelateBody, _=_API):
+    return _respond(mcp_tools.correlate_gateway(body.server_id, body.name))
+
+
+@router.post("/access/correlate/vpn", summary="Resolve a VPN phrase to a CP VPN community (rule VPN column)")
+def api_correlate_vpn(body: CorrelateBody, _=_API):
+    return _respond(mcp_tools.correlate_vpn(body.server_id, body.name))
+
+
 # --- dynamic layers (Rail B) — author + push an access rulebase to a gateway via the Gaia API -----
 class DynRuleBody(BaseModel):
     layer: str

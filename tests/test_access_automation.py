@@ -66,6 +66,27 @@ def test_relation_subset_superset_disjoint_equal():
     assert aa.relation(_host("10.1.0.5"), _host("192.168.0.1")) == Relation.DISJOINT
 
 
+def test_rule_preview_renders_new_widen_and_existing():
+    R = _rule("r5", 5, "Accept", _host("10.1.2.250"), _host("1.1.1.1"), _tcp(443))
+    R.src_names, R.dst_names, R.svc_names = ["win_client"], ["win_server"], ["https"]
+    req = AccessRequest(["10.1.2.250/32"], ["1.1.1.1/32"], "tcp", "443")
+    # NO_OP -> the EXISTING rule, real number + cells, unchanged
+    e = aa._rule_preview(aa.Decision(Outcome.NO_OP, "already", target_rule=R), req, {})
+    assert e["mode"] == "existing" and e["number"] == 5 and e["action"] == "Accept"
+    assert e["cells"]["source"]["items"] == ["win_client"] and e["cells"]["service"]["items"] == ["https"]
+    # WIDEN -> the existing rule with the ADDED object highlighted in the widened cell
+    w = aa._rule_preview(aa.Decision(Outcome.WIDEN, "add src", target_rule=R, widen_field="source"),
+                         req, {"widen": {"object": {"name": "kali_linux"}}})
+    assert w["mode"] == "widen" and w["number"] == 5 and w["cells"]["source"]["added"] == ["kali_linux"]
+    # CREATE -> a NEW rule (no number yet), request action + cells + placement
+    c = aa._rule_preview(aa.Decision(Outcome.CREATE, "create"),
+                         AccessRequest(["10.1.2.250/32"], ["1.1.1.1/32"], "tcp", "443", action="Drop"),
+                         {"source": {"name": "S"}, "destination": {"name": "D"},
+                          "service": {"name": "tcp/443"}, "position": "above rule 9 (Cleanup rule)"})
+    assert c["mode"] == "new" and c["number"] is None and c["action"] == "Drop"
+    assert c["cells"]["destination"]["items"] == ["D"] and c["position"] == "above rule 9 (Cleanup rule)"
+
+
 def test_svc_relation_multikind_equal_only_on_true_equality():
     # A MULTI-kind request (tcp/443 + a named service) equal to the rule cell now reads EQUAL — which
     # unlocks a WIDEN on another dimension. It must be EQUAL ONLY when the rule is EXACTLY the request:

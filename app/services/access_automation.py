@@ -2989,6 +2989,65 @@ def _req_gap_label(req: "AccessRequest", gap: str) -> str:
     return ", ".join(cidrs or []) or "Any"
 
 
+def _cell_items(names: list, is_any: bool) -> list:
+    """Display cells for a rule column: the real object names, else ['Any'] for an Any cell, else []."""
+    if names:
+        return list(names)
+    return ["Any"] if is_any else []
+
+
+def _req_columns(req: "AccessRequest") -> list:
+    """The restriction/setting columns THIS request sets (for the new rule's chips) — order matches SmartConsole."""
+    cols = []
+    if req.time_objects:
+        cols.append("time")
+    if req.has_content:
+        cols.append("content")
+    if req.install_on:
+        cols.append("install-on")
+    if req.vpn:
+        cols.append("vpn")
+    if req.action_settings_limit:
+        cols.append("limit")
+    if req.action_settings_captive_portal:
+        cols.append("captive portal")
+    return cols
+
+
+def _rule_preview(decision: "Decision", req: "AccessRequest", out: dict) -> Optional[dict]:
+    """A faithful rule-ROW render of the decision so the UI can show exactly how the rule will look:
+      * no_op → the EXISTING rule that already permits it (real number + cells), unchanged.
+      * widen → the EXISTING rule (real number + cells) with the object being ADDED highlighted in its cell.
+      * create → the NEW rule (cells from the request, action, where it'll be placed; no number yet).
+    Display-only — every value is already computed above; this just shapes it for a rule-row widget."""
+    tr = decision.target_rule
+    if decision.outcome == Outcome.NO_OP and tr is not None:
+        return {"mode": "existing", "number": tr.number, "name": tr.name, "action": tr.action or "Accept",
+                "cells": {"source": {"items": _cell_items(tr.src_names, _covers(tr.src, ANY_IP))},
+                          "destination": {"items": _cell_items(tr.dst_names, _covers(tr.dst, ANY_IP))},
+                          "service": {"items": _cell_items(tr.svc_names, tr.svc.any)}},
+                "columns": list(tr.conditions or [])}
+    if decision.outcome == Outcome.WIDEN and tr is not None:
+        field = decision.widen_field or "source"
+        added = ((out.get("widen") or {}).get("object") or {}).get("name")
+        cells = {"source": {"items": _cell_items(tr.src_names, _covers(tr.src, ANY_IP))},
+                 "destination": {"items": _cell_items(tr.dst_names, _covers(tr.dst, ANY_IP))},
+                 "service": {"items": _cell_items(tr.svc_names, tr.svc.any)}}
+        if added and field in cells:
+            cells[field]["added"] = [added]
+        return {"mode": "widen", "number": tr.number, "name": tr.name, "action": tr.action or "Accept",
+                "cells": cells, "widen_field": field, "columns": list(tr.conditions or [])}
+    if decision.outcome == Outcome.CREATE:
+        def _nm(k):
+            return ((out.get(k) or {}).get("name")) or "Any"
+        return {"mode": "new", "number": None, "name": None, "action": req.canon_action,
+                "cells": {"source": {"items": [_nm("source")]},
+                          "destination": {"items": [_nm("destination")]},
+                          "service": {"items": [_nm("service")]}},
+                "position": out.get("position"), "columns": _req_columns(req)}
+    return None
+
+
 def build_preview(session, decision: Decision, req: AccessRequest, rules: list[ParsedRule]) -> dict:
     """Read-only: report exactly what execute() would do, without writing anything."""
     out: dict = {"outcome": decision.outcome.value, "reason": decision.reason,
@@ -3000,7 +3059,10 @@ def build_preview(session, decision: Decision, req: AccessRequest, rules: list[P
         out.update(notes_payload(decision.notes))
     if decision.layer:                       # the change lands inside an inline layer, not the top layer
         out["layer"] = decision.layer
-    if decision.outcome in (Outcome.NO_OP, Outcome.REVIEW):
+    if decision.outcome is Outcome.NO_OP:
+        out["rule_preview"] = _rule_preview(decision, req, out)   # the existing rule that already permits it
+        return out
+    if decision.outcome is Outcome.REVIEW:
         return out
 
     if decision.outcome == Outcome.WIDEN:
@@ -3016,6 +3078,7 @@ def build_preview(session, decision: Decision, req: AccessRequest, rules: list[P
         if (decision.position or {}).get("_anomaly"):
             out["anomaly"] = True
         _partial_overlay(decision, out)   # "already permitted for these sources, just not the one asked"
+    out["rule_preview"] = _rule_preview(decision, req, out)   # the new (create) / updated (widen) rule row
     return out
 
 

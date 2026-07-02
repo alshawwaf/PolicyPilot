@@ -28,6 +28,34 @@
   .aa-cd-pre { margin:0; padding:11px 13px; background:var(--surface-3); border:1px solid var(--line-soft);
     border-radius:10px; font-family:var(--font-mono,monospace); font-size:11.5px; line-height:1.5; color:var(--text-2);
     white-space:pre-wrap; word-break:break-word; max-height:300px; overflow:auto; }
+  /* ---- Rule card: a SmartConsole-style row showing how the rule will look ---- */
+  .rulecard { margin-top:12px; border:1px solid var(--line); border-radius:14px; overflow:hidden; background:var(--surface-1); }
+  .rulecard.new { border-color:var(--warn); box-shadow:0 0 0 1px var(--warn-bg); }
+  .rulecard.widen { border-color:var(--info); box-shadow:0 0 0 1px var(--info-bg); }
+  .rulecard.existing { border-color:rgba(52,211,153,.5); box-shadow:0 0 0 1px var(--ok-bg); }
+  .rc-head { display:flex; align-items:center; gap:10px; padding:8px 13px; background:var(--surface-2); border-bottom:1px solid var(--line-soft); flex-wrap:wrap; }
+  .rc-tag { font-size:10.5px; font-weight:800; letter-spacing:.05em; text-transform:uppercase; }
+  .rc-cols { display:flex; gap:5px; flex-wrap:wrap; margin-left:auto; }
+  .rc-col-chip { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.03em; color:var(--accent);
+    background:var(--accent-soft); border-radius:6px; padding:2px 7px; }
+  .rc-scroll { overflow-x:auto; }
+  .rc-table { width:100%; border-collapse:collapse; font-size:12.5px; }
+  .rc-table thead th { text-align:left; font-size:10px; font-weight:700; letter-spacing:.04em; text-transform:uppercase;
+    color:var(--faint); padding:8px 12px; border-bottom:1px solid var(--line-soft); white-space:nowrap; }
+  .rc-table td { padding:11px 12px; vertical-align:middle; border-bottom:0; }
+  .rc-table td + td { border-left:1px solid var(--line-soft); }
+  .rc-no { width:1%; white-space:nowrap; font-weight:700; color:var(--muted); }
+  .rc-new { display:inline-block; font-size:10px; font-weight:800; letter-spacing:.05em; color:#fff;
+    background:var(--accent-grad); border-radius:6px; padding:2px 8px; box-shadow:0 2px 6px rgba(123,63,242,.3); }
+  .rc-nm { max-width:170px; font-weight:600; }
+  .rc-chips { display:flex; gap:5px; flex-wrap:wrap; }
+  .rc-chip { font-size:12px; background:var(--surface-3); border:1px solid var(--line-soft); border-radius:7px; padding:3px 9px; white-space:nowrap; }
+  .rc-chip.any { color:var(--muted); font-style:italic; }
+  .rc-chip.add { color:var(--info); background:var(--info-bg); border-color:var(--info); font-weight:700;
+    box-shadow:0 0 0 2px var(--info-bg); }
+  .rc-a { width:1%; }
+  .rc-act { font-size:11px; font-weight:700; border-radius:7px; padding:4px 11px; white-space:nowrap; }
+  .rc-cap { padding:8px 13px; font-size:12px; color:var(--muted); background:var(--surface-2); border-top:1px solid var(--line-soft); }
 </style>
 <div class="page-head">
   <span class="icon-chip lg"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></span>
@@ -274,6 +302,51 @@
       var m = map[o] || ['?', 'var(--chip-bg)', 'var(--chip-fg)'];
       return '<span class="pill" style="background:' + m[1] + ';color:' + m[2] + ';font-size:12px;">' + m[0] + '</span>';
     }
+    // A SmartConsole-style rule ROW showing exactly how the rule will look for this decision.
+    function actionChip(a) {
+      var A = String(a || 'Accept'), k = A.toLowerCase();
+      var col = (k === 'accept') ? ['var(--ok)', 'var(--ok-bg)']
+        : (k === 'drop' || k === 'reject') ? ['var(--danger)', 'var(--danger-bg)']
+        : (k === 'apply layer') ? ['#a855f7', 'rgba(168,85,247,.16)']
+        : ['var(--warn)', 'var(--warn-bg)'];   // ask / inform
+      return '<span class="rc-act" style="color:' + col[0] + ';background:' + col[1] + '">' + esc(A) + '</span>';
+    }
+    function ruleCells(cells) {
+      return ['source', 'destination', 'service'].map(function (f) {
+        var c = (cells && cells[f]) || {}, items = c.items || [], added = c.added || [];
+        var chips = items.map(function (n) { return '<span class="rc-chip">' + esc(n) + '</span>'; });
+        added.forEach(function (n) { chips.push('<span class="rc-chip add">+ ' + esc(n) + '</span>'); });
+        if (!chips.length) chips.push('<span class="rc-chip any">Any</span>');
+        return '<td class="rc-cell" data-col="' + f + '"><div class="rc-chips">' + chips.join('') + '</div></td>';
+      }).join('');
+    }
+    function ruleCard(rp) {
+      var isNew = rp.mode === 'new';
+      var no = isNew ? '<span class="rc-new">NEW</span>' : ('#' + rp.number);
+      var name = rp.name ? esc(rp.name) : (isNew ? '<span class="muted">name set on publish</span>' : '');
+      var cols = (rp.columns || []).map(function (c) { return '<span class="rc-col-chip">' + esc(c) + '</span>'; }).join('');
+      var tag = { 'new': ['Rule to create', 'var(--warn)'], 'widen': ['Rule to update', 'var(--info)'],
+                  'existing': ['Existing rule — no change', 'var(--ok)'] }[rp.mode] || ['Rule', 'var(--muted)'];
+      var cap = '';
+      if (isNew && rp.position) cap = 'Inserted ' + esc(rp.position);
+      else if (rp.mode === 'widen') cap = 'Its ' + esc(rp.widen_field || 'source') + ' cell gains the highlighted object — no new rule';
+      else if (rp.mode === 'existing') cap = 'This rule already permits the request';
+      return '' +
+        '<div class="rulecard ' + rp.mode + '">' +
+          '<div class="rc-head"><span class="rc-tag" style="color:' + tag[1] + '">' + tag[0] + '</span>' +
+            (cols ? '<span class="rc-cols">' + cols + '</span>' : '') + '</div>' +
+          '<div class="rc-scroll"><table class="rc-table"><thead><tr>' +
+            '<th class="rc-no">No.</th><th class="rc-nm">Name</th><th>Source</th>' +
+            '<th>Destination</th><th>Service &amp; App</th><th class="rc-a">Action</th></tr></thead>' +
+            '<tbody><tr>' +
+              '<td class="rc-no">' + no + '</td>' +
+              '<td class="rc-nm">' + name + '</td>' +
+              ruleCells(rp.cells) +
+              '<td class="rc-a">' + actionChip(rp.action) + '</td>' +
+            '</tr></tbody></table></div>' +
+          (cap ? '<div class="rc-cap">' + cap + '</div>' : '') +
+        '</div>';
+    }
     function objLine(label, obj) {
       if (!obj) return '';
       var verb;
@@ -343,6 +416,10 @@
       var h = '<div class="runbox">';
       h += '<div class="row" style="align-items:center; gap:10px;">' + outcomeBadge(j.outcome) +
            '<span>' + esc(j.reason) + '</span></div>';
+      // A faithful rule-ROW render of the decision — the NEW rule (create), the UPDATED rule with the
+      // added object highlighted (widen), or the EXISTING rule that already permits it (no_op), with its
+      // real number. Shows the operator exactly how the rule will look before they publish.
+      if (j.rule_preview) h += ruleCard(j.rule_preview);
       // Advisories, rendered by KIND (j.notes_detail: [{text, kind}]). Not every note is benign: a
       // "shadow" note means this placement NEUTRALIZES a more-specific deny below it (an over-grant
       // warning) — it must read as a danger, never as info-blue "review later". "redundant" warns the

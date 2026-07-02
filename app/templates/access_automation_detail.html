@@ -69,6 +69,24 @@
   .aa-asettings .as-h { font-size:11.5px; font-weight:700; letter-spacing:.03em; text-transform:uppercase; color:var(--muted); margin-bottom:9px; }
   .aa-cpx { display:flex; align-items:center; gap:8px; font-size:13px; white-space:nowrap; align-self:flex-end; padding-bottom:8px; }
   .aa-cpx input { width:16px; height:16px; }
+  /* Chips multiselect — pick one or more objects (searchable) that show as removable tokens in the field. */
+  .chips { position:relative; }
+  .chips-box { display:flex; flex-wrap:wrap; gap:6px; align-items:center; min-height:40px; padding:6px 8px;
+    border:1px solid var(--line); border-radius:10px; background:var(--surface-2); cursor:text; margin-top:5px; }
+  .chips-box:focus-within { border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-soft); }
+  .chip { display:inline-flex; align-items:center; gap:6px; font-size:12.5px; background:var(--accent-soft);
+    color:var(--accent); border:1px solid var(--accent); border-radius:8px; padding:3px 6px 3px 9px; white-space:nowrap; }
+  .chip .x { cursor:pointer; width:15px; height:15px; display:inline-flex; align-items:center; justify-content:center;
+    border-radius:50%; font-size:14px; line-height:1; color:var(--accent); opacity:.7; }
+  .chip .x:hover { opacity:1; background:var(--accent); color:#fff; }
+  .chips-in { flex:1; min-width:90px; border:0; background:none; padding:4px 2px; font-size:13px; color:var(--text); outline:none; }
+  .chips-menu { position:absolute; z-index:40; left:0; right:0; top:calc(100% + 4px); background:var(--surface-2);
+    border:1px solid var(--line); border-radius:10px; box-shadow:0 12px 30px -10px rgba(0,0,0,.4); overflow:hidden; max-height:220px; overflow-y:auto; }
+  .chips-opt { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:8px 11px; font-size:13px; cursor:pointer; }
+  .chips-opt:hover, .chips-opt.on { background:var(--accent-soft); }
+  .chips-opt .k { font-size:10.5px; color:var(--muted); text-transform:uppercase; letter-spacing:.03em; }
+  .chips-opt .add { color:var(--accent); font-weight:600; }
+  .chips-empty { padding:9px 11px; font-size:12.5px; color:var(--muted); }
 </style>
 <div class="page-head">
   <span class="icon-chip lg"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></span>
@@ -189,8 +207,8 @@
           <datalist id="aa-timelist"></datalist></label></div>
       </div>
       <div class="row endalign">
-        <div class="grow"><label>Content <span class="muted">(data types — comma-separated)</span>
-          <input id="aa-content" placeholder="SQL Queries, Credit Card Numbers" autocomplete="off" list="aa-contentlist">
+        <div class="grow"><label>Content <span class="muted">(data types — search &amp; pick)</span>
+          <input id="aa-content" placeholder="Search data types…" autocomplete="off" list="aa-contentlist">
           <datalist id="aa-contentlist"></datalist></label></div>
         <div style="width:150px;"><label>Direction
           <select id="aa-content-dir">
@@ -200,11 +218,11 @@
           </select></label></div>
       </div>
       <div class="row endalign">
-        <div class="grow"><label>Install on <span class="muted">(gateways — comma-separated)</span>
-          <input id="aa-install" placeholder="Policy Targets" autocomplete="off" list="aa-installlist">
+        <div class="grow"><label>Install on <span class="muted">(gateways — search &amp; pick)</span>
+          <input id="aa-install" placeholder="Search gateways…" autocomplete="off" list="aa-installlist">
           <datalist id="aa-installlist"></datalist></label></div>
-        <div class="grow"><label>VPN <span class="muted">(communities — comma-separated)</span>
-          <input id="aa-vpn" placeholder="All_GwToGw" autocomplete="off" list="aa-vpnlist">
+        <div class="grow"><label>VPN <span class="muted">(communities — search &amp; pick)</span>
+          <input id="aa-vpn" placeholder="Search communities…" autocomplete="off" list="aa-vpnlist">
           <datalist id="aa-vpnlist"></datalist></label></div>
       </div>
       <div class="aa-asettings" id="aa-asettings">
@@ -772,12 +790,80 @@
     typeahead('aa-source', 'aa-srclist', 'object-search', function () { var k = document.getElementById('aa-srctype').value; return k === 'ip' ? '' : k; });
     typeahead('aa-dest', 'aa-dstlist', 'object-search', function () { var k = document.getElementById('aa-dsttype').value; return k === 'ip' ? '' : k; });
     typeahead('aa-uc', 'aa-uclist', 'usercheck-search');   // Advanced options: UserCheck interaction object
-    // Advanced options type-ahead — Time / Content / Install-on / VPN / Limit recommend real CP objects too.
+    // Single-value Advanced fields keep the simple datalist type-ahead.
     typeahead('aa-time', 'aa-timelist', 'field-search', function () { return 'time'; });
-    typeahead('aa-content', 'aa-contentlist', 'field-search', function () { return 'content'; });
-    typeahead('aa-install', 'aa-installlist', 'field-search', function () { return 'gateway'; });
-    typeahead('aa-vpn', 'aa-vpnlist', 'field-search', function () { return 'vpn'; });
     typeahead('aa-limit', 'aa-limitlist', 'field-search', function () { return 'limit'; });
+
+    // Multi-value fields (Content / Install-on / VPN) get a CHIPS multiselect: search a menu, click to add a
+    // removable token; the hidden input keeps the comma-joined value body() already reads (progressive
+    // enhancement — the plain field still works if JS is off).
+    function chipSelect(inputId, kind) {
+      var orig = document.getElementById(inputId);
+      if (!orig) return;
+      var ph = orig.getAttribute('placeholder') || '';
+      orig.type = 'hidden';
+      var values = splitList(orig.value) || [];   // splitList returns undefined when empty; chips need an array
+      var wrap = document.createElement('div'); wrap.className = 'chips';
+      var box = document.createElement('div'); box.className = 'chips-box';
+      var input = document.createElement('input'); input.className = 'chips-in'; input.type = 'text';
+      input.autocomplete = 'off'; input.setAttribute('aria-label', ph || inputId);
+      var menu = document.createElement('div'); menu.className = 'chips-menu'; menu.hidden = true;
+      box.appendChild(input); wrap.appendChild(box); wrap.appendChild(menu);
+      orig.parentNode.insertBefore(wrap, orig.nextSibling);
+      function sync() { orig.value = values.join(', '); input.placeholder = values.length ? '' : ph; setActionable(false); }
+      function renderChips() {
+        Array.prototype.forEach.call(box.querySelectorAll('.chip'), function (c) { c.remove(); });
+        values.forEach(function (v, i) {
+          var chip = document.createElement('span'); chip.className = 'chip';
+          chip.innerHTML = esc(v) + '<span class="x" role="button" aria-label="Remove ' + escAttr(v) + '">×</span>';
+          chip.querySelector('.x').addEventListener('click', function (e) {
+            e.stopPropagation(); values.splice(i, 1); renderChips(); sync(); input.focus();
+          });
+          box.insertBefore(chip, input);
+        });
+      }
+      function closeMenu() { clearTimeout(t); menu.hidden = true; menu.innerHTML = ''; }
+      function add(v) {
+        v = (v || '').trim();
+        if (v && values.indexOf(v) < 0) { values.push(v); renderChips(); sync(); }
+        input.value = ''; closeMenu();
+      }
+      function openMenu(cands, q) {
+        var items = (cands || []).filter(function (c) { return values.indexOf(c.name) < 0; });
+        var html = '';
+        if (q && values.indexOf(q) < 0 && !items.some(function (c) { return c.name === q; }))
+          html += '<div class="chips-opt" data-add="' + escAttr(q) + '"><span>' + esc(q) + '</span><span class="add">use exact</span></div>';
+        html += items.slice(0, 10).map(function (c) {
+          return '<div class="chips-opt" data-add="' + escAttr(c.name) + '"><span>' + esc(c.name) + '</span><span class="k">' + esc(c.kind || '') + '</span></div>';
+        }).join('');
+        menu.innerHTML = html || '<div class="chips-empty">No matches — type an exact name, then Enter.</div>';
+        menu.hidden = false;
+      }
+      var t;
+      box.addEventListener('click', function () { input.focus(); });
+      input.addEventListener('input', function () {
+        var q = input.value.trim(); clearTimeout(t);
+        if (q.length < 2) { closeMenu(); return; }
+        t = setTimeout(function () {
+          fetch('/access-automation/' + id + '/field-search?kind=' + encodeURIComponent(kind) + '&q=' + encodeURIComponent(q))
+            .then(function (r) { return r.json(); }).then(function (d) { openMenu(d.candidates || [], q); }).catch(function () {});
+        }, 220);
+      });
+      input.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') { e.preventDefault(); if (input.value.trim()) add(input.value); }
+        else if (e.key === 'Backspace' && !input.value && values.length) { values.pop(); renderChips(); sync(); }
+        else if (e.key === 'Escape') closeMenu();
+      });
+      menu.addEventListener('mousedown', function (e) {   // mousedown fires before the input's blur
+        var opt = e.target.closest ? e.target.closest('[data-add]') : null;
+        if (opt) { e.preventDefault(); add(opt.getAttribute('data-add')); }
+      });
+      document.addEventListener('click', function (e) { if (!wrap.contains(e.target)) closeMenu(); });
+      renderChips(); sync();
+    }
+    chipSelect('aa-content', 'content');
+    chipSelect('aa-install', 'gateway');
+    chipSelect('aa-vpn', 'vpn');
 
     fetch('/management/' + id + '/layers').then(function (r) { return r.json(); })
       .then(function (data) {

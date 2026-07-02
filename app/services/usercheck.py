@@ -87,18 +87,27 @@ def resolve(session, term: str) -> dict:
         out["note"] = (f"No Check Point UserCheck object matches “{term}” (or this server doesn't index them "
                        f"— pass the exact name; it's validated when the rule is published).")
         return out
-    exacts = [c for (lvl, _), c in scored if lvl == "exact"]
-    norms = [c for (lvl, _), c in scored if lvl == "normalized"]
-    win = (exacts[0] if (not truncated and len(exacts) == 1)
-           else norms[0] if (not truncated and not exacts and len(norms) == 1) else None)
+    cands = [(lvl, sc, c) for (lvl, sc), c in scored if sc >= 0.4]
+    exacts = [c for lvl, _sc, c in cands if lvl == "exact"]
+    norms = [c for lvl, _sc, c in cands if lvl == "normalized"]
+    win, conf = None, ""
+    if not truncated:
+        if len(exacts) == 1:
+            win, conf = exacts[0], "exact"
+        elif not exacts and len(norms) == 1:
+            win, conf = norms[0], "normalized"
+        elif len(cands) == 1:
+            # A UserCheck interaction is a cosmetic MESSAGE object, not access-determining — so a SINGLE
+            # clear match (e.g. "block message" → the one "Blocked Message …" object) is safe to auto-select:
+            # a wrong pick only shows a different page, never a wrong grant. So the user needn't type the full
+            # object name. (The identity/service/app resolvers stay strict — there a wrong object = wrong access.)
+            win, conf = cands[0][2], "likely"
     if win is not None:
-        out["match"], out["match_kind"] = win["name"], win["kind"]
-        out["confidence"] = "exact" if exacts else "normalized"
-    out["candidates"] = [{"name": c["name"], "kind": c["kind"], "score": round(sc, 2)}
-                         for (lvl, sc), c in scored if sc >= 0.4][:8]
+        out["match"], out["match_kind"], out["confidence"] = win["name"], win["kind"], conf
+    out["candidates"] = [{"name": c["name"], "kind": c["kind"], "score": round(sc, 2)} for _lvl, sc, c in cands][:8]
     if not out["match"]:
         out["note"] = (f"Too many matches for “{term}” — refine the name." if truncated
-                       else (f"“{term}” is ambiguous — choose the exact UserCheck object."
+                       else (f"Several UserCheck objects match “{term}” — pick which one."
                              if out["candidates"] else f"No close match for “{term}”."))
     return out
 

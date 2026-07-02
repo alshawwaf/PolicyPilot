@@ -63,3 +63,17 @@ def test_mcp_correlate_user_check_delegates(monkeypatch):
     monkeypatch.setattr(mcp_tools, "_server_secret",
                         lambda db, sid: (_ for _ in ()).throw(ValueError("no such server")))
     assert "error" in mcp_tools.correlate_user_check(9, "Company Policy")
+
+
+def test_resolve_unique_fuzzy_match_auto_selects():
+    # "block message" (loose) is the ONLY UserCheck match -> auto-select it (a message is cosmetic, so the
+    # user needn't type the full "Blocked Message - Access Control"). Non-exact -> confidence "likely".
+    r = uc.resolve(FakeSession(_OBJS), "blocked message")
+    assert r["match"] == "Blocked Message - Access Control" and r["confidence"] in ("likely", "normalized", "exact")
+
+
+def test_resolve_multiple_matches_still_asks():
+    two = [{"name": "Blocked Message - Access Control", "uid": "u1", "type": "user-check-drop"},
+           {"name": "Blocked Message - Threat Prevention", "uid": "u2", "type": "user-check-drop"}]
+    r = uc.resolve(FakeSession(two), "blocked message")
+    assert r["match"] is None and len(r["candidates"]) == 2 and r["note"]

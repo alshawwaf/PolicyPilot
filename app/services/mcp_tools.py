@@ -717,8 +717,10 @@ def _correlate_typed(server_id: str, name: str, kind: str) -> dict:
 def correlate_user_check(server_id: str, name: str) -> dict:
     """Map a UserCheck phrase ("the blocked message", "company policy") to the real Check Point UserCheck
     interaction object, or return candidates. Pass the returned ``match`` as ``user_check`` on an Ask / Inform
-    (the prompt) or a Drop / Reject (the blocked-message page). Reuse-only — the object is defined in
-    SmartConsole (UserCheck); if none matches, relay the candidates or say one must be created first."""
+    (the prompt) or a Drop / Reject (the blocked-message page). A LOOSE phrase auto-resolves when it's the
+    ONLY UserCheck match (the message is cosmetic, not access-determining, so the user needn't type the exact
+    name); if several match, it returns candidates to pick. Reuse-only — defined in SmartConsole (UserCheck);
+    if none matches, relay the candidates or say one must be created first."""
     db = SessionLocal()
     try:
         ms, secret = _server_secret(db, server_id)

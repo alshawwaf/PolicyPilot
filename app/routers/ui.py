@@ -52,6 +52,15 @@ def field_support_page(request: Request, db: Session = Depends(get_db)):
     })
 
 
+@router.get("/handbook", response_class=HTMLResponse)
+def handbook_page(request: Request, db: Session = Depends(get_db)):
+    """The in-app Handbook: what PolicyPilot is, driving the desktop, access automation, the interfaces,
+    deploying, and administration — the single onboarding read for a new user or admin."""
+    if get_user_or_none(request, db) is None:
+        return RedirectResponse("/login", status_code=303)
+    return templates.TemplateResponse(request, "handbook.html", {})
+
+
 @router.get("/mcp-guide", response_class=HTMLResponse)
 def mcp_guide_page(request: Request, db: Session = Depends(get_db)):
     """Onboarding for the MCP server: the tool catalog + copy-paste connect config for the common

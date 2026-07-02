@@ -96,3 +96,49 @@ def test_typed_object_preview_recommends_for_missing_reuse_only():
     # a creatable domain that's missing just gets created -> no candidates noise
     prev_dom = aa.typed_object_preview(s, "domain", "newsite.com")
     assert prev_dom["creatable"] is True and "candidates" not in prev_dom
+
+
+def test_resolve_auto_matches_a_unique_exact_access_role():
+    s = _roles_and_domains()
+    r = to.resolve(s, "access-role", "Finance_Users")
+    assert r["match"] == "Finance_Users" and r["confidence"] == "exact" and r["match_kind"] == "access-role"
+
+
+def test_resolve_no_auto_match_when_not_a_unique_exact():
+    # "Finance" matches Finance_Users as a substring but is NOT a unique exact -> no silent pick
+    s = FakeSession([{"name": "Finance_Users", "uid": "r1", "type": "access-role"},
+                     {"name": "Finance_Admins", "uid": "r2", "type": "access-role"}])
+    r = to.resolve(s, "access-role", "Finance")
+    assert r["match"] is None and r["note"]
+
+
+def test_resolve_zone_and_no_match_note():
+    s = FakeSession([{"name": "DMZ", "uid": "z1", "type": "security-zone"}])
+    assert to.resolve(s, "security-zone", "DMZ")["match"] == "DMZ"
+    miss = to.resolve(s, "security-zone", "Nonexistent")
+    assert miss["match"] is None and miss["note"]
+
+
+def test_resolve_query_type_matches_the_apply_side_lookup():
+    # DRIFT GUARD: correlate must query the SAME object type the apply path (lookup_typed_object) resolves,
+    # else a discovered name could fail to apply. _KIND_TYPE value == _TYPED_OBJ[kind]["type"].
+    for kind, cp_type in to._KIND_TYPE.items():
+        assert cp_type == aa._TYPED_OBJ[kind]["type"], kind
+
+
+def test_mcp_correlate_access_role_and_zone_delegate(monkeypatch):
+    from app.services import mcp_tools
+    monkeypatch.setattr(mcp_tools, "_server_secret",
+                        lambda db, sid: (types.SimpleNamespace(id=sid, host="h"), "secret"))
+
+    class _RS:
+        def __enter__(self): return FakeSession([
+            {"name": "Finance_Users", "uid": "r1", "type": "access-role"},
+            {"name": "DMZ", "uid": "z1", "type": "security-zone"}])
+        def __exit__(self, *a): return False
+    monkeypatch.setattr("app.services.mgmt_api.read_session", lambda ms, secret: _RS())
+    assert mcp_tools.correlate_access_role(1, "Finance_Users")["match"] == "Finance_Users"
+    assert mcp_tools.correlate_zone(1, "DMZ")["match"] == "DMZ"
+    monkeypatch.setattr(mcp_tools, "_server_secret",
+                        lambda db, sid: (_ for _ in ()).throw(ValueError("no such server")))
+    assert "error" in mcp_tools.correlate_access_role(9, "Finance_Users")

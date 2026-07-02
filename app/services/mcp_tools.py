@@ -216,7 +216,11 @@ def decide_access(server_id: str, source: str, destination: str, layer: str, ser
     Source/destination default to IP/CIDR/Any; set ``source_kind``/``destination_kind`` to a typed kind
     (domain / access-role / dynamic-object / updatable-object / security-zone) to reason in that identity
     space — e.g. does a host have access to the domain ``alshawwaf.ca`` (source_kind stays ip,
-    destination_kind=domain, destination='alshawwaf.ca').
+    destination_kind=domain, destination='alshawwaf.ca'). ZERO-TRUST by IDENTITY: resolve an identity phrase
+    FIRST — correlate_access_role ("the finance role" → an Identity-Awareness access-role) or correlate_zone
+    ("DMZ" → a security-zone) — then pass the returned match as source/destination with
+    source_kind/destination_kind = "access-role" / "security-zone". Both are REUSE-ONLY (defined in Identity
+    Awareness / topology; the engine never creates them) — if none matches, relay the candidates.
 
     RESTRICTION COLUMNS (time / content / action limit) take EXACT Check Point object names — resolve a
     natural phrase FIRST, exactly as you would a service with correlate_service:
@@ -662,6 +666,42 @@ def correlate_content(server_id: str, name: str) -> dict:
     types are reuse-only (must exist on the server); Content inspection also requires the Content Awareness
     blade enabled on the gateway."""
     return _correlate_object(server_id, name, "resolve_content")
+
+
+def _correlate_typed(server_id: str, name: str, kind: str) -> dict:
+    """Shared body for the typed-identity correlators (access-role / security-zone): resolve the server,
+    then typed_objects.resolve(kind). Returns {term, match, confidence, candidates, note}."""
+    db = SessionLocal()
+    try:
+        ms, secret = _server_secret(db, server_id)
+    except ValueError as exc:
+        db.close()
+        return {"error": str(exc)}
+    db.close()
+    from . import typed_objects
+    from .mgmt_api import MgmtError, read_session
+    try:
+        with read_session(ms, secret) as s:
+            return typed_objects.resolve(s, kind, name)
+    except MgmtError as exc:
+        return {"error": str(exc)}
+
+
+def correlate_access_role(server_id: str, name: str) -> dict:
+    """Map an identity phrase ("the finance role", "Finance_Users") to the real Check Point ACCESS-ROLE
+    object (Identity Awareness), or return candidates. This is the ZERO-TRUST source: pass the returned
+    ``match`` as source (with source_kind="access-role") so access follows the user's IDENTITY, not an IP.
+    Access-roles are REUSE-ONLY — they're defined in Identity Awareness and the engine never creates one; if
+    none matches, relay the candidates or say a role must be created in SmartConsole first."""
+    return _correlate_typed(server_id, name, "access-role")
+
+
+def correlate_zone(server_id: str, name: str) -> dict:
+    """Map a zone phrase ("internal zone", "DMZ") to the real Check Point SECURITY-ZONE object (gateway
+    topology), or return candidates. Pass the returned ``match`` as source/destination with the matching
+    source_kind/destination_kind="security-zone". Security-zones are REUSE-ONLY (defined by interface
+    topology); if none matches, relay the candidates or say one must be defined first."""
+    return _correlate_typed(server_id, name, "security-zone")
 
 
 def correlate_limit(server_id: str, name: str) -> dict:

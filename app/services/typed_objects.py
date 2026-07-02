@@ -110,6 +110,52 @@ def suggest(session, kind: str, term: str) -> list:
             for (lvl, sc), c in scored if sc >= 0.4][:8]
 
 
+_RESOLVE_LIMIT = 200      # deep page so a duplicate can't hide past the cutoff (truncation guard)
+
+
+def resolve(session, kind: str, term: str) -> dict:
+    """Map ``term`` to a real Check Point object of ``kind`` (access-role / security-zone / dns-domain /
+    dynamic-object / updatable-object) for a TYPED source/destination — returns {term, match, match_kind,
+    confidence, candidates, note}. ``match`` is set ONLY for a confident, UNIQUE exact / normalized-exact
+    hit over a COMPLETE (non-truncated) page — a wrong identity object is a wrong access. Queries the SAME
+    ``show-objects type=…`` the apply path resolves against (access_automation.lookup_typed_object), so a
+    matched name always validates + applies cleanly."""
+    kind = (kind or "").lower()
+    term = (term or "").strip()
+    out = {"term": term, "match": None, "match_kind": kind, "confidence": "", "candidates": [], "note": ""}
+    if not supported_kind(kind):
+        out["note"] = f"“{kind}” is not a typed object kind."
+        return out
+    if not term:
+        return out
+    try:
+        r = session.call("show-objects", {"filter": term, "type": _KIND_TYPE[kind],
+                                          "limit": _RESOLVE_LIMIT, "details-level": "full"})
+        raw = r.get("objects") or []
+        total = r.get("total")
+        truncated = len(raw) >= _RESOLVE_LIMIT or (total is not None and total > len(raw))
+    except Exception:  # noqa: BLE001 — best-effort; a failure just yields no candidates
+        raw, truncated = [], False
+    scored = sorted(((_score(term, c["name"]), c) for c in _candidates(raw, kind)),
+                    key=lambda x: x[0][1], reverse=True)
+    if not scored:
+        out["note"] = f"No Check Point {kind} matches “{term}”."
+        return out
+    exacts = [c for (lvl, _), c in scored if lvl == "exact"]
+    norms = [c for (lvl, _), c in scored if lvl == "normalized"]
+    win = (exacts[0] if (not truncated and len(exacts) == 1)
+           else norms[0] if (not truncated and not exacts and len(norms) == 1) else None)
+    if win is not None:
+        out["match"], out["confidence"] = win["name"], ("exact" if exacts else "normalized")
+    out["candidates"] = [{"name": c["name"], "kind": c["kind"], "category": c.get("category", ""),
+                          "score": round(sc, 2)} for (lvl, sc), c in scored if sc >= 0.4][:8]
+    if not out["match"]:
+        out["note"] = (f"Too many matches for “{term}” — refine the name." if truncated
+                       else (f"“{term}” is ambiguous — choose the exact {kind}." if out["candidates"]
+                             else f"No close match for “{term}”."))
+    return out
+
+
 def search_server(server, secret: str, kind: str, term: str) -> list:
     from .mgmt_api import read_session
     with read_session(server, secret) as s:

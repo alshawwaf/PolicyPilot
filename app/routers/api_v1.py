@@ -165,6 +165,16 @@ def api_correlate_limit(body: CorrelateBody, _=_API):
     return _respond(mcp_tools.correlate_limit(body.server_id, body.name))
 
 
+@router.post("/access/correlate/access-role", summary="Resolve an identity phrase to a CP access-role (zero-trust source)")
+def api_correlate_access_role(body: CorrelateBody, _=_API):
+    return _respond(mcp_tools.correlate_access_role(body.server_id, body.name))
+
+
+@router.post("/access/correlate/zone", summary="Resolve a zone phrase to a CP security-zone object")
+def api_correlate_zone(body: CorrelateBody, _=_API):
+    return _respond(mcp_tools.correlate_zone(body.server_id, body.name))
+
+
 # --- dynamic layers (Rail B) — author + push an access rulebase to a gateway via the Gaia API -----
 class DynRuleBody(BaseModel):
     layer: str

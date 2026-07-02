@@ -9,5 +9,5 @@ def test_healthz_and_version():
     assert c.get("/healthz").json()["status"] == "ok"
     v = c.get("/version").json()
     assert v["version"] == app.main.__version__
-    assert v["mcp_tools"] == 24          # 16 management (incl. correlate_time/content/limit) + 8 dynamic-layer
+    assert v["mcp_tools"] == 26          # 18 management (incl. correlate time/content/limit/access-role/zone) + 8 DL
     assert v["name"] == "PolicyPilot"

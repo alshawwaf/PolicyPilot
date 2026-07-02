@@ -50,14 +50,17 @@ def matrix() -> list[dict]:
                 ("host / network / address-range / group", FULL, "Resolved to member IP extents (a group expands to its members)."),
                 (f"Typed identities: {typed}", FULL, "Set source_kind to reason in that identity space, not by IP. "
                  "Domains + dynamic-objects are created if missing; access-role / security-zone / updatable "
-                 "are reused (they live in Identity Awareness / topology / Check Point's repository)."),
+                 "are reused (they live in Identity Awareness / topology / Check Point's repository). "
+                 "Resolve an identity NAME with correlate_access_role or correlate_zone — the zero-trust path."),
             ],
             "gaps": [
                 "A negated (‘not’) source cell → the rule stays in the path and routes to REVIEW (its true reach is unknown).",
                 "A wildcard object that expands past 256 disjoint ranges → kept opaque → REVIEW.",
                 "A group whose members aren’t inlined in the fetched objects (a thin/nested copy) → REVIEW.",
+                "No discovery tool yet for a dynamic-object / updatable-object name (pass it exactly).",
             ],
-            "notes": "No name discovery needed for an IP; a typed object is passed by its exact name.",
+            "notes": "No name discovery needed for an IP. Identity sources are the zero-trust primitive: "
+                     "correlate_access_role / correlate_zone resolve the name, then pass it with the typed kind.",
         },
         {
             "field": "Destination", "column": "Destination", "level": FULL, "discovery": None,

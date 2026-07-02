@@ -227,9 +227,17 @@
 <script>window.PP_LAYOUT = {{ layout | tojson }}; window.PP_ADMIN = {{ is_admin | tojson }}; window.PP_CAN_MANAGE_USERS = {{ can_manage_users | tojson }};</script>
 <script>
 (function () {
-  // The desktop must never render inside a window. If this page is somehow loaded in an iframe (a window
-  // navigated to "/"), break out to the real top-level desktop instead of nesting one.
-  if (window.self !== window.top) { try { window.top.location.replace('/'); } catch (e) {} return; }
+  // Don't nest the desktop inside one of OUR OWN windows: if a PolicyPilot window
+  // (same-origin) navigated to "/", break out to the real top-level desktop.
+  // BUT when embedded cross-origin by an allowed host (e.g. the dev-hub — see our
+  // CSP frame-ancestors), top-navigation is sandboxed/blocked; busting would just
+  // abort to a blank page. In that case render normally (base.html adds .embedded
+  // and trims the top chrome).
+  if (window.self !== window.top) {
+    var sameOriginTop = false;
+    try { void window.top.location.href; sameOriginTop = true; } catch (e) { sameOriginTop = false; }
+    if (sameOriginTop) { try { window.top.location.replace('/'); } catch (e) {} return; }
+  }
   var desktop = document.getElementById('os-desktop'), dock = document.getElementById('os-dock'),
       hello = document.getElementById('os-hello'), launch = document.getElementById('os-launch'),
       lgrid = document.getElementById('os-launch-grid');

@@ -515,6 +515,18 @@
     .acct-who-t span { font-size:11.5px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; display:block; }
     .acct-signout { color:var(--danger) !important; }
     .acct-signout:hover, .acct-signout:focus { background:var(--danger-bg) !important; color:var(--danger) !important; }
+    /* Brand "About PolicyPilot" menu (the macOS Apple-menu spot) — left-aligned, opens from the brand. */
+    #brand-menu .brand-link.menu-trigger { cursor:pointer; }
+    .about-panel { left:0; right:auto; min-width:250px; }
+    .about-head { display:flex; align-items:center; gap:11px; padding:6px 10px 12px; margin-bottom:4px; border-bottom:1px solid var(--line); }
+    .about-mark { width:34px; height:34px; flex:none; border-radius:9px; display:flex; align-items:center; justify-content:center;
+      color:#fff; background:var(--accent-grad); box-shadow:0 2px 8px rgba(123,63,242,.28); }
+    .about-mark svg { width:19px; height:19px; }
+    .about-t b { display:block; font-size:14px; } .about-t span { font-size:11.5px; color:var(--muted); }
+    .about-kv { display:flex; justify-content:space-between; gap:16px; padding:5px 10px; font-size:12.5px; }
+    .about-kv span { color:var(--muted); } .about-kv b { font-weight:600; }
+    .about-sha { font-family:var(--font-mono,ui-monospace,monospace); font-size:12px; }
+    .about-copy { display:block; width:100%; text-align:left; margin-top:4px; }
     /* Export dropdown — two-line options with a gradient icon chip (fills on hover). */
     .export-items { min-width:250px; }
     .export-opt { display:flex; align-items:center; gap:11px; padding:8px 10px !important; border-radius:9px; }
@@ -869,10 +881,23 @@
 </head>
 <body class="{% block body_class %}{% endblock %}">
   <header>
-    <a class="brand-link" href="/">
-      <span class="brand-mark"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><polygon points="15 9 13.4 13.4 9 15 10.6 10.6 15 9"/></svg></span>
-      <span class="brand">PolicyPilot</span>
-    </a>
+    <div class="menu" id="brand-menu">
+      <a href="#" class="brand-link menu-trigger" id="brand-trigger" role="button" aria-haspopup="true" aria-label="About PolicyPilot" title="About PolicyPilot">
+        <span class="brand-mark"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><polygon points="15 9 13.4 13.4 9 15 10.6 10.6 15 9"/></svg></span>
+        <span class="brand">PolicyPilot</span>
+      </a>
+      <div class="menu-items about-panel">
+        <div class="about-head">
+          <span class="about-mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><polygon points="15 9 13.4 13.4 9 15 10.6 10.6 15 9"/></svg></span>
+          <div class="about-t"><b>PolicyPilot</b><span>Access automation</span></div>
+        </div>
+        <div class="about-kv"><span>Version</span><b>{{ build_info.version if build_info else app_version }}</b></div>
+        <div class="about-kv"><span>Build</span><b class="about-sha" id="about-build">{{ build_info.build if build_info else 'dev' }}</b></div>
+        {% if build_info and build_info.built_at %}<div class="about-kv"><span>Built</span><b>{{ build_info.built_at }}</b></div>{% endif %}
+        <a href="/version">Version details (JSON)</a>
+        <button type="button" class="about-copy" id="about-copy" data-build="{{ build_info.build if build_info else 'dev' }}">Copy build id</button>
+      </div>
+    </div>
     {% block nav %}
     <nav class="nav-main" id="nav-main">
       <a href="/">Home</a>
@@ -1209,6 +1234,14 @@
         setTimeout(function () { t.classList.add('hide'); }, 3500);
         setTimeout(function () { t.remove(); }, 4000);
       };
+      // "About PolicyPilot" -> copy the deployed build id (handy for support / confirming a redeploy).
+      var aboutCopy = document.getElementById('about-copy');
+      if (aboutCopy) aboutCopy.addEventListener('click', function () {
+        var v = aboutCopy.getAttribute('data-build') || '';
+        var done = function () { window.appToast('Build id copied: ' + v, 'success'); };
+        if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(v).then(done, done);
+        else done();
+      });
       document.addEventListener('click', function (e) {
         var el = e.target.closest('[data-confirm]');
         if (!el) return;

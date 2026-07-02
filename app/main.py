@@ -175,7 +175,9 @@ def create_app() -> FastAPI:
     @app.get("/version", include_in_schema=False)
     def version() -> dict:
         """Build + capability info for agents and ops — version, the MCP tool count, and whether /mcp is live."""
-        info = {"name": settings.app_name, "version": __version__, "mcp_tools": 0, "mcp_ready": False}
+        from . import build
+        info = {"name": settings.app_name, "version": __version__, "build": build.build_sha(),
+                "built_at": build.built_at(), "mcp_tools": 0, "mcp_ready": False}
         try:
             from . import mcp_server
             info["mcp_tools"] = len(mcp_server.tool_catalog())

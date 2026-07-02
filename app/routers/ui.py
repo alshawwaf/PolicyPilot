@@ -29,7 +29,9 @@ router = APIRouter(include_in_schema=False)
 TEMPLATES_DIR = Path(__file__).resolve().parent.parent / "templates"
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 from .. import __version__ as _app_version
+from .. import build as _build
 templates.env.globals["app_version"] = _app_version   # surfaced in the footer (single shared templates env)
+templates.env.globals["build_info"] = _build.build_info()   # {version, build (short SHA), built_at} — the About menu
 # RBAC helpers available in every template: {{ can(user, 'publish') }} to show/hide controls, and
 # {{ perms(user) }} for the full capability map. Single shared env, so this reaches all routers.
 templates.env.globals["can"] = permissions.can

@@ -8,6 +8,13 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY app ./app
 
+# Build identity, surfaced in /version + the "About PolicyPilot" menu so ops can confirm the deployed commit.
+# Pass the commit at build (Dokploy -> Build Args: GIT_SHA=<sha>) to show the SHA; the build TIMESTAMP is
+# always baked (no config) and changes every rebuild, so a redeploy is visible even without the SHA.
+ARG GIT_SHA=dev
+ENV PILOT_BUILD_SHA=$GIT_SHA
+RUN date -u +"%Y-%m-%dT%H:%M:%SZ" > /srv/app/_built_at.txt
+
 ENV PILOT_DATABASE_URL=sqlite:////data/policypilot.db
 VOLUME ["/data"]
 EXPOSE 8000

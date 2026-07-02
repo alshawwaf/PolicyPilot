@@ -91,6 +91,12 @@ def resolve(session, term: str) -> dict:
     out = {"term": term, "match": None, "match_kind": "", "confidence": "", "candidates": [], "note": ""}
     if not term:
         return out
+    if term.lower() in ("any", "all", "*"):
+        # "Any" is the ALL-services wildcard (block/allow everything), NOT a named service to search for —
+        # resolve it directly so an agent that correlates it isn't derailed by look-alikes (sip_any, H323_any…).
+        out.update(match="Any", match_kind="any", confidence="exact",
+                   note="the predefined Any service (all services / ports)")
+        return out
     raw, truncated = _query(session, term, _RESOLVE_LIMIT)
     scored = sorted(((_score(term, c["name"]), c) for c in _candidates(raw)),
                     key=lambda x: x[0][1], reverse=True)

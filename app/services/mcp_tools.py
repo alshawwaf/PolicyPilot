@@ -389,11 +389,18 @@ def remove_access(server_id: str, source: str, destination: str, layer: str, ser
                   port: str | None = None, protocol: str = "tcp", application: str | None = None,
                   package: str | None = None, publish: bool = False, ticket_id: str = "",
                   source_kind: str = "ip", destination_kind: str = "ip") -> dict:
-    """REVOKE an access (the inverse of apply_access): find the rule that grants src->dst:svc and remove it
-    with the least-disruptive safe move — DISABLE a rule that grants exactly this, or insert a least-privilege
-    DROP above a broader rule so first-match denies just this flow. no_op = not permitted; review = granted via
-    an opaque/inline/conditional/multi-rule path (won't guess a destructive change). With publish=false it
-    DRY-RUNS (validate then discard); publish=true COMMITS, allowed ONLY when 'mcp_allow_publish' is enabled.
+    """REVOKE an EXISTING access (the inverse of apply_access): use this ONLY for "revoke / remove / take
+    away / undo X's access" — it finds the rule granting src->dst:svc and removes it (DISABLE an exact grant,
+    or DROP above a broader rule).
+
+    NOT for "block" / "deny" — that is CREATING a Drop rule: use apply_access(action="Drop"). In particular a
+    block that shows a message ("block X and show the block page") MUST be apply_access(action="Drop",
+    user_check=...) — remove_access has no action / user_check / service=Any and can't attach a message.
+    (To block ALL traffic, apply_access with service="Any".)
+
+    Outcomes: no_op = not permitted; review = granted via an opaque/inline/conditional/multi-rule path (won't
+    guess a destructive change). With publish=false it DRY-RUNS (validate then discard); publish=true COMMITS,
+    allowed ONLY when 'mcp_allow_publish' is enabled.
 
     ``server_id`` MUST be a REAL server — its numeric id, name, or host from list_management_servers.
     NEVER invent or default it (not "localhost", "127.0.0.1", a hostname, or any guess — a fabricated value

@@ -104,3 +104,12 @@ def test_resolve_truncation_via_full_page_even_after_type_filter():
         def call(self, cmd, payload=None):
             return {"objects": page[: sv._RESOLVE_LIMIT]}          # server caps at the limit -> truncated
     assert sv.resolve(_S(), "echo-request")["match"] is None
+
+
+def test_resolve_any_is_the_wildcard_not_a_lookalike():
+    # "Any"/"all"/"*" must resolve to the predefined Any service (all services) — never derail into
+    # look-alikes (sip_any, H323_any) that a name search would return. No server query needed.
+    lookalikes = [_svc("sip_any", typ="service-udp"), _svc("H323_any", typ="service-tcp")]
+    for term in ("Any", "any", "all", "*"):
+        r = sv.resolve(_Sess(lookalikes), term)
+        assert r["match"] == "Any" and r["confidence"] == "exact" and not r["candidates"], term

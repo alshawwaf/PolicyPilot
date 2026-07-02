@@ -218,6 +218,18 @@ def decide_access(server_id: str, source: str, destination: str, layer: str, ser
     space — e.g. does a host have access to the domain ``alshawwaf.ca`` (source_kind stays ip,
     destination_kind=domain, destination='alshawwaf.ca').
 
+    RESTRICTION COLUMNS (time / content / action limit) take EXACT Check Point object names — resolve a
+    natural phrase FIRST, exactly as you would a service with correlate_service:
+      • "during work hours" → correlate_time(...) → pass its ``match`` as time_objects=["Work-Hours"].
+      • "SQL Queries" / a data type → correlate_content(...) → pass as content=["SQL Queries"] (set
+        content_direction up/down/any).
+      • a bandwidth cap → correlate_limit(...) → pass as action_limit (a rate object like "Upload_10Mbps";
+        a Limit is a RATE, not a volume — there is NO "max 10 GB total" control, so map a volume request to
+        an existing rate limit or tell the user it can't be expressed). These objects are REUSE-ONLY (must
+        already exist); if correlate returns no match, relay the candidates or say one must be created first.
+    Any of these columns makes the request "restricted" → the engine always CREATEs a precise rule ABOVE a
+    broad Accept (never a false no_op/widen), so the new condition actually takes effect (first-match).
+
     ``server_id`` MUST be a REAL server — its numeric id, name, or host from list_management_servers.
     NEVER invent or default it (not "localhost", "127.0.0.1", a hostname, or any guess — a fabricated value
     just fails to resolve). If the user named no management server: call list_management_servers — if exactly
@@ -612,6 +624,53 @@ def correlate_application(server_id: str, name: str) -> dict:
             return applications.resolve(s, name)
     except MgmtError as exc:
         return {"error": str(exc)}
+
+
+def _correlate_object(server_id: str, name: str, resolver_attr: str) -> dict:
+    """Shared body for the column-object correlators (time / content / limit): resolve the server, then
+    call correlate_objects.<resolver_attr>. Returns {term, match, confidence, candidates, note} — ``match``
+    is set ONLY for a confident, UNIQUE hit the apply path will accept, else candidates to choose from."""
+    db = SessionLocal()
+    try:
+        ms, secret = _server_secret(db, server_id)
+    except ValueError as exc:
+        db.close()
+        return {"error": str(exc)}
+    db.close()
+    from . import correlate_objects
+    from .mgmt_api import MgmtError, read_session
+    try:
+        with read_session(ms, secret) as s:
+            return getattr(correlate_objects, resolver_attr)(s, name)
+    except MgmtError as exc:
+        return {"error": str(exc)}
+
+
+def correlate_time(server_id: str, name: str) -> dict:
+    """Map a natural time phrase ("work hours", "weekends") to the real Check Point TIME / time-group object
+    to use in a rule's Time column, or return candidates ('did you mean'). Call this BEFORE decide_access /
+    apply_access whenever a request restricts access to a time window — pass the returned ``match`` as
+    time_objects. A time object must already exist on the server (reuse-only); if none matches, tell the user
+    which time objects exist (the candidates) or that one must be created in SmartConsole first."""
+    return _correlate_object(server_id, name, "resolve_time")
+
+
+def correlate_content(server_id: str, name: str) -> dict:
+    """Map a content phrase ("SQL Queries", "credit card numbers") to the real Check Point DATA-TYPE object
+    for a rule's Content column, or return candidates. Call this BEFORE decide_access / apply_access whenever
+    a request restricts access by data type / content — pass the returned ``match`` as content=[…]. Data
+    types are reuse-only (must exist on the server); Content inspection also requires the Content Awareness
+    blade enabled on the gateway."""
+    return _correlate_object(server_id, name, "resolve_content")
+
+
+def correlate_limit(server_id: str, name: str) -> dict:
+    """Map a bandwidth phrase ("10 Mbps upload", "Upload_10Mbps") to the real Check Point LIMIT object for a
+    rule's Action Settings (Accept/Ask/Inform), or return candidates — pass the returned ``match`` as
+    action_limit. IMPORTANT: a Limit is a RATE (Mbps/Gbps), NOT a volume/quota — Check Point has no "max 10 GB
+    total" control in the Access Policy, so a volume request must be mapped to an existing rate limit or
+    declined (say so to the user). Limits are reuse-only (must exist on the server)."""
+    return _correlate_object(server_id, name, "resolve_limit")
 
 
 def _load_layer_rules(server_id: str, layer: str):

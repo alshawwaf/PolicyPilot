@@ -20,7 +20,7 @@ def memdb(monkeypatch):
 
 def test_run_passes_on_healthy_surface(memdb):
     rep = conformance.run()
-    assert rep["ok"] is True and rep["tools"] == 21
+    assert rep["ok"] is True and rep["tools"] == 24
     by = {c["name"]: c for c in rep["checks"]}
     for required in ("tools_registered", "write_tools_rbac_guarded",
                      "readonly_capability_enforced", "db_reachable"):

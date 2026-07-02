@@ -150,6 +150,21 @@ def api_correlate_application(body: CorrelateBody, _=_API):
     return _respond(mcp_tools.correlate_application(body.server_id, body.name))
 
 
+@router.post("/access/correlate/time", summary="Resolve a time phrase to a CP time object (rule Time column)")
+def api_correlate_time(body: CorrelateBody, _=_API):
+    return _respond(mcp_tools.correlate_time(body.server_id, body.name))
+
+
+@router.post("/access/correlate/content", summary="Resolve a content phrase to a CP data-type (rule Content column)")
+def api_correlate_content(body: CorrelateBody, _=_API):
+    return _respond(mcp_tools.correlate_content(body.server_id, body.name))
+
+
+@router.post("/access/correlate/limit", summary="Resolve a bandwidth phrase to a CP limit object (rule Action Settings)")
+def api_correlate_limit(body: CorrelateBody, _=_API):
+    return _respond(mcp_tools.correlate_limit(body.server_id, body.name))
+
+
 # --- dynamic layers (Rail B) — author + push an access rulebase to a gateway via the Gaia API -----
 class DynRuleBody(BaseModel):
     layer: str

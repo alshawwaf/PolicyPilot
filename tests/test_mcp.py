@@ -713,3 +713,23 @@ def test_resolve_server_multiple_servers_still_asks():
     with pytest.raises(ValueError):
         mcp_tools._resolve_server(db, "localhost")
     db.close()
+
+
+def test_apply_access_carries_usercheck_fields_into_the_request():
+    # The MCP apply_access / decide_access params must flow through _build -> build_request -> the exact
+    # web_api user-check + action-settings payload (regression: "are the new fields confirmed over MCP?").
+    from app.services import mcp_tools, access_automation as aa
+    req = mcp_tools._build("Finance_Users", "Any", None, "443", "tcp", "Facebook",
+                           source_kind="access-role", destination_kind="internet", action="Inform",
+                           user_check="Company Policy", user_check_frequency="once a day",
+                           user_check_confirm="per application/site", action_limit="Upload_10Mbps",
+                           time_objects=["Work-Hours"])
+    assert req.src_kind == "access-role" and req.src_value == "Finance_Users"
+    assert aa._user_check_payload("Inform", req) == {
+        "interaction": "Company Policy", "frequency": "once a day", "confirm": "per application/site"}
+    assert aa._action_settings_payload("Inform", req) == {"limit": "Upload_10Mbps"}
+    # custom-frequency over MCP
+    r2 = mcp_tools._build("10.1.1.0/24", "Any", None, "443", "tcp", None, action="Ask",
+                          user_check="Ask", user_check_frequency="custom frequency...",
+                          user_check_custom_every=6, user_check_custom_unit="hours")
+    assert aa._user_check_payload("Ask", r2)["custom-frequency"] == {"every": 6, "unit": "hours"}

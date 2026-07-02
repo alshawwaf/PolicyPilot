@@ -5,14 +5,17 @@ persists all state in SQLite under **`/data`**, reads its config from `PILOT_*` 
 a non-root user, and ships a Docker `HEALTHCHECK` on `/healthz`. It expects a **TLS-terminating reverse proxy
 in front** — the app speaks HTTP on 8000; your proxy speaks publicly-trusted HTTPS to the world.
 
-Nothing about PolicyPilot is tied to a particular platform. Any Docker host works — a VM, a container PaaS, or
-your own orchestrator. Pick whichever path below fits your environment.
+Nothing about PolicyPilot is tied to a particular platform — it runs on any Docker host. Pick the install
+method that fits your environment; the shared configuration reference is below the methods.
 
-## Option A — `docker compose` with Caddy (automatic HTTPS)
+## Choose an install method
 
-The quickest self-host, with no manual certificate step. The repo ships a `docker-compose.yml` (app + **Caddy**)
-and a `Caddyfile`; Caddy obtains a Let's Encrypt certificate for your domain automatically (or an internal cert
-when `PILOT_DOMAIN=localhost` for a local demo).
+<details>
+<summary><b>Docker Compose — bundled Caddy, automatic HTTPS (turnkey self-host)</b></summary>
+
+The quickest path, with no manual certificate step. The repo ships a `docker-compose.yml` (app + **Caddy**)
+and a `Caddyfile`; Caddy obtains a Let's Encrypt certificate for your domain automatically (or an internal
+cert when `PILOT_DOMAIN=localhost` for a local demo).
 
 ```bash
 cp .env.example .env         # then edit it (see below)
@@ -30,12 +33,17 @@ PILOT_ADMIN_USERNAME=admin
 PILOT_ADMIN_PASSWORD=<choose a strong password>
 ```
 
-Caddy publishes ports **80/443**; the app is reachable only through it. `PILOT_TRUSTED_PROXY_HOPS=1` is already
-set in the compose file (Caddy is one proxy in front). Sign in at `https://<PILOT_DOMAIN>` as the admin above.
+Caddy publishes ports **80/443**; the app is reachable only through it. `PILOT_TRUSTED_PROXY_HOPS=1` is
+already set in the compose file (Caddy is one proxy in front). Sign in at `https://<PILOT_DOMAIN>` as the
+admin above.
 
-## Option B — plain Docker behind your own proxy or platform
+</details>
 
-Build and run the image, then put **any** TLS-terminating reverse proxy or PaaS in front:
+<details>
+<summary><b>Plain Docker — bring your own reverse proxy</b></summary>
+
+Build and run the image, then put any TLS-terminating reverse proxy in front (nginx, Caddy, Traefik, HAProxy,
+a cloud load balancer):
 
 ```bash
 docker build -t policypilot .
@@ -48,30 +56,41 @@ docker run -d --name policypilot -p 8000:8000 -v policypilot-data:/data \
   policypilot
 ```
 
-Whatever fronts it — nginx, Caddy, Traefik, HAProxy, a cloud load balancer, or a container PaaS such as
-Dokploy / Coolify / Render / Fly.io — must:
+Your proxy must forward to container port **8000**, terminate TLS, and pass the `X-Forwarded-*` headers (the
+app runs uvicorn with `--proxy-headers`). Mount a persistent volume at **`/data`** — SQLite lives there;
+without it, saved management servers, gateways, dynamic layers, settings, and API keys are wiped on every
+redeploy. Set `PILOT_TRUSTED_PROXY_HOPS` to the number of proxies in front, and leave `PILOT_DATABASE_URL`
+unset (the image already points it at `/data/policypilot.db`).
 
-- forward to container port **8000**;
-- terminate TLS and pass the `X-Forwarded-*` headers (the app runs uvicorn with `--proxy-headers`);
-- mount a persistent volume at **`/data`** — SQLite lives here; without it, saved management servers,
-  gateways, dynamic layers, settings, and API keys are wiped on every redeploy;
-- provide the environment below — `PILOT_BASE_URL` must equal the public HTTPS URL, and
-  `PILOT_TRUSTED_PROXY_HOPS` must equal the number of proxies in front.
+</details>
 
-Leave `PILOT_DATABASE_URL` unset — the image already points it at `/data/policypilot.db`.
+<details>
+<summary><b>Dokploy (or another build-from-Dockerfile PaaS: Coolify, Render, Fly.io, …)</b></summary>
 
-### Example: a build-from-Dockerfile PaaS (Dokploy, Coolify, Render, …)
+Most build-from-Dockerfile platforms follow the same shape. Using **Dokploy** as the worked example:
 
-Most such platforms follow the same shape:
+1. **Create an Application** — your project → *Create Service* → *Application*.
+2. **Source** — the Git repo (a Check Point-approved remote per org policy), or a Docker image you've pushed.
+3. **Build** — type **Dockerfile**; build context `.`, Dockerfile path `Dockerfile`.
+4. **Port** — set the exposed port to **8000** (uvicorn's listen port).
+5. **Domain** — add your domain (e.g. `policypilot.example.com`); Dokploy provisions the Let's Encrypt cert via
+   its Traefik automatically. (On other platforms, their ingress does the same.)
+6. **Persistent volume** — mount a named volume at container path **`/data`**. The SQLite DB lives there;
+   without it, your saved servers, gateways, dynamic layers, settings, and API keys are wiped on every redeploy.
+7. **Environment variables** (the bootstrap set — see the full `PILOT_*` list below):
+   ```
+   PILOT_BASE_URL=https://<your-domain>            # MUST equal the domain in step 5
+   PILOT_SESSION_SECRET=<openssl rand -base64 32>
+   PILOT_ENCRYPTION_KEY=<openssl rand -base64 32>  # encrypts saved gateway / SMS creds at rest — PERSIST IT
+   PILOT_ADMIN_USERNAME=admin
+   PILOT_ADMIN_PASSWORD=<choose a strong password>
+   PILOT_TRUSTED_PROXY_HOPS=1                       # one proxy (Traefik/ingress) in front
+   ```
+   Don't set `PILOT_DATABASE_URL` — the `Dockerfile` already points it at `/data/policypilot.db`.
+8. **Deploy.** Sign in at your domain as the admin user above. Redeploy (or push to the tracked branch) to
+   update; the `/data` volume preserves everything across deploys.
 
-1. **Create an application** from this Git repo (a Check Point-approved remote per org policy) or a pushed image.
-2. **Build type** Dockerfile (context `.`, Dockerfile path `Dockerfile`).
-3. **Port** — the exposed/container port is **8000**.
-4. **Domain** — add your domain; the platform provisions the TLS certificate (e.g. via its built-in
-   Traefik / ingress).
-5. **Persistent volume** — mount one at container path **`/data`**.
-6. **Environment** — set the bootstrap set below.
-7. **Deploy**, then sign in at your domain as the admin.
+</details>
 
 ## The full `PILOT_*` environment (`app/config.py`)
 
@@ -147,8 +166,9 @@ The portal must be reachable at `https://<your-domain>` on 443. From any shell:
 
 ## Updating
 
-Rebuild and restart: `docker compose up -d --build` (compose), or redeploy on your platform. The `/data` volume
-preserves your servers, gateways, dynamic layers, settings, and API keys across deploys.
+Rebuild and restart: `docker compose up -d --build` (compose), `docker build` + recreate the container (plain
+Docker), or redeploy on your platform. The `/data` volume preserves your servers, gateways, dynamic layers,
+settings, and API keys across deploys.
 
 ## After deploy — validate
 

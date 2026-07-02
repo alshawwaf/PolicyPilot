@@ -374,18 +374,29 @@ Environment variables bootstrap the deployment; **most secrets are also settable
 
 PolicyPilot is a **single container**: it listens on port **8000** (plain HTTP), stores state in SQLite under
 **`/data`**, reads config from `PILOT_*` variables, and expects a **TLS-terminating reverse proxy** in front.
-It runs on any Docker host — a VM, a container PaaS, or your own orchestrator.
+It runs anywhere Docker does — pick whichever method you prefer.
 
-The repo ships a `docker-compose.yml` with **Caddy** for automatic HTTPS — the quickest self-host path:
+<details>
+<summary><b>Docker Compose — bundled Caddy with automatic HTTPS (turnkey self-host)</b></summary>
+
+The repo ships `docker-compose.yml` (app + **Caddy**) and a `Caddyfile`; Caddy obtains a Let's Encrypt
+certificate for your domain automatically (or an internal cert when `PILOT_DOMAIN=localhost`).
 
 ```bash
 cp .env.example .env       # set PILOT_DOMAIN, PILOT_BASE_URL, and the secrets
 docker compose up -d --build
 ```
 
-Prefer your own setup? Build and run the image directly and front it with **any** reverse proxy (nginx, Caddy,
-Traefik, a cloud load balancer) or a container PaaS (Dokploy, Coolify, Render, Fly.io, …) — anything that
-terminates TLS and forwards to port 8000:
+Caddy publishes ports 80/443 and `PILOT_TRUSTED_PROXY_HOPS=1` is already set in the compose file. Sign in at
+`https://<PILOT_DOMAIN>` as the admin.
+
+</details>
+
+<details>
+<summary><b>Plain Docker — bring your own reverse proxy</b></summary>
+
+Build and run the image, then front it with any TLS-terminating proxy (nginx, Caddy, Traefik, a cloud load
+balancer) that forwards to port 8000 and passes the `X-Forwarded-*` headers.
 
 ```bash
 docker build -t policypilot .
@@ -396,14 +407,39 @@ docker run -d -p 8000:8000 -v policypilot-data:/data \
   policypilot
 ```
 
-Set `PILOT_TRUSTED_PROXY_HOPS` to the number of proxies in front (so the login throttle keys on the real
-client IP) and persist `PILOT_ENCRYPTION_KEY` (saved credentials are encrypted with it). The build bakes the
-git SHA, so `GET /version` (`build`, `built_at`) and the About menu confirm exactly which commit is live;
-`GET /healthz` / `GET /readyz` are liveness / readiness probes, and `GET /dbapi/v1/conformance` is a read-only
-self-check that the agent surface is wired and safe.
+Set `PILOT_TRUSTED_PROXY_HOPS` to the number of proxies in front. Leave `PILOT_DATABASE_URL` unset — the image
+already points it at `/data/policypilot.db`.
 
-Full guide (secrets, the single-worker note, platform specifics): **[DEPLOY.md](DEPLOY.md)**. Post-deploy
-smoke test: **[docs/live-validation.md](docs/live-validation.md)**.
+</details>
+
+<details>
+<summary><b>Dokploy / a build-from-Dockerfile PaaS (Coolify, Render, Fly.io, …)</b></summary>
+
+Create an application from this repo (or a pushed image); build type **Dockerfile** (context `.`); exposed
+port **8000**; add your domain (the platform provisions the TLS certificate via its ingress); and mount a
+persistent volume at **`/data`**. Set the bootstrap environment:
+
+```
+PILOT_BASE_URL=https://policypilot.example.com   # must equal the domain you added
+PILOT_SESSION_SECRET=<openssl rand -base64 32>
+PILOT_ENCRYPTION_KEY=<openssl rand -base64 32>
+PILOT_ADMIN_PASSWORD=<choose a strong password>
+PILOT_TRUSTED_PROXY_HOPS=1
+```
+
+Deploy, then sign in at your domain. Redeploy from the platform (or on push) to update — the `/data` volume
+persists across deploys.
+
+</details>
+
+Whatever the method: **persist `PILOT_ENCRYPTION_KEY`** (saved credentials are encrypted with it) and set
+`PILOT_TRUSTED_PROXY_HOPS` to the number of proxies in front (so the login throttle keys on the real client
+IP). The build bakes the git SHA — `GET /version` (`build`, `built_at`) and the About menu confirm which
+commit is live; `GET /healthz` / `GET /readyz` are liveness / readiness probes, and `GET /dbapi/v1/conformance`
+is a read-only self-check that the agent surface is wired and safe.
+
+Full guide (the complete `PILOT_*` reference, the single-worker note, per-platform detail):
+**[DEPLOY.md](DEPLOY.md)**. Post-deploy smoke test: **[docs/live-validation.md](docs/live-validation.md)**.
 
 ---
 

@@ -35,6 +35,9 @@ def _apply_fingerprint(ms, req, layer, package) -> str:
         "action": req.canon_action, "layer": (layer or "").lower(), "package": (package or "").lower(),
         "inline_layer": req.inline_layer or "",
         "content": sorted(req.content or []), "content_negate": bool(req.content_negate),
+        "content_direction": (req.content_direction or "").lower(),
+        "action_limit": req.action_settings_limit or "",
+        "captive_portal": bool(req.action_settings_captive_portal),
         "time": sorted(req.time_objects or []), "install_on": sorted(req.install_on or []),
         "vpn": (sorted(req.vpn) if req.vpn else req.vpn),
     }

@@ -126,6 +126,11 @@ def test_apply_idempotency_key_conflicts_on_a_different_request(monkeypatch, ide
     c = mcp_tools.apply_access(1, "10.0.0.1", "10.0.0.2", "Network", port="443",
                               publish=True, idempotency_key="chg-1")
     assert c.get("idempotent_replay") is True and calls["n"] == 1
+    # a request differing ONLY in an action-settings / content-direction field is a DIFFERENT change too
+    # (verification found these fields missing from the fingerprint -> a silent replay)
+    d = mcp_tools.apply_access(1, "10.0.0.1", "10.0.0.2", "Network", port="443",
+                              publish=True, idempotency_key="chg-1", action_limit="2 Mbps")
+    assert d.get("idempotency_conflict") is True and calls["n"] == 1
 
 
 def test_apply_idempotency_dry_run_is_not_cached(monkeypatch, idemdb):

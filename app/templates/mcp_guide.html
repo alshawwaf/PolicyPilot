@@ -4,21 +4,45 @@
 <style>
   .mcp-status { display:flex; gap:8px; flex-wrap:wrap; margin:0 0 18px; }
   .mcp-status .pill { font-size:12px; }
-  .mcp-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:10px; align-items:start; }
-  /* Tool cards: inset grouped-card feel (Settings .grp), hairline border + soft hover. */
-  .mcp-tool { border:1px solid var(--line); border-radius:var(--r-lg); background:var(--surface-2);
-    transition:border-color .14s, box-shadow .14s; }
-  .mcp-tool:hover { border-color:var(--line-strong); box-shadow:var(--shadow-sm); }
-  .mcp-tool[open] { border-color:var(--accent-soft); }
-  .mcp-tool > summary { list-style:none; cursor:pointer; display:flex; align-items:center; gap:8px;
-    padding:12px 14px; border-radius:var(--r-lg); }
+  /* Tool catalog: two grouped, inset accordion LISTS (macOS System-Settings style) — full-width rows so a
+     long expanded description flows naturally instead of blowing a hole in a card grid. */
+  .mcp-toolgroup { border:1px solid var(--line); border-radius:var(--r-lg); background:var(--surface-2);
+    overflow:hidden; margin:0 0 14px; }
+  .mcp-toolgroup:last-child { margin-bottom:0; }
+  .mcp-tg-head { display:flex; align-items:center; gap:10px; padding:11px 15px;
+    background:var(--surface-3); border-bottom:1px solid var(--line); }
+  .mcp-tg-head b { font-size:13px; letter-spacing:-.1px; }
+  .mcp-tg-head .mcp-tg-count { font-size:11px; font-weight:700; color:var(--accent);
+    background:var(--accent-soft); border-radius:var(--r-pill); padding:2px 9px; }
+  .mcp-tg-head .mcp-tg-api { margin-left:auto; font-size:11px; color:var(--faint);
+    font-family:ui-monospace,monospace; }
+  .mcp-tool { border-bottom:1px solid var(--line-soft); }
+  .mcp-tool:last-child { border-bottom:none; }
+  .mcp-tool[open] { background:var(--surface); }
+  .mcp-tool > summary { list-style:none; cursor:pointer; display:flex; align-items:center; gap:10px;
+    padding:11px 15px; min-width:0; }
+  .mcp-tool > summary:hover { background:var(--hover); }
   .mcp-tool > summary::-webkit-details-marker { display:none; }
+  /* base.html adds a global ▸/▾ to every summary — we have .mcp-chev. The [open] variant is needed to
+     out-specify base's `details[open] > summary::before`. */
+  .mcp-tool > summary::before, .mcp-tool[open] > summary::before { content:none; }
   .mcp-tool > summary:hover code { text-decoration:underline; }
-  .mcp-tool code { font-size:13px; font-weight:700; color:var(--accent); background:none; padding:0; }
-  .mcp-tool .mcp-chev { margin-left:auto; flex:none; color:var(--faint); font-size:10px;
-    transition:transform .15s ease; }
+  .mcp-tool code.mcp-name { flex:none; font-size:13px; font-weight:700; color:var(--accent);
+    background:none; padding:0; }
+  .mcp-brief { flex:1; min-width:0; font-size:12px; color:var(--faint); white-space:nowrap;
+    overflow:hidden; text-overflow:ellipsis; }
+  .mcp-tool[open] .mcp-brief { visibility:hidden; }   /* the body repeats it — keep the row width stable */
+  .mcp-rw { flex:none; font-size:10px; font-weight:800; letter-spacing:.5px; text-transform:uppercase;
+    border-radius:var(--r-pill); padding:2px 8px; background:var(--subtle-bg); color:var(--faint); }
+  .mcp-rw.w { background:var(--warn-bg); color:var(--warn); }
+  .mcp-tool .mcp-chev { flex:none; color:var(--faint); font-size:10px; transition:transform .15s ease; }
   .mcp-tool[open] > summary .mcp-chev { transform:rotate(90deg); }
-  .mcp-tool p { margin:0; padding:0 14px 13px; font-size:12.5px; color:var(--muted); line-height:1.5; }
+  .mcp-body { padding:2px 15px 14px 33px; }
+  .mcp-body p { margin:7px 0 0; font-size:12.5px; color:var(--muted); line-height:1.6; }
+  .mcp-body ul { margin:7px 0 0; padding-left:18px; }
+  .mcp-body li { font-size:12.5px; color:var(--muted); line-height:1.6; margin:4px 0; }
+  .mcp-body code { font-size:11.5px; }
+  .mcp-body b { color:var(--text-2); }
   /* Expand-all: a secondary button (matches base .btn.secondary). */
   .mcp-expand-toggle { margin-left:auto; }
   .mcp-tabs { display:flex; gap:6px; flex-wrap:wrap; margin:6px 0 10px; }
@@ -143,20 +167,40 @@
             onclick="mcpToggleAll(this)">Expand all</button>
   </div>
   <p class="mcp-note" style="margin:0 0 12px;">The tools cover two areas. <b>Management access policy</b> (the
-    SMS, over the Management Web API): list servers and layers, decide and apply a change, remove access, amend a
-    rule, list and revert changes, correlate a service or app, and analyze a layer. <b>Dynamic Layers</b> (pushed
-    to a gateway via the Gaia API): list gateways and layers, read a layer, fetch a gateway's LIVE layer or import
-    it into the portal (to safely append without wiping policy pushed outside the portal), add or remove a rule,
-    and push it. Each write is behind its own admin gate — publishing to the SMS and pushing to a gateway are
-    separate toggles.</p>
-  <div class="mcp-grid">
-    {% for t in tools %}
+    SMS, over the Management Web API): list servers and layers, decide and apply a change with any rule column,
+    remove access, amend a rule, resolve plain-language names with the <b>correlate</b> family ("did you mean"),
+    analyze a layer, and drive the full rollback lifecycle (undo · disable · finalize · re-enable). <b>Dynamic
+    Layers</b> (pushed to a gateway via the Gaia API): list gateways and layers, read a layer, fetch a gateway's
+    LIVE layer or import it into the portal (to safely append without wiping policy pushed outside the portal),
+    add or remove a rule, and push it. Each <span class="mcp-rw w" style="vertical-align:1px;">write</span> tool
+    is refused on a read-only key, and each rail's live write sits behind its own admin gate — publishing to the
+    SMS and pushing to a gateway are separate toggles.</p>
+  {% for group, title, api in [("management", "Management access policy", "web_api"),
+                               ("dynamic", "Dynamic Layers", "gaia_api")] %}
+  <div class="mcp-toolgroup">
+    <div class="mcp-tg-head">
+      <b>{{ title }}</b>
+      <span class="mcp-tg-count">{{ tools | selectattr("group", "equalto", group) | list | length }} tools</span>
+      <span class="mcp-tg-api">{{ api }}</span>
+    </div>
+    {% for t in tools if t.group == group %}
     <details class="mcp-tool">
-      <summary><code>{{ t.name }}</code><span class="mcp-chev" aria-hidden="true">▶</span></summary>
-      <p>{{ t.summary }}</p>
+      <summary>
+        <span class="mcp-chev" aria-hidden="true">▶</span>
+        <code class="mcp-name">{{ t.name }}</code>
+        <span class="mcp-brief">{{ t.brief }}</span>
+        <span class="mcp-rw{{ ' w' if t.writes }}">{{ "write" if t.writes else "read" }}</span>
+      </summary>
+      <div class="mcp-body">
+        {% for b in t.blocks %}
+        {% if b.kind == "ul" %}<ul>{% for i in b["items"] %}<li>{{ i }}</li>{% endfor %}</ul>
+        {% else %}<p>{{ b.text }}</p>{% endif %}
+        {% endfor %}
+      </div>
     </details>
     {% endfor %}
   </div>
+  {% endfor %}
 </div>
 
 <div class="card">
@@ -193,13 +237,26 @@
 </div>
 
 <script>
-  // Expand/collapse every tool description at once (each tool card is a <details>, collapsed by default).
+  // Expand/collapse every tool description at once (each tool row is a <details>, collapsed by default).
   function mcpToggleAll(btn) {
     var cards = document.querySelectorAll('.mcp-tool');
     var anyClosed = Array.prototype.some.call(cards, function (d) { return !d.open; });
     cards.forEach(function (d) { d.open = anyClosed; });
     btn.textContent = anyClosed ? 'Collapse all' : 'Expand all';
   }
+  // Typeset the docstrings' inline markup (**bold**, ``code``/`code`) — the agent-facing docstring stays
+  // the single source of truth; the guide renders it instead of showing literal asterisks/backticks. The
+  // text is read via textContent (plain) and re-escaped before substitution, so no injection path.
+  (function () {
+    function esc(s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+    document.querySelectorAll('.mcp-body p, .mcp-body li, .mcp-brief').forEach(function (el) {
+      var h = esc(el.textContent);
+      h = h.replace(/``([^`]+)``/g, '<code>$1</code>')
+           .replace(/`([^`]+)`/g, '<code>$1</code>')
+           .replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>');
+      el.innerHTML = h;
+    });
+  })();
   (function () {
     var url = location.origin + '/mcp/';   // trailing slash = the canonical endpoint; a bare /mcp would
     var urlEl = document.getElementById('mcp-url');                       // 307-redirect and some clients

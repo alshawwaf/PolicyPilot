@@ -45,18 +45,75 @@ def have_mcp() -> bool:
     return _HAVE_MCP
 
 
+# The Dynamic-Layer (Rail B) tools — grouping for the guide's catalog (everything else is management/SMS).
+_DYNAMIC_TOOLS = frozenset({"list_gateways", "list_dynamic_layers", "get_dynamic_layer",
+                            "fetch_dynamic_layer", "import_dynamic_layer", "add_dynamic_rule",
+                            "remove_dynamic_rule", "push_dynamic_layer"})
+
+
+def _doc_blocks(doc: str) -> list:
+    """Split a docstring into renderable blocks — {"kind":"p","text":…} paragraphs and
+    {"kind":"ul","items":[…]} bullet lists (• / * lines, with wrapped continuation lines folded into their
+    item). The agent-facing docstring stays the single source of truth; the guide renders it readably
+    instead of dumping one flattened mega-paragraph."""
+    blocks: list = []
+    cur: list = []
+
+    def flush():
+        if not cur:
+            return
+        para: list = []
+        items: list = []
+        buf = None
+        for raw in cur:
+            s = raw.strip()
+            if s.startswith(("• ", "* ")):
+                if buf is not None:
+                    items.append(buf)
+                buf = s[2:]
+            elif buf is not None:
+                buf += " " + s                    # wrapped continuation of the current bullet
+            else:
+                para.append(s)
+        if buf is not None:
+            items.append(buf)
+        if para:
+            blocks.append({"kind": "p", "text": " ".join(" ".join(para).split())})
+        if items:
+            blocks.append({"kind": "ul", "items": [" ".join(i.split()) for i in items]})
+        cur.clear()
+
+    for line in (doc or "").splitlines():
+        if line.strip():
+            cur.append(line)
+        else:
+            flush()
+    flush()
+    return blocks
+
+
 def tool_catalog() -> list:
-    """[{name, summary}] for the tools an agent gets — each tool's name + its full docstring flattened to a
-    single line (the /mcp-guide page shows it inside a collapsible card). Works without the SDK installed
-    (reads services.mcp_tools directly), so the page always renders."""
+    """[{name, group, writes, brief, summary, blocks}] for the tools an agent gets — the /mcp-guide catalog.
+    ``group`` is management|dynamic, ``writes`` marks the RBAC-guarded write tools (the ``_write_tool``
+    marker), ``brief`` is the first sentence (the collapsed-row teaser), ``summary`` the flattened full
+    docstring (kept for existing consumers), and ``blocks`` the docstring as renderable paragraphs / bullet
+    lists. Works without the SDK installed (reads services.mcp_tools directly), so the page always renders."""
+    import re
     from .services import mcp_tools as t
     out = []
     for name in _TOOLS:
         fn = getattr(t, name, None)
-        summary = ""
-        if fn and fn.__doc__:
-            summary = " ".join(fn.__doc__.split())           # flatten the docstring to one line (whitespace)
-        out.append({"name": name, "summary": summary})
+        doc = (fn.__doc__ or "") if fn else ""
+        summary = " ".join(doc.split())
+        # First sentence, not fooled by "e.g." / "i.e." (fixed-width lookbehinds).
+        first = re.split(r"(?<!e\.g)(?<!i\.e)\.\s", summary, maxsplit=1)[0] if summary else ""
+        brief = first.rstrip(".") + "." if first else ""
+        if len(brief) > 220:
+            brief = brief[:217].rstrip() + "…"
+        out.append({"name": name,
+                    "group": "dynamic" if name in _DYNAMIC_TOOLS else "management",
+                    "writes": bool(getattr(fn, "_pp_write", False)),
+                    "brief": brief, "summary": summary, "blocks": _doc_blocks(doc)})
     return out
 
 

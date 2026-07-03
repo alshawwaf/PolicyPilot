@@ -59,6 +59,7 @@ def _write_tool(fn):
                     "fetch_dynamic_layer, list_*, summarize/analyze, …) but cannot apply, publish, push, or "
                     "edit layers. Use a write-enabled key for changes."}
         return fn(*args, **kwargs)
+    wrapper._pp_write = True                     # explicit marker: tool_catalog badges write vs read tools
     return wrapper
 
 

@@ -514,6 +514,39 @@ def test_tool_catalog_lists_all_tools_with_summaries():
     assert "summarize_layer" in names and "analyze_policy" in names   # the CP-style analyze tools
 
 
+def test_tool_catalog_groups_badges_and_blocks():
+    # The /mcp-guide catalog view renders groups + read/write badges + structured blocks from this shape.
+    cat = mcp_server.tool_catalog()
+    assert sum(1 for c in cat if c["group"] == "management") == 21
+    assert sum(1 for c in cat if c["group"] == "dynamic") == 8
+    writes = {c["name"] for c in cat if c["writes"]}
+    assert writes == {"apply_access", "remove_access", "amend_access_rule", "revert_change",
+                      "import_dynamic_layer", "add_dynamic_rule", "remove_dynamic_rule",
+                      "push_dynamic_layer"}                       # exactly the RBAC-guarded write tools
+    assert all(c["brief"] and len(c["brief"]) <= 220 for c in cat)  # collapsed-row teaser: short, present
+    assert all(c["blocks"] for c in cat)                          # every docstring parses into blocks
+    rc = next(c for c in cat if c["name"] == "revert_change")
+    assert any(b["kind"] == "ul" and len(b["items"]) >= 4 for b in rc["blocks"])  # the lifecycle list
+
+
+def test_doc_blocks_splits_paragraphs_and_bullets():
+    doc = """First paragraph line one
+    wrapped line two.
+
+    Intro to the list:
+      • item one starts here
+        and wraps onto this line
+      • item two
+
+    Final paragraph."""
+    blocks = mcp_server._doc_blocks(doc)
+    assert blocks[0] == {"kind": "p", "text": "First paragraph line one wrapped line two."}
+    assert blocks[1] == {"kind": "p", "text": "Intro to the list:"}
+    assert blocks[2] == {"kind": "ul",
+                         "items": ["item one starts here and wraps onto this line", "item two"]}
+    assert blocks[3] == {"kind": "p", "text": "Final paragraph."}
+
+
 # --- generate-and-autofill: the MCP page mints an mcp-scope key and returns its plaintext once ----------
 def test_mcp_guide_generate_key_route(monkeypatch):
     import types

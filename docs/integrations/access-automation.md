@@ -195,6 +195,26 @@ access request and get back the decision — and, optionally, have it applied an
 - **Write-back:** the result is pushed to the caller's `callback_url` if supplied, else the built-in
   **ServiceNow Table API** adapter writes a work note to the incident (`PILOT_SERVICENOW_*` / Settings).
 
+## Rollback lifecycle (undo, disable, finalize, re-enable)
+
+Every **published** change records its exact inverse op-list and becomes an entry in the rollback journal
+(`list_changes` on MCP, `GET /dbapi/v1/access/changes` on REST, the per-server *Recent changes* panel in the
+portal). Each entry has a **state**, and all three surfaces drive the **same state machine**
+(`change_log.revert_state`):
+
+| State | Meaning | Available actions |
+|---|---|---|
+| `active` | the change is in effect | **roll back** (replay the inverse), or — for a change that *added* a rule — **disable instead** (`disable_instead_of_delete`) |
+| `disabled` | the rule is OFF but still in the rulebase (greyed out) | **finalize** — delete the rule outright (`delete_rule`), or **re-enable** (`reenable`) |
+| `resolved` | terminal — undone or deleted | none (audit only) |
+
+The disable-undo is the *gentler* rollback: the rule stays visible and auditable, and the decision to delete
+it can be taken later (or reversed). Re-enabling an added rule returns the entry to `active` — it can be
+rolled back again; re-enabling a rule that a **removal** disabled restores the original access (terminal).
+Rollbacks are surgical and idempotent (a rule already deleted out-of-band counts as done), transitions are
+claimed atomically (one actor per entry — a concurrent panel click and agent call can't double-publish), and
+objects a change created are left in place.
+
 ## Security notes
 
 - The publish webhook token grants policy publish on every allowed server — treat it as a top-tier

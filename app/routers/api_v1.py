@@ -140,6 +140,27 @@ def api_apply(body: ApplyBody, _=_API_WRITE):
     return _respond(mcp_tools.apply_access(**body.model_dump()))
 
 
+class RevertApiBody(BaseModel):
+    """One lifecycle endpoint, mirroring the MCP tool / portal panel: plain = roll back an ACTIVE change;
+    disable_instead_of_delete = undo an added rule by DISABLING it (reversible, entry stays actionable);
+    delete_rule = FINALIZE a disabled rule (delete it outright); reenable = turn a disabled rule back on."""
+    change_id: int
+    publish: bool = False
+    disable_instead_of_delete: bool = False
+    delete_rule: bool = False
+    reenable: bool = False
+
+
+@router.get("/access/changes", summary="List recorded published changes (the rollback journal)")
+def api_changes(limit: int = 20, _=_API):
+    return _respond(mcp_tools.list_changes(limit))
+
+
+@router.post("/access/revert", summary="Roll back / finalize a published change (publish is admin-gated)")
+def api_revert(body: RevertApiBody, _=_API_WRITE):
+    return _respond(mcp_tools.revert_change(**body.model_dump()))
+
+
 @router.post("/access/correlate/service", summary="Resolve a service/protocol name to a CP object")
 def api_correlate_service(body: CorrelateBody, _=_API):
     return _respond(mcp_tools.correlate_service(body.server_id, body.name))

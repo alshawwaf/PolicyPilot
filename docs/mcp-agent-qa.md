@@ -197,9 +197,16 @@ candidates — reuse-only, so a miss is reported, never invented):
 
 | # | Prompt | Exercises | Expect |
 |---|--------|-----------|--------|
-| 31 | "Show me the recent changes you've published." | `list_changes` | the changes from this run, newest first, with what/when |
-| 32 | "Undo the last change you made and publish the changes." | `revert_change` (delete added rule / re-enable disabled) | the change is surgically reverted + published |
-| 33 | "Revert change #N but disable the rule instead of deleting it, and publish the changes." | `revert_change` (disable_instead_of_delete) | rule disabled rather than removed; published |
+| 31 | "Show me the recent changes you've published." | `list_changes` | the changes from this run, newest first, with what/when + each entry's lifecycle **state** (active / disabled / resolved) |
+| 32 | "Undo the last change you made and publish the changes." | `revert_change` (delete added rule / re-enable disabled) | the change is surgically reverted + published; state → **resolved** |
+| 33 | "Revert change #N but disable the rule instead of deleting it, and publish the changes." | `revert_change` (disable_instead_of_delete) | rule disabled rather than removed; published; the entry stays actionable — state → **disabled** |
+| 33a | *(after #33)* "Now get rid of that disabled rule entirely and publish." | `revert_change` (delete_rule — **finalize**) | the disabled rule is deleted outright; state → **resolved** |
+| 33b | *(after #33, instead of 33a)* "Actually, turn that rule back on and publish." | `revert_change` (reenable) | the rule is re-enabled; an added rule returns to **active** (rollable again) |
+| 33c | *(on an ACTIVE change)* "Delete the disabled rule for change #N." | lifecycle guard | **refused** — delete_rule applies only to a disabled entry; the error says to roll it back first |
+
+> **The rollback lifecycle in one line:** active —undo→ resolved, or —disable-instead→ **disabled** (still
+> listed, rule greyed out) —finalize (`delete_rule`)→ resolved, or —`reenable`→ active again. The portal's
+> change panel, the MCP tool, and `POST /dbapi/v1/access/revert` drive the same state machine.
 
 ---
 

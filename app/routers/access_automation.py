@@ -426,18 +426,10 @@ class RevertBody(BaseModel):
 
 
 def _revert_state(r) -> str:
-    """The actionable state of a recorded change for the rollback panel:
-      * "resolved" — terminal: the rule was deleted, or the change was fully undone.
-      * "disabled" — the rule is turned OFF but still PRESENT (a removal that disabled it, or an added rule
-                     rolled back BY disabling it) → it can be re-enabled (undo) or deleted (finalize).
-      * "active"   — the change is in effect → it can be rolled back.
-    A "disabled" entry deliberately keeps ``reverted_at`` NULL: it is NOT terminal, so further actions stay
-    available (this was the gap — a created rule rolled back via Disable used to look fully resolved)."""
-    if r.reverted_at and r.resolution != "disabled":
-        return "resolved"
-    if r.resolution == "disabled" or (r.outcome == "disable" and not r.reverted_at):
-        return "disabled"
-    return "active"
+    """The actionable state of a recorded change (resolved | disabled | active). ONE shared state machine —
+    the panel, the MCP tool, and the REST endpoint all delegate to ``change_log.revert_state`` so they can
+    never disagree on what an entry allows."""
+    return change_log.revert_state(r)
 
 
 def _change_row(r) -> dict:
@@ -530,18 +522,12 @@ def aa_revert(sid: int, cid: int, body: RevertBody, request: Request, db: Sessio
         # failure we restore the captured prior state below (a successful SMS op is never reported as failure).
         prior = {"reverted_at": change.reverted_at, "reverted_by": change.reverted_by or "",
                  "resolution": change.resolution or "", "revert_error": change.revert_error or ""}
-        claimed = (db.query(AppliedChange)
-                   .filter(AppliedChange.id == cid, AppliedChange.reverted_at.is_(None),
-                           AppliedChange.resolution == (change.resolution or ""))
-                   .update(new_fields, synchronize_session=False))
-        db.commit()
-        if not claimed:
+        if not change_log.claim(db, cid, change.resolution or "", new_fields):
             return JSONResponse({"error": "This change was already resolved or changed."}, status_code=400)
     result = aa.revert_execute(ms, secret, ops, publish=body.publish, disable_added_rules=disable_added)
     if body.publish and not (result.get("ok") and result.get("reverted")):
         try:
-            db.query(AppliedChange).filter(AppliedChange.id == cid).update(prior, synchronize_session=False)
-            db.commit()
+            change_log.restore(db, cid, prior)
         except Exception:  # noqa: BLE001
             db.rollback()
             import logging

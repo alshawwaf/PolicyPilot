@@ -73,8 +73,11 @@ Endpoints (thin wrappers over the same `services.mcp_tools`, so behaviour + safe
 `GET /dbapi/v1/servers`, `GET /dbapi/v1/layers?server_id=`, `GET /dbapi/v1/layers/summary`,
 `GET /dbapi/v1/layers/analyze`, `GET /dbapi/v1/coverage`, `GET /dbapi/v1/conformance` (post-deploy
 self-check: surface wired + safe, no live SMS/gateway touched), `POST /dbapi/v1/access/decide`,
-`POST /dbapi/v1/access/apply` (publish admin-gated; also the block path — `action=Drop/Reject`), and the
-full correlate family
+`POST /dbapi/v1/access/apply` (publish admin-gated; also the block path — `action=Drop/Reject`),
+`GET /dbapi/v1/access/changes` (the rollback journal — each entry carries its lifecycle `state`),
+`POST /dbapi/v1/access/revert` (body `{"change_id":1,"publish":true}` plus optionally ONE of
+`disable_instead_of_delete` / `delete_rule` / `reenable` — the same rollback lifecycle as the MCP tool,
+write-key + publish-gated), and the full correlate family
 `POST /dbapi/v1/access/correlate/{service,application,time,content,limit,access-role,zone,user-check,gateway,vpn}`.
 Each `correlate/*` endpoint takes a body of `{"server_id":1,"name":"dns"}` (a fuzzy name → the matching
 Check Point object: a service / application / time / data-type / limit / access-role / security-zone /
@@ -137,12 +140,38 @@ rails have **separate** gates (see §4).
 | `apply_access(server_id, …, action?/content?/time_objects?/install_on?/vpn?/user_check?…, publish)` | create/widen with any access-rule column; `publish=false` **dry-run** (validate + discard); `publish=true` **commit**. **Also the way to _block_** (`action=Drop/Reject`; `service` defaults to `Any` for a serviceless block; add `user_check` for a block message) | gated — `mcp_allow_publish` |
 | `remove_access(server_id, …, publish)` | **revoke an existing allow** — disable an exact-grant rule, or drop-above a broader one. *Not* how you block new traffic (that's `apply_access` with `action=Drop`) | gated — `mcp_allow_publish` |
 | `amend_access_rule(change_id \| rule_uid+layer, name?/comment?/tags?/track?, publish)` | edit a rule's **metadata only** (name/comment/tags/track-logging) — never its match columns | gated — `mcp_allow_publish` |
-| `list_changes(limit?)` | recent **published** changes (id/what/when/reverted?) for audit + undo | no |
-| `revert_change(change_id, publish, disable_instead_of_delete?)` | surgically undo one published change (delete/re-enable/restore) | gated — `mcp_allow_publish` |
+| `list_changes(limit?)` | recent **published** changes for audit + undo — each carries its lifecycle **`state`**: `active` \| `disabled` \| `resolved` | no |
+| `revert_change(change_id, publish, disable_instead_of_delete? / delete_rule? / reenable?)` | roll back **or finalize** one published change — the full lifecycle below | gated — `mcp_allow_publish` |
 
 **Block ≠ remove_access.** To *block* traffic, use `apply_access` with `action=Drop` (or `Reject`) — a
 serviceless block passes `service=Any`, and a block that shows a page passes a `user_check` message object.
 `remove_access` is only for taking away an **existing** allow (it has no action / service=Any / UserCheck).
+
+#### Rollback lifecycle — undo, disable, finalize, re-enable
+
+Every published change is a `list_changes` entry with a **state**, and `revert_change` is the single verb
+that moves it (the portal's change panel and the REST endpoint drive the **same state machine** — they never
+disagree):
+
+```
+active ──revert_change(id)──────────────────────────────▶ resolved   (inverse replayed: added rule deleted /
+       │                                                              disabled rule re-enabled / widened
+       │                                                              object removed)
+       └─revert_change(id, disable_instead_of_delete)───▶ disabled   (an ADDED rule is turned OFF, not
+                                                                      deleted — reversible, still listed)
+disabled ─revert_change(id, delete_rule=true)───────────▶ resolved   (FINALIZE: delete the disabled rule
+                                                                      outright — "get rid of it entirely")
+disabled ─revert_change(id, reenable=true)──────────────▶ active     (an added rule is restored — rollable
+                                                          | resolved  again; re-enabling a rule a REMOVAL
+                                                                      disabled restores the access: terminal)
+```
+
+Verb routing for the agent: *"undo / roll back"* → plain `revert_change`; *"disable it instead / keep it
+visible"* → `disable_instead_of_delete=true`; *"delete the disabled rule / finalize / remove it for good"* →
+`delete_rule=true`; *"turn it back on"* → `reenable=true`. An action that doesn't fit the entry's current
+state is refused with an error that says what applies. Rollbacks are surgical (the recorded inverse op-list,
+strictly whitelisted, idempotent if the rule was already removed out-of-band) — never a full-DB revision
+rollback — and objects a change created are left in place.
 
 The **`correlate_*`** family is pure discovery — each resolves a plain phrase to the real Check Point object
 (unique-exact auto-match, else "did you mean" candidates, drift-safe) so the agent names an object that

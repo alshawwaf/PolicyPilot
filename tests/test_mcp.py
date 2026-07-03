@@ -14,7 +14,7 @@ from app import models  # noqa: F401 — registers tables on Base.metadata
 from app.db import Base
 from app.services import access_automation as aa
 from app.services import app_settings, change_log, gaia_client, mcp_tools, mgmt_creds
-from app.models import ManagementServer
+from app.models import AppliedChange, ManagementServer
 
 
 def _fake_server(monkeypatch):
@@ -733,3 +733,83 @@ def test_apply_access_carries_usercheck_fields_into_the_request():
                           user_check="Ask", user_check_frequency="custom frequency...",
                           user_check_custom_every=6, user_check_custom_unit="hours")
     assert aa._user_check_payload("Ask", r2)["custom-frequency"] == {"every": 6, "unit": "hours"}
+
+
+# --- revert_change lifecycle (parity with the portal change panel: one shared state machine) --------
+def _lifecycle_env(monkeypatch, result=None):
+    """Gate open + creds stubbed + revert_execute stubbed (records ops; returns ``result`` or success)."""
+    monkeypatch.setattr(app_settings, "get", lambda k: True if k == "mcp_allow_publish" else None)
+    monkeypatch.setattr(mgmt_creds, "get_secret", lambda db, ms: "secret")
+    monkeypatch.setattr(gaia_client, "ensure_pinned", lambda db, ms: None)
+    seen = {}
+    monkeypatch.setattr(aa, "revert_execute",
+                        lambda srv, sec, ops, publish=False, disable_added_rules=False:
+                        seen.update(ops=ops, publish=publish, disable=disable_added_rules)
+                        or (result or {"ok": True, "reverted": publish}))
+    return seen
+
+
+def test_revert_disable_undo_lands_in_the_actionable_disabled_state(monkeypatch, cdb):
+    # An added rule rolled back via DISABLE must stay actionable (NOT terminal) — exactly like the panel —
+    # so it can later be finalized (delete_rule) or turned back on (reenable). Regression: the MCP path used
+    # to stamp it terminal "reverted", stranding the rule half-rolled-back with no agent-side finalize.
+    seen = _lifecycle_env(monkeypatch)
+    cid = _seed_change(cdb)
+    out = mcp_tools.revert_change(cid, publish=True, disable_instead_of_delete=True)
+    assert out["ok"] and seen["disable"] is True
+    assert out["state"] == "disabled"
+    with cdb() as s:
+        row = s.get(AppliedChange, cid)
+        assert row.resolution == "disabled" and row.reverted_at is None
+    lst = mcp_tools.list_changes()
+    assert any(c["id"] == cid and c["state"] == "disabled" for c in lst["changes"])
+
+
+def test_revert_finalize_deletes_the_disabled_rule(monkeypatch, cdb):
+    seen = _lifecycle_env(monkeypatch)
+    cid = _seed_change(cdb)
+    mcp_tools.revert_change(cid, publish=True, disable_instead_of_delete=True)   # active -> disabled
+    out = mcp_tools.revert_change(cid, publish=True, delete_rule=True)           # disabled -> deleted
+    assert out["ok"] and out["state"] == "resolved"
+    assert seen["ops"] == [{"op": "delete-access-rule", "uid": "u9", "layer": "Network"}]
+    with cdb() as s:
+        row = s.get(AppliedChange, cid)
+        assert row.resolution == "deleted" and row.reverted_at is not None
+
+
+def test_revert_reenable_restores_an_added_rule_to_active(monkeypatch, cdb):
+    seen = _lifecycle_env(monkeypatch)
+    cid = _seed_change(cdb)
+    mcp_tools.revert_change(cid, publish=True, disable_instead_of_delete=True)   # active -> disabled
+    out = mcp_tools.revert_change(cid, publish=True, reenable=True)              # disabled -> active again
+    assert out["ok"] and out["state"] == "active"
+    assert seen["ops"] == [{"op": "set-access-rule", "uid": "u9", "layer": "Network", "enabled": True}]
+    out2 = mcp_tools.revert_change(cid, publish=True)                            # rollable again
+    assert out2["ok"] and out2["state"] == "resolved"
+
+
+def test_revert_lifecycle_guards_teach_the_right_next_call(monkeypatch, cdb):
+    _lifecycle_env(monkeypatch)
+    cid = _seed_change(cdb)
+    out = mcp_tools.revert_change(cid, publish=True, delete_rule=True)   # finalize an ACTIVE change
+    assert out["ok"] is False and "disabled" in out["error"].lower()
+    mcp_tools.revert_change(cid, publish=True, disable_instead_of_delete=True)
+    out = mcp_tools.revert_change(cid, publish=True)                     # plain undo on a DISABLED entry
+    assert out["ok"] is False and "delete_rule" in out["error"] and "reenable" in out["error"]
+    out = mcp_tools.revert_change(cid, publish=True, delete_rule=True, reenable=True)
+    assert out["ok"] is False and "ONE action" in out["error"]
+
+
+def test_revert_claim_is_released_when_the_sms_fails(monkeypatch, cdb):
+    # Claim-first + restore-on-failure: an SMS failure must leave the entry ACTIVE (retryable) with the
+    # error stamped — never falsely resolved.
+    _lifecycle_env(monkeypatch, result={"ok": False, "error": "lock conflict"})
+    cid = _seed_change(cdb)
+    out = mcp_tools.revert_change(cid, publish=True)
+    assert out["ok"] is False and out["state"] == "active"
+    with cdb() as s:
+        row = s.get(AppliedChange, cid)
+        assert row.reverted_at is None and (row.resolution or "") == ""
+        assert "lock conflict" in (row.revert_error or "")
+    again = mcp_tools.revert_change(cid, publish=True)                   # still retryable... but SMS still down
+    assert again["ok"] is False and again["state"] == "active"

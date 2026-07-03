@@ -128,6 +128,43 @@ def _safe_commit(db: Session) -> bool:
         return False
 
 
+def revert_state(r) -> str:
+    """The actionable state of a recorded change — ONE state machine shared by the rollback panel, the MCP
+    tool, and the REST endpoint (they must never disagree on what an entry allows):
+      * "resolved" — terminal: the rule was deleted, or the change was fully undone.
+      * "disabled" — the rule is turned OFF but still PRESENT (a removal that disabled it, or an added rule
+                     rolled back BY disabling it) → it can be re-enabled (undo) or deleted (finalize).
+      * "active"   — the change is in effect → it can be rolled back (or disable-undone if it added a rule).
+    A "disabled" entry deliberately keeps ``reverted_at`` NULL: it is NOT terminal, so further actions stay
+    available."""
+    if r.reverted_at and r.resolution != "disabled":
+        return "resolved"
+    if r.resolution == "disabled" or (r.outcome == "disable" and not r.reverted_at):
+        return "disabled"
+    return "active"
+
+
+def claim(db: Session, change_id: int, current_resolution: str, new_fields: dict) -> bool:
+    """ATOMICALLY transition a change BEFORE touching the SMS, so only ONE actor (panel click, MCP agent,
+    REST caller) acts on it — no double publish, no spurious error stamped on an already-acted row. Guards
+    ``reverted_at IS NULL`` (true of every actionable state) AND the resolution the caller observed, so a
+    concurrent transition from a different state can't win. Returns True if this caller won."""
+    n = (db.query(AppliedChange)
+         .filter(AppliedChange.id == change_id, AppliedChange.reverted_at.is_(None),
+                 AppliedChange.resolution == (current_resolution or ""))
+         .update(new_fields, synchronize_session=False))
+    db.commit()
+    return bool(n)
+
+
+def restore(db: Session, change_id: int, prior: dict) -> None:
+    """Release a claim after an SMS failure by restoring the captured prior state (a successful SMS op is
+    never reported as failure; a FAILED one must not leave the entry falsely resolved). Callers wrap this
+    best-effort — a restore failure is logged there, never raised further."""
+    db.query(AppliedChange).filter(AppliedChange.id == change_id).update(prior, synchronize_session=False)
+    db.commit()
+
+
 def mark_reverted(db: Session, change: AppliedChange, actor: str = "", resolution: str = "reverted") -> None:
     """Close a change: ``resolution`` is 'reverted' (the inverse was applied — the normal rollback) or
     'deleted' (a DISABLEd rule was then deleted outright — the removal finalized, not undone). Both stamp

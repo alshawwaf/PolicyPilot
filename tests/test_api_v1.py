@@ -150,3 +150,31 @@ def test_correlate_endpoints(monkeypatch):
     r = c.post("/dbapi/v1/access/correlate/service", headers={"Authorization": "Bearer good"},
                json={"server_id": 1, "name": "https"})
     assert r.status_code == 200 and r.json()["match"] == "https"
+
+
+def test_changes_and_revert_wrap_mcp_tools(monkeypatch):
+    # The rollback journal + lifecycle actions are first-class REST citizens, mirroring the MCP tool.
+    c = _client(monkeypatch)
+    monkeypatch.setattr(api_v1.mcp_tools, "list_changes",
+                        lambda limit=20: {"ok": True, "changes": [{"id": 1, "state": "disabled"}]})
+    r = c.get("/dbapi/v1/access/changes", headers={"Authorization": "Bearer good"})
+    assert r.status_code == 200 and r.json()["changes"][0]["state"] == "disabled"
+    seen = {}
+    monkeypatch.setattr(api_v1.mcp_tools, "revert_change",
+                        lambda **kw: seen.update(kw) or {"ok": True, "reverted": True, "state": "resolved"})
+    r = c.post("/dbapi/v1/access/revert", headers={"Authorization": "Bearer good"},
+               json={"change_id": 7, "publish": True, "delete_rule": True})
+    assert r.status_code == 200 and r.json()["state"] == "resolved"
+    assert seen == {"change_id": 7, "publish": True, "disable_instead_of_delete": False,
+                    "delete_rule": True, "reenable": False}
+
+
+def test_revert_is_write_guarded(monkeypatch):
+    # A read-only api key can read the journal but is refused 403 at the revert endpoint.
+    c = _client(monkeypatch, can_write=False)
+    monkeypatch.setattr(api_v1.mcp_tools, "list_changes", lambda limit=20: {"ok": True, "changes": []})
+    assert c.get("/dbapi/v1/access/changes",
+                 headers={"Authorization": "Bearer good"}).status_code == 200
+    r = c.post("/dbapi/v1/access/revert", headers={"Authorization": "Bearer good"},
+               json={"change_id": 1, "publish": True})
+    assert r.status_code == 403 and "read-only" in r.json()["detail"]

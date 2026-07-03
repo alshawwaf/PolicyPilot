@@ -547,16 +547,20 @@ def amend_access_rule(server_id: str | None = None, layer: str | None = None,
 
 
 def _change_brief(r) -> dict:
+    from . import change_log
     return {"id": r.id, "at": r.created_at.isoformat() if r.created_at else None, "by": r.created_by,
             "server": r.server_name, "layer": r.layer, "action": r.action, "outcome": r.outcome,
             "summary": r.summary, "ticket_id": r.ticket_id or None, "reverted": bool(r.reverted_at),
-            "reverted_at": r.reverted_at.isoformat() if r.reverted_at else None}
+            "reverted_at": r.reverted_at.isoformat() if r.reverted_at else None,
+            "state": change_log.revert_state(r), "resolution": r.resolution or ""}
 
 
 def list_changes(limit: int = 20) -> dict:
     """List recent access-automation changes PUBLISHED to live policy (newest first) — each with its id, what
-    it did, who/when, and whether it has already been rolled back. Pass an id to revert_change to undo one.
-    Read-only. Dry-runs are never recorded, so everything here actually committed."""
+    it did, who/when, and its ``state``: **active** (in effect — revert_change can roll it back), **disabled**
+    (the rule is OFF but still in the rulebase — revert_change can FINALIZE it with delete_rule=true or turn
+    it back on with reenable=true), or **resolved** (terminal — already undone or deleted). Read-only.
+    Dry-runs are never recorded, so everything here actually committed."""
     from . import change_log
     db = SessionLocal()
     try:
@@ -570,14 +574,29 @@ def list_changes(limit: int = 20) -> dict:
 
 
 @_write_tool
-def revert_change(change_id: int, publish: bool = False, disable_instead_of_delete: bool = False) -> dict:
-    """ROLL BACK a previously published change by its id (from list_changes): replays the recorded inverse —
-    delete the rule that was added / re-enable the rule that was disabled / remove the object that was widened
-    in — surgically, without touching the rest of the policy. For a change that ADDED a rule (create / a Drop
-    from a removal), set disable_instead_of_delete=true to DISABLE that rule rather than delete it — the
-    gentler, reversible undo (the rule stays in the rulebase, greyed out). With publish=false it DRY-RUNS
-    (validate then discard); publish=true COMMITS, allowed ONLY when an admin has enabled 'mcp_allow_publish'.
-    Refuses if the change was already rolled back. Objects the change created are left in place."""
+def revert_change(change_id: int, publish: bool = False, disable_instead_of_delete: bool = False,
+                  delete_rule: bool = False, reenable: bool = False) -> dict:
+    """ROLL BACK or FINALIZE a previously published change by its id (from list_changes). One state machine,
+    shared with the portal's change panel — each entry is **active**, **disabled**, or **resolved**:
+
+      * active   --revert_change(id)-->                              resolved.  Replays the recorded inverse
+        (delete the rule that was added / re-enable the rule a removal disabled / remove the object that was
+        widened in) — surgical, never a full-DB revision rollback.
+      * active   --revert_change(id, disable_instead_of_delete=true)--> disabled.  A change that ADDED a rule
+        (create / a Drop from a removal) is undone by DISABLING that rule instead of deleting it — the
+        gentler, reversible undo: the rule stays in the rulebase greyed out, and the entry stays actionable.
+      * disabled --revert_change(id, delete_rule=true)-->             resolved.  FINALIZE: delete the disabled
+        rule outright ("get rid of it entirely").
+      * disabled --revert_change(id, reenable=true)-->                active or resolved.  Turn the rule back
+        ON: an added rule becomes active again (rollable again); re-enabling a rule that a REMOVAL disabled
+        restores the original access (terminal).
+
+    Verb routing: "undo / roll back" → plain; "disable it instead / keep it visible" →
+    disable_instead_of_delete; "delete the disabled rule / finalize / remove it for good" → delete_rule;
+    "turn it back on / re-enable" → reenable. Refuses an action that doesn't fit the entry's current state
+    (the error says what applies). With publish=false it DRY-RUNS (validate then discard, nothing recorded);
+    publish=true COMMITS, allowed ONLY when an admin has enabled 'mcp_allow_publish'. Objects the change
+    created are left in place."""
     if publish:
         from . import app_settings
         try:
@@ -588,6 +607,9 @@ def revert_change(change_id: int, publish: bool = False, disable_instead_of_dele
             return {"ok": False, "reverted": False,
                     "error": "publishing is disabled for the MCP agent — an admin must enable 'Let the MCP "
                              "agent publish to live policy' in Settings. Re-run with publish=false to dry-run."}
+    if delete_rule and reenable:
+        return {"ok": False, "error": "pick ONE action: delete_rule (finalize) or reenable (turn back on)"}
+    from ..models import utcnow
     from . import change_log
     from . import access_automation as aa
     db = SessionLocal()
@@ -595,9 +617,56 @@ def revert_change(change_id: int, publish: bool = False, disable_instead_of_dele
         change = change_log.get(db, int(change_id))
         if change is None:
             return {"ok": False, "error": f"no recorded change with id {change_id}"}
-        if change.reverted_at:
-            return {"ok": False, "error": f"change {change_id} was already rolled back "
-                                          f"at {change.reverted_at.isoformat()}"}
+        inv = list(change.inverse_json or [])
+        if not inv:
+            return {"ok": False, "error": "this change has no recorded inverse — it can't be acted on here"}
+        state = change_log.revert_state(change)
+        inv0 = inv[0]
+        # Decide the action → (ops, disable-added-rules?, the DB state to stamp). MIRRORS the portal panel
+        # (routers/access_automation.aa_revert) — same guards, same transitions, one shared state machine.
+        if delete_rule:
+            if state != "disabled":
+                return {"ok": False, "error": f"delete_rule finalizes a DISABLED rule, but change "
+                                              f"{change_id} is {state} — "
+                        + ("roll it back first (optionally with disable_instead_of_delete=true)"
+                           if state == "active" else "it was already resolved")}
+            ops = [{"op": "delete-access-rule", "uid": inv0.get("uid"), "layer": inv0.get("layer")}]
+            disable_added = False
+            new_fields = {"reverted_at": utcnow(), "reverted_by": "mcp", "resolution": "deleted",
+                          "revert_error": ""}
+        elif reenable:
+            if state != "disabled":
+                return {"ok": False, "error": f"reenable turns a DISABLED rule back on, but change "
+                                              f"{change_id} is {state}"}
+            ops = [{"op": "set-access-rule", "uid": inv0.get("uid"), "layer": inv0.get("layer"),
+                    "enabled": True}]
+            disable_added = False
+            # Re-enabling a rule a REMOVAL disabled restores the original access → terminal. Re-enabling an
+            # ADDED rule we'd disabled restores the created rule → back to ACTIVE (rollable again).
+            new_fields = ({"reverted_at": utcnow(), "reverted_by": "mcp", "resolution": "reverted",
+                           "revert_error": ""}
+                          if change.outcome == "disable"
+                          else {"reverted_at": None, "reverted_by": "mcp", "resolution": "",
+                                "revert_error": ""})
+        elif disable_instead_of_delete:
+            if change.outcome not in ("create", "deny") or state != "active":
+                return {"ok": False, "error": "disable_instead_of_delete undoes an ACTIVE change that ADDED "
+                                              f"a rule (create/deny), but change {change_id} is "
+                                              f"{state} with outcome '{change.outcome}'"}
+            ops = inv                            # rewritten to enabled=false by disable_added_rules below
+            disable_added = True
+            new_fields = {"reverted_at": None, "reverted_by": "mcp", "resolution": "disabled",
+                          "revert_error": ""}
+        else:
+            if state != "active":
+                hint = ("it is DISABLED — use delete_rule=true to remove the rule for good, or "
+                        "reenable=true to turn it back on" if state == "disabled"
+                        else f"it was already resolved at {change.reverted_at.isoformat()}")
+                return {"ok": False, "error": f"change {change_id} can't be rolled back: {hint}"}
+            ops = inv
+            disable_added = False
+            new_fields = {"reverted_at": utcnow(), "reverted_by": "mcp", "resolution": "reverted",
+                          "revert_error": ""}
         # Resolve the original server STRICTLY by id (never the fuzzy name/host matcher) so a deleted server's
         # stale id can't misroute this DESTRUCTIVE rollback onto a different live SMS.
         ms = db.get(ManagementServer, change.server_id) if change.server_id is not None else None
@@ -612,26 +681,29 @@ def revert_change(change_id: int, publish: bool = False, disable_instead_of_dele
             ensure_pinned(db, ms)
         except Exception:  # noqa: BLE001 — pinning is best-effort; the call still verifies the saved cert
             pass
-        result = aa.revert_execute(ms, secret, list(change.inverse_json or []), publish=publish,
-                                   disable_added_rules=disable_instead_of_delete)
-        # INVARIANT: once the rollback COMMITTED on the SMS, nothing below may flip the report to failure —
-        # bookkeeping trouble becomes a warning on an ok:true result, never a false ok:false (which would
-        # leave the operator believing the SMS was untouched when it was changed).
+        # ATOMIC claim BEFORE touching the SMS (only one actor transitions the entry), restore on SMS
+        # failure. The stamp happens PRE-publish, so a committed publish can never be left unrecorded by
+        # post-publish bookkeeping — the invariant behind the committed-rollback-reported-failed incident.
         cid, summary = change.id, change.summary
-        if result.get("ok") and result.get("reverted"):
+        prior = {"reverted_at": change.reverted_at, "reverted_by": change.reverted_by or "",
+                 "resolution": change.resolution or "", "revert_error": change.revert_error or ""}
+        if publish and not change_log.claim(db, cid, change.resolution or "", new_fields):
+            return {"ok": False, "error": f"change {change_id} was just acted on by another session — "
+                                          "re-check list_changes"}
+        result = aa.revert_execute(ms, secret, ops, publish=publish, disable_added_rules=disable_added)
+        if publish and not (result.get("ok") and result.get("reverted")):
             try:
-                change_log.mark_reverted(db, change, actor="mcp")
-            except Exception:  # noqa: BLE001 — the SMS change IS committed; report it as such
-                logger.exception("marking change %s reverted failed (the rollback itself committed)", cid)
-                result["warning"] = ("the rollback committed and published on the management server, but "
-                                     "updating this change's record failed — run revert_change again to "
-                                     "stamp it (the replay is safe), or check the portal DB")
-        elif not result.get("ok"):
-            try:
-                change_log.mark_revert_failed(db, change, result.get("error", ""))
-            except Exception:  # noqa: BLE001 — best-effort error stamp
-                logger.exception("recording revert failure for change %s failed", cid)
-        return {**result, "change_id": cid, "summary": summary}
+                change_log.restore(db, cid, prior)          # SMS did NOT commit -> release the claim
+            except Exception:  # noqa: BLE001
+                logger.exception("releasing revert claim for change %s failed", cid)
+            if not result.get("ok"):
+                try:
+                    change_log.mark_revert_failed(db, change_log.get(db, cid), result.get("error", ""))
+                except Exception:  # noqa: BLE001 — best-effort error stamp
+                    logger.exception("recording revert failure for change %s failed", cid)
+        fresh = change_log.get(db, cid)
+        return {**result, "change_id": cid, "summary": summary,
+                "state": change_log.revert_state(fresh) if fresh is not None else None}
     except Exception as exc:  # noqa: BLE001
         logger.exception("revert_change failed (change_id=%s)", change_id)
         return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}

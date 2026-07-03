@@ -614,11 +614,24 @@ def revert_change(change_id: int, publish: bool = False, disable_instead_of_dele
             pass
         result = aa.revert_execute(ms, secret, list(change.inverse_json or []), publish=publish,
                                    disable_added_rules=disable_instead_of_delete)
+        # INVARIANT: once the rollback COMMITTED on the SMS, nothing below may flip the report to failure —
+        # bookkeeping trouble becomes a warning on an ok:true result, never a false ok:false (which would
+        # leave the operator believing the SMS was untouched when it was changed).
+        cid, summary = change.id, change.summary
         if result.get("ok") and result.get("reverted"):
-            change_log.mark_reverted(db, change, actor="mcp")
+            try:
+                change_log.mark_reverted(db, change, actor="mcp")
+            except Exception:  # noqa: BLE001 — the SMS change IS committed; report it as such
+                logger.exception("marking change %s reverted failed (the rollback itself committed)", cid)
+                result["warning"] = ("the rollback committed and published on the management server, but "
+                                     "updating this change's record failed — run revert_change again to "
+                                     "stamp it (the replay is safe), or check the portal DB")
         elif not result.get("ok"):
-            change_log.mark_revert_failed(db, change, result.get("error", ""))
-        return {**result, "change_id": change.id, "summary": change.summary}
+            try:
+                change_log.mark_revert_failed(db, change, result.get("error", ""))
+            except Exception:  # noqa: BLE001 — best-effort error stamp
+                logger.exception("recording revert failure for change %s failed", cid)
+        return {**result, "change_id": cid, "summary": summary}
     except Exception as exc:  # noqa: BLE001
         logger.exception("revert_change failed (change_id=%s)", change_id)
         return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}

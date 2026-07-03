@@ -454,6 +454,11 @@ def read_session(server, secret: str):
                 sess._client.close()
 
     with entry.call_lock:
+        # Rebind to THIS request's live ORM instance + secret. A pooled session outlives the DB session
+        # that loaded its original ``server``, which by now is expired + detached — any attribute access
+        # on it (auto-relogin's username/domain, invalidate_cache's id) raises DetachedInstanceError.
+        entry.session.server = server
+        entry.session._secret = secret
         if app_settings.get("mgmt_keepalive") and (time.monotonic() - entry.last_used) > 60:
             entry.session.keepalive()          # cheap insurance; call() auto-relogin is the real net
         entry.session.trace = []               # fresh trace for this (serialized) operation
@@ -569,6 +574,11 @@ def write_session(server, secret: str):
                 raise
             with _WRITE_META_LOCK:
                 _WRITE_POOL[key] = s
+        # Rebind to THIS request's live ORM instance + secret (see read_session): the pooled session's
+        # original ``server`` is detached once its creating request ends — publish()'s cache invalidation
+        # touching it is exactly what turned a COMMITTED rollback into a reported failure.
+        s.server = server
+        s._secret = secret
         s.trace = []
         ok = False
         try:
@@ -803,12 +813,22 @@ def cached_raw(session: "MgmtSession", server, layer: str, package=None, max_rul
 
 
 def invalidate_cache(server=None) -> None:
-    """Drop cached policy (all, or just one server's) — call after a publish so the next read re-pulls."""
+    """Drop cached policy (all, or just one server's) — call after a publish so the next read re-pulls.
+
+    NEVER raises. This runs right after a SUCCESSFUL publish, so a bookkeeping failure here must not turn
+    a committed change into a reported failure (the live incident: a pooled session's ``server`` was a
+    detached ORM instance, keying it raised DetachedInstanceError, and a committed rollback was reported
+    ok:false and left marked unreverted). If the server can't be keyed, drop the WHOLE cache instead —
+    over-invalidation is always safe for a cache."""
     with _RAW_LOCK:
         if server is None:
             _RAW_CACHE.clear()
             return
-        pk = _pool_key(server)
+        try:
+            pk = _pool_key(server)
+        except Exception:  # noqa: BLE001 — e.g. DetachedInstanceError on a stale/expired instance
+            _RAW_CACHE.clear()
+            return
         for k in [k for k in _RAW_CACHE if k[0] == pk]:
             _RAW_CACHE.pop(k, None)
 

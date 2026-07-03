@@ -916,3 +916,96 @@ def test_raw_pull_sectioned_layer_not_falsely_truncated():
         assert False, "expected MgmtError for a genuinely over-cap layer"
     except mgmt_api.MgmtError:
         pass
+
+
+# --------------------------------------------------------------------------- #
+# Pooled sessions vs. ORM instance lifetime — regression for the live incident where a COMMITTED
+# rollback was reported ok:false: the pooled write session still held the ManagementServer instance
+# captured when the pool entry was created; that request's DB session had committed (expiring it) and
+# closed (detaching it), so publish()'s cache invalidation raised DetachedInstanceError AFTER the
+# publish had succeeded on the SMS.
+# --------------------------------------------------------------------------- #
+
+class _DetachedServer:
+    """Mimics an EXPIRED ManagementServer whose Session has closed: ANY attribute access raises, exactly
+    like SQLAlchemy's refresh-on-detached (including the primary key — getattr() defaults don't help)."""
+    def __getattr__(self, name):
+        from sqlalchemy.orm.exc import DetachedInstanceError
+        raise DetachedInstanceError("Instance <ManagementServer> is not bound to a Session")
+
+
+def _cache_entry():
+    return {"items": [], "objdict": {}, "total": 0, "token": "t", "at": 0.0}
+
+
+def test_invalidate_cache_never_raises_on_a_detached_server():
+    # Post-publish bookkeeping must never turn a committed change into a reported failure. If the server
+    # can't be keyed, the whole cache is dropped instead (over-invalidation is always safe).
+    with mgmt_api._RAW_LOCK:
+        mgmt_api._RAW_CACHE.clear()
+        mgmt_api._RAW_CACHE[((1, ""), "Network", "", 50000)] = _cache_entry()
+        mgmt_api._RAW_CACHE[((2, ""), "Network", "", 50000)] = _cache_entry()
+    mgmt_api.invalidate_cache(_DetachedServer())            # must NOT raise
+    with mgmt_api._RAW_LOCK:
+        assert not mgmt_api._RAW_CACHE
+
+
+def test_invalidate_cache_stays_selective_for_a_live_server():
+    with mgmt_api._RAW_LOCK:
+        mgmt_api._RAW_CACHE.clear()
+        mgmt_api._RAW_CACHE[((1, ""), "Network", "", 50000)] = _cache_entry()
+        mgmt_api._RAW_CACHE[((2, ""), "Network", "", 50000)] = _cache_entry()
+    mgmt_api.invalidate_cache(_srv(id=1))
+    with mgmt_api._RAW_LOCK:
+        assert list(mgmt_api._RAW_CACHE) == [((2, ""), "Network", "", 50000)]
+        mgmt_api._RAW_CACHE.clear()
+
+
+def test_pooled_write_session_rebinds_the_live_server_each_apply(monkeypatch):
+    # The SAME server row arrives as a NEW ORM instance on every request; the pooled session must be
+    # rebound to the current instance + secret on checkout, or post-publish code touches the stale one.
+    mgmt_api.close_write_pool()
+    _FakeWrite.instances = []
+    monkeypatch.setattr(app_settings, "get", _settings())
+    monkeypatch.setattr(mgmt_api, "MgmtSession", _FakeWrite)
+    first = _srv(id=301)
+    with mgmt_api.write_session(first, "old-secret") as s:
+        s.call("publish")
+    second = _srv(id=301)                       # same row, next request -> a fresh instance
+    with mgmt_api.write_session(second, "new-secret") as s:
+        assert s is _FakeWrite.instances[0]     # pooled + reused (one login)
+        assert s.server is second               # rebound to the LIVE instance…
+        assert s._secret == "new-secret"        # …and the current credential
+        s.call("publish")
+    mgmt_api.close_write_pool()
+
+
+def test_pooled_read_session_rebinds_the_live_server_each_call(monkeypatch):
+    # Same contract for the read pool: auto-relogin reads server.username/domain, which would raise on
+    # the stale detached instance the pool entry was created with.
+    mgmt_api.close_pool()
+    monkeypatch.setattr(app_settings, "get", _settings())
+
+    class FakeSess:
+        _client = types.SimpleNamespace(close=lambda: None)
+
+        def __init__(self, server, secret, **kw):
+            self.server, self._secret, self.sid, self.trace = server, secret, None, []
+
+        def login(self):
+            self.sid = "x"
+
+        def keepalive(self):
+            pass
+
+        def logout(self):
+            self.sid = None
+
+    monkeypatch.setattr(mgmt_api, "MgmtSession", FakeSess)
+    first = _srv(id=302)
+    with mgmt_api.read_session(first, "old-secret"):
+        pass
+    second = _srv(id=302)
+    with mgmt_api.read_session(second, "new-secret") as s:
+        assert s.server is second and s._secret == "new-secret"
+    mgmt_api.close_pool()

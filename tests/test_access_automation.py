@@ -4410,3 +4410,52 @@ def test_serviceless_block_defaults_to_block_all():
         with pytest.raises(ValueError):
             tk.build_request("10.1.1.222", "10.1.2.250", "tcp", "", action=act,
                              user_check=("m" if act in ("Ask", "Inform") else ""))
+
+
+# --------------------------------------------------------------------------- #
+# THE COMMITTED-ROLLBACK INCIDENT: publish() succeeded on the SMS, then its own cache-invalidation tail
+# touched a DETACHED ManagementServer instance (held by the pooled session since an earlier request) and
+# raised — so a committed, published rollback was reported ok:false and left marked unreverted. A
+# successful publish must NEVER be reported as a failure by post-publish bookkeeping.
+# --------------------------------------------------------------------------- #
+
+def test_revert_publish_committed_survives_stale_cache_bookkeeping(monkeypatch):
+    from app.services import mgmt_api
+
+    class _Detached:
+        def __getattr__(self, name):
+            from sqlalchemy.orm.exc import DetachedInstanceError
+            raise DetachedInstanceError("Instance <ManagementServer> is not bound to a Session")
+
+    calls = []
+
+    class _S:
+        def __init__(self, server, secret, **kw):
+            self.trace = []
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def call(self, command, payload=None, **k):
+            calls.append((command, payload or {}))
+            return {}
+
+        def publish(self):
+            calls.append(("publish", {}))
+            # the real publish() tail: invalidate the policy cache keyed by self.server — here the stale,
+            # detached instance the pooled session captured at creation (the incident's exact shape)
+            mgmt_api.invalidate_cache(_Detached())
+
+        def discard(self):
+            calls.append(("discard", {}))
+            return {}
+
+    monkeypatch.setattr(aa, "MgmtSession", _S)
+    res = aa.revert_execute(object(), "secret",
+                            [{"op": "set-access-rule", "uid": "u1", "layer": "Network", "enabled": False}],
+                            publish=True)
+    assert res["ok"] is True and res["reverted"] is True     # committed -> reported committed
+    assert ("publish", {}) in calls and ("discard", {}) not in calls

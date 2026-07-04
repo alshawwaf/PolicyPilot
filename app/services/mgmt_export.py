@@ -486,6 +486,41 @@ def _cell(values: list[str]) -> list[str]:
     return values if values else ["Any"]
 
 
+# Emit order for a dependency-correct replay/restore: leaf objects first, then
+# the groups that reference them, so an mgmt_cli / web_api backup re-applies
+# top-to-bottom without "referenced object does not exist" errors. (Terraform
+# orders itself via depends_on; this fixes the linear backends, which previously
+# emitted objects alphabetically by type — e.g. a group before its member hosts.)
+# Order distilled from the CLEANUP_ORDER in alshawwaf/cp-api-qa-tool (MIT),
+# reversed (create = delete-order reversed). Unlisted types keep alphabetical
+# order, after the known ones.
+_CREATION_ORDER = [
+    # core network leaf objects
+    "host", "network", "wildcard", "address-range", "multicast-address-range",
+    "dns-domain", "security-zone", "dynamic-object", "tag", "time",
+    "updatable-object", "network-feed",
+    # services (leaf)
+    "service-tcp", "service-udp", "service-icmp", "service-icmp6",
+    "service-sctp", "service-other", "service-dce-rpc", "service-rpc",
+    "service-citrix-tcp", "service-compound-tcp",
+    # applications (leaf before group)
+    "application-site", "application-site-category",
+    # gateways / hosts
+    "checkpoint-host", "simple-gateway", "simple-cluster",
+    "interoperable-device", "logical-server",
+    # groups — AFTER their potential members
+    "service-group", "application-site-group", "group",
+    "group-with-exclusion", "time-group",
+]
+_CREATION_RANK = {t: i for i, t in enumerate(_CREATION_ORDER)}
+
+
+def _creation_rank(cp_type: str) -> tuple:
+    """Sort key: known types by dependency rank (deps first), unknown types
+    alphabetically after them."""
+    return (_CREATION_RANK.get(cp_type, len(_CREATION_ORDER)), cp_type)
+
+
 # --- public entry point ----------------------------------------------------------------------
 
 def generate(bundle: dict, host: str = "", domain: str = "") -> dict:
@@ -502,7 +537,7 @@ def generate(bundle: dict, host: str = "", domain: str = "") -> dict:
     skipped: dict[str, int] = {}
     ref_map: dict[str, str] = {}
 
-    for cp_type in sorted(objects_by_type):
+    for cp_type in sorted(objects_by_type, key=_creation_rank):
         spec = OBJ_SPECS.get(cp_type)
         objs = objects_by_type[cp_type]
         if not spec:

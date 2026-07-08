@@ -21,6 +21,34 @@ def fetch_gateway_cert(host: str, port: int = 443, timeout: float = 6.0) -> dict
     return {"pem": pem.strip(), "fingerprint": cert_fingerprint(pem)}
 
 
+def connect_error_message(host, port, exc) -> str:
+    """An honest message for a failed connection to a management server.
+
+    Distinguishes a *network* failure (unreachable / timed out — the portal
+    couldn't open the socket) from a *TLS/certificate* failure (the handshake
+    reached the server but the cert wasn't trusted). Only the latter mentions
+    trusting the cert — a timeout must never be blamed on the pinned cert /
+    auto-trust, which is what made an unreachable SMS read as a "trust" problem.
+    """
+    cause = getattr(exc, "__cause__", None)
+    text = f"{exc}".lower()
+    is_tls = isinstance(exc, ssl.SSLError) or isinstance(cause, ssl.SSLError) or any(
+        k in text for k in ("certificate", "ssl", "tls handshake", "cert verify",
+                             "self-signed", "self signed", "verify failed"))
+    if is_tls:
+        return (f"TLS/certificate error connecting to {host}:{port} — {exc}. If this is a self-signed "
+                f"Check Point certificate, tick “Trust this server's certificate” on the server "
+                f"profile (or paste/pin the certificate), then try again.")
+    is_timeout = "timed out" in text or "timeout" in text or exc.__class__.__name__.endswith("Timeout")
+    if is_timeout:
+        return (f"Could not reach {host}:{port} — the connection timed out. The management server is "
+                f"not reachable from the portal. Check the host and port, and any firewall / VPN / routing "
+                f"between the portal and the server. (This is a network-path issue, not a certificate/"
+                f"trust issue.)")
+    return (f"Could not reach {host}:{port} — {exc}. Check the host and port, and that the management "
+            f"server is reachable from the portal (network / firewall).")
+
+
 def ensure_pinned(db, gw) -> bool:
     """Trust-on-first-use: if the gateway opts into auto-trust and has no cert pinned yet, fetch the
     cert it currently presents and pin it to the profile. The apply/fetch that follows then verifies

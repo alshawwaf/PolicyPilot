@@ -359,6 +359,7 @@ Environment variables bootstrap the deployment; **most secrets are also settable
 | `PILOT_ENCRYPTION_KEY` | AES-256-GCM key for saved credentials / secrets | derived from the session secret if unset |
 | `PILOT_BASE_URL` | External base URL (links, callbacks) | `http://localhost:8000` |
 | `PILOT_DATABASE_URL` | Database URL | `sqlite:///./data/policypilot.db` |
+| `PILOT_MCP_TOKEN` | Bootstrap Bearer for `/mcp` — on boot, seeds an active mcp-scope API key whose secret is this token, so the n8n agent authenticates without an admin minting a key by hand (idempotent; no-op when unset) | — |
 | `PILOT_TRUSTED_PROXY_HOPS` | Trusted `X-Forwarded-For` hops behind a proxy | `0` (set `1` behind Traefik / Caddy) |
 | `PILOT_WEBHOOK_TOKEN` | Ticket-webhook auth token | — |
 | `PILOT_WEBHOOK_SERVER_IDS` | Server ids the webhook may target | blank = all |

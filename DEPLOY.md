@@ -108,7 +108,7 @@ safe default **or** is settable later from the **Settings** UI — see the note 
 | `PILOT_TRUSTED_PROXY_HOPS` | Reverse-proxy hops in front (see below). | `0` (trust the direct TCP peer) |
 | `PILOT_WEBHOOK_TOKEN` | `X-PolicyPilot-Token` shared secret enabling the ticketing webhook. | unset → webhook disabled |
 | `PILOT_WEBHOOK_SERVER_IDS` | Comma-separated server ids the webhook may target. | blank = all allowed servers |
-| `PILOT_MCP_TOKEN` | Bearer for the **standalone** `python -m app.mcp_server` run mode only (the portal-mounted `/mcp` uses an mcp-scope API key instead). | unset |
+| `PILOT_MCP_TOKEN` | Bearer for the MCP endpoint. On boot the app seeds an **active mcp-scope API key** from this value (`_seed_mcp_key()`), so the portal-mounted `/mcp` (and the standalone `python -m app.mcp_server`) accept `Authorization: Bearer $PILOT_MCP_TOKEN` with no admin minting a key by hand. | unset |
 | `PILOT_SERVICENOW_INSTANCE` / `_USER` / `_PASSWORD` / `_TABLE` | Optional ServiceNow Table API write-back of the decision + rule UID. | unset (`_TABLE` = `incident`) |
 
 > **Most of these are also settable from the Settings UI now** (portal-configurable secrets, encrypted at

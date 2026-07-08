@@ -24,6 +24,8 @@ import time
 
 import httpx
 
+from .gaia_client import connect_error_message
+
 GAIA_VERSION = "v1.9"   # matches apply_runner's Gaia API version
 _SECTIONS = ("hostname", "dns", "ntp", "time", "interfaces", "routes", "proxy")
 
@@ -102,14 +104,13 @@ def pull_gaia(host: str, port: int, user: str, secret: str, cert_pem: str | None
                       "ms": round((time.perf_counter() - t0) * 1000)})
 
     try:
-        with httpx.Client(verify=verify, timeout=30.0) as c:
+        with httpx.Client(verify=verify, timeout=httpx.Timeout(30.0, connect=8.0)) as c:
             t = time.perf_counter()
             try:
                 login = c.post(f"{base}/login", json={"user": user, "password": secret})
             except (httpx.ConnectError, ssl.SSLError, httpx.ConnectTimeout) as exc:
                 return {"ok": False, "config": {}, "trace": trace,
-                        "error": f"Could not reach {host}:{port} over TLS — {exc}. Check the host/port, "
-                                 "firewall, and the pinned cert / auto-trust."}
+                        "error": connect_error_message(host, port, exc)}
             rec("login", login, t)
             if login.status_code >= 400:
                 return {"ok": False, "config": {}, "trace": trace, "error": _login_error(login)}

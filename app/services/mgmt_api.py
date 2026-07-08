@@ -16,7 +16,7 @@ import time
 
 import httpx
 
-from .gaia_client import ensure_pinned  # noqa: F401 — re-exported; routers pin a server's cert the same way
+from .gaia_client import ensure_pinned, connect_error_message  # noqa: F401 — re-exported; routers pin a server's cert the same way
 
 
 class MgmtError(Exception):
@@ -63,7 +63,10 @@ class MgmtSession:
         except ssl.SSLError as exc:
             raise MgmtError(f"The saved certificate for {server.host} is not valid PEM — re-paste it "
                             f"on the Edit page ({exc}).") from exc
-        self._client = httpx.Client(verify=verify, timeout=timeout)
+        # Fail fast on an unreachable host (connect) while still allowing slow
+        # web_api reads: a dead SMS should error in ~8s, not hang ~30s.
+        self._client = httpx.Client(verify=verify,
+                                    timeout=httpx.Timeout(timeout, connect=min(8.0, timeout)))
         self.sid: str | None = None
         self.login_info: dict = {}
         self.trace: list[dict] = []
@@ -110,9 +113,7 @@ class MgmtSession:
                 t = time.perf_counter()
                 r = self._client.post(f"{self.base}/login", json=payload)
             except (httpx.ConnectError, ssl.SSLError, httpx.ConnectTimeout) as exc:
-                raise MgmtError(f"Could not reach {self.server.host}:{self.server.port} over TLS — {exc}. "
-                                "Check the host/port, the firewall, and (for a self-signed cert) the pinned "
-                                "cert / auto-trust.") from exc
+                raise MgmtError(connect_error_message(self.server.host, self.server.port, exc)) from exc
             self._record("login", {"user": self.server.username, "password": "***",
                                    **({"domain": self.server.domain} if self.server.domain else {})}, r, t)
             if r.status_code == 200:

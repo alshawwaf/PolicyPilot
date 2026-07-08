@@ -176,6 +176,13 @@
   .os-ctx .os-ctx-sep { height:1px; background:rgba(255,255,255,.10); margin:5px 7px; }
   .os-ctx .os-ctx-h { font-size:10px; font-weight:700; letter-spacing:.07em; text-transform:uppercase; color:var(--muted); padding:7px 11px 3px; }
   .os-ctx .os-ctx-note { font-size:11px; color:var(--muted); padding:3px 11px 7px; max-width:230px; line-height:1.35; white-space:normal; }
+  /* macOS-style flyout submenu (e.g. the "Widgets ▸" item): opens beside its parent row on hover/click */
+  .os-ctx .os-sub { position:relative; }
+  .os-ctx .os-sub > button .os-sub-arr { margin-left:auto; display:inline-flex; opacity:.75; }
+  .os-ctx .os-sub > button .os-sub-arr svg { width:13px; height:13px; }
+  .os-ctx .os-ctx-sub { display:none; left:calc(100% - 4px); top:-6px; }
+  .os-ctx .os-sub.open > .os-ctx-sub { display:block; }
+  .os-ctx .os-sub.open > button { background:var(--accent-grad); color:#fff; }
   /* one-time discovery pulse on the menubar Customize button */
   @keyframes pp-cust-pulse { 0%,100%{ box-shadow:0 0 0 0 rgba(123,63,242,0); } 50%{ box-shadow:0 0 0 4px rgba(123,63,242,.35); } }
   #os-customize.hint { animation:pp-cust-pulse 1.8s ease-in-out 3; border-radius:8px; }
@@ -274,6 +281,8 @@
     dots: '<circle cx="5" cy="12" r="1.6" fill="currentColor"/><circle cx="12" cy="12" r="1.6" fill="currentColor"/><circle cx="19" cy="12" r="1.6" fill="currentColor"/>',
     edit: '<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>',
     check: '<polyline points="20 6 9 17 4 12"/>',
+    chev: '<polyline points="9 18 15 12 9 6"/>',
+    widgets: '<rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="8" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/><path d="M17 13.5v7M13.5 17h7"/>',
     rules: '<rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/>',
     download: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>',
     users: '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>',
@@ -477,8 +486,9 @@
       var c = cellOf(i.x || 0, i.y || 0); return c.col === col && c.row === row;
     });
   }
+  // Auto-placement is column-major like macOS: fill a column top-to-bottom, then start the next column.
   function nextSlot() {
-    for (var row = 0; row < 6; row++) for (var col = 0; col < 12; col++) if (!occupied(col, row, null)) return slotXY(col, row);
+    for (var col = 0; col < 12; col++) for (var row = 0; row < 6; row++) if (!occupied(col, row, null)) return slotXY(col, row);
     return slotXY(0, 0);
   }
   function snapSlot(x, y, key) {
@@ -607,12 +617,41 @@
   /* ---- right-click context menu (macOS-style) ---- */
   var ctx = document.createElement('div'); ctx.className = 'os-ctx'; desktop.appendChild(ctx);
   function hideCtx() { ctx.classList.remove('open'); }
-  function showCtx(x, y, items) {
-    ctx.innerHTML = '';
+  function buildMenu(host, items) {
     items.forEach(function (it) {
-      if (it.sep) { var s = document.createElement('div'); s.className = 'os-ctx-sep'; ctx.appendChild(s); return; }
-      if (it.heading) { var h = document.createElement('div'); h.className = 'os-ctx-h'; h.textContent = it.heading; ctx.appendChild(h); return; }
-      if (it.note) { var nt = document.createElement('div'); nt.className = 'os-ctx-note'; nt.textContent = it.note; ctx.appendChild(nt); return; }
+      if (it.sep) { var s = document.createElement('div'); s.className = 'os-ctx-sep'; host.appendChild(s); return; }
+      if (it.heading) { var h = document.createElement('div'); h.className = 'os-ctx-h'; h.textContent = it.heading; host.appendChild(h); return; }
+      if (it.note) { var nt = document.createElement('div'); nt.className = 'os-ctx-note'; nt.textContent = it.note; host.appendChild(nt); return; }
+      if (it.sub) {                                 // macOS-style flyout submenu ("Widgets ▸"): hover or click opens it
+        var wrap = document.createElement('div'); wrap.className = 'os-sub';
+        var pb = document.createElement('button'); pb.type = 'button';
+        pb.innerHTML = svg(it.ic || I.play) + '<span>' + it.label + '</span><span class="os-sub-arr">' + svg(I.chev) + '</span>';
+        var sub = document.createElement('div'); sub.className = 'os-ctx os-ctx-sub';
+        buildMenu(sub, it.sub);
+        wrap.appendChild(pb); wrap.appendChild(sub);
+        var closeT = null;
+        function openSub() {
+          clearTimeout(closeT);
+          host.querySelectorAll('.os-sub.open').forEach(function (n) { if (n !== wrap) n.classList.remove('open'); });
+          wrap.classList.add('open');
+          sub.style.left = ''; sub.style.right = ''; sub.style.top = '';   // re-measure from the default flyout side
+          var r = sub.getBoundingClientRect(), dr = desktop.getBoundingClientRect();
+          if (r.right > dr.right - 8) { sub.style.left = 'auto'; sub.style.right = 'calc(100% - 4px)'; }   // flip left at the edge
+          var over = r.bottom - (dr.bottom - 8);
+          if (over > 0) {                            // shift up so the flyout stays inside the desktop
+            var wr = wrap.getBoundingClientRect();
+            sub.style.top = Math.round(Math.max(8 - (wr.top - dr.top), -6 - over)) + 'px';
+          }
+        }
+        wrap.addEventListener('mouseenter', openSub);
+        wrap.addEventListener('mouseleave', function () { closeT = setTimeout(function () { wrap.classList.remove('open'); }, 260); });
+        pb.addEventListener('click', function (e) {   // click toggles too (touch / no-hover)
+          e.stopPropagation();
+          if (wrap.classList.contains('open')) wrap.classList.remove('open'); else openSub();
+        });
+        host.appendChild(wrap);
+        return;
+      }
       var b = document.createElement('button'); b.type = 'button';
       var lead = (it.check !== undefined)
         ? '<span class="os-ck' + (it.check ? ' on' : '') + '">' + svg(I.check) + '</span>'
@@ -625,8 +664,12 @@
           var ck = b.querySelector('.os-ck'); if (ck && it.recheck) ck.classList.toggle('on', it.recheck());
         } else { hideCtx(); it.fn(); }
       });
-      ctx.appendChild(b);
+      host.appendChild(b);
     });
+  }
+  function showCtx(x, y, items) {
+    ctx.innerHTML = '';
+    buildMenu(ctx, items);
     ctx.style.left = Math.min(x, desktop.clientWidth - 224) + 'px';
     ctx.style.top = Math.min(y, Math.max(8, desktop.clientHeight - (items.length * 40 + 16))) + 'px';
     ctx.classList.add('open');
@@ -856,17 +899,17 @@
         fn: function () { toggleWidget(id); } };
     });
   }
-  // One discoverable menu: Widgets checklist + an "add app icons" shortcut (+ admin default).
+  // One discoverable menu: a "Widgets ▸" flyout with the checklist + an "add app icons" shortcut (+ admin default).
   // Reused by the menubar Customize button, the empty-widget card, and the desktop background right-click.
   function customizeMenuItems() {
     // Below 1040px the widget rail is hidden (CSS), so toggling widgets would have no visible effect —
     // surface a note instead of dead-end checkboxes. App icons still work at any width.
     var railHidden = window.matchMedia && window.matchMedia('(max-width:1040px)').matches;
-    var items = [{ heading: 'Widgets' }];
-    if (railHidden) items.push({ note: 'The widget rail is hidden on narrow screens — widen the window to use widgets.' });
-    else items = items.concat(widgetMenuItems());
-    items.push({ sep: true }, { heading: 'App icons' },
-      { label: 'Add apps to Dock or Desktop…', ic: I.grid, fn: function () { openLaunchpad(); } });
+    var items = [];
+    if (railHidden) items.push({ heading: 'Widgets' },
+      { note: 'The widget rail is hidden on narrow screens — widen the window to use widgets.' }, { sep: true });
+    else items.push({ label: 'Widgets', ic: I.widgets, sub: widgetMenuItems() });
+    items.push({ label: 'Add apps to Dock or Desktop…', ic: I.grid, fn: function () { openLaunchpad(); } });
     if (window.PP_ADMIN) items.push({ sep: true }, { label: 'Set this layout as everyone’s default', ic: I.star, fn: saveDefault });
     return items;
   }

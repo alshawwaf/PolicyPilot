@@ -508,22 +508,46 @@ def update_profile(
 # --- Home ------------------------------------------------------------------------------
 # --- Desktop layout (OS-style Home): which apps are on the dock + which icons sit on the desktop ------
 # Server-side allowlist of app keys (anything else in a saved layout is dropped — no junk/injection).
-DESKTOP_APP_KEYS = {"access", "decisionmap", "decisiontree", "changelog", "webhook", "layers", "management",
-                    "policymanager", "iacexporter", "gateways", "agents", "apiexplorer", "apidocs",
-                    "settings", "activity", "account", "system", "users", "fieldsupport"}
+DESKTOP_APP_KEYS = {"access", "handbook", "decisionmap", "decisiontree", "changelog", "webhook", "layers",
+                    "management", "policymanager", "iacexporter", "gateways", "agents", "apiexplorer",
+                    "apidocs", "settings", "activity", "account", "system", "users", "fieldsupport"}
 # Toggleable desktop widgets (the right-hand rail on the OS Home). Each is backed by real, DB-side data.
 DESKTOP_WIDGET_KEYS = {"decisions", "activity", "last", "connections", "coverage",
                        "errors", "latency", "recent", "clock", "quick", "system"}
+# Built-in default desktop: EVERY catalog app sits on the desktop (a fresh macOS shows its apps), laid out
+# column-major — fill a column top-to-bottom, then start the next one. Coordinates mirror the client's icon
+# grid (home.html: 104x116 pitch from a 24,18 origin, 6 rows per column — keep in sync). Permission-gated
+# apps ('settings', 'users') come last so a non-admin's desktop (which hides them) still renders gap-free.
+_DESKTOP_GRID = {"ox": 24, "oy": 18, "gx": 104, "gy": 116, "rows": 6}
+_DEFAULT_DESKTOP_ORDER = ["access", "handbook", "decisionmap", "decisiontree", "fieldsupport", "changelog",
+                          "layers", "management", "policymanager", "iacexporter", "gateways", "agents",
+                          "apidocs", "webhook", "apiexplorer", "activity", "system", "account",
+                          "settings", "users"]
+
+
+def _default_desktop_icons() -> list[dict]:
+    g = _DESKTOP_GRID
+    return [{"key": k, "x": g["ox"] + (i // g["rows"]) * g["gx"], "y": g["oy"] + (i % g["rows"]) * g["gy"]}
+            for i, k in enumerate(_DEFAULT_DESKTOP_ORDER)]
+
+
 DEFAULT_DESKTOP_LAYOUT = {"dock": ["access", "layers", "management", "policymanager", "iacexporter",
                                    "gateways", "agents", "settings", "activity", "system"],
-                          "desktop": []}
+                          "desktop": _default_desktop_icons()}
+
+
+def _builtin_layout() -> dict:
+    """A fresh copy of the built-in default (never hand out the module-level lists/dicts — saved layouts
+    are stored as-is, and shared references would alias every caller)."""
+    return {"dock": list(DEFAULT_DESKTOP_LAYOUT["dock"]),
+            "desktop": [dict(it) for it in DEFAULT_DESKTOP_LAYOUT["desktop"]]}
 
 
 def _sanitize_layout(raw) -> dict:
     """Validate a layout dict against the app-key allowlist; clamp counts + icon positions. Falls back to
     the default dock when empty so a user is never stranded with no apps."""
     if not isinstance(raw, dict):
-        return {k: list(v) for k, v in DEFAULT_DESKTOP_LAYOUT.items()}
+        return _builtin_layout()
     seen = set()
     dock = []
     for k in (raw.get("dock") or [])[:24]:
@@ -589,7 +613,7 @@ def _load_desktop_layout(db: Session, user: User) -> dict:
     row = db.scalar(select(UserDesktopPref).where(UserDesktopPref.owner_id == user.id))
     if row and isinstance(row.layout, dict) and row.layout:
         return _sanitize_layout(row.layout)
-    return _global_default_layout(db) or {k: list(v) for k, v in DEFAULT_DESKTOP_LAYOUT.items()}
+    return _global_default_layout(db) or _builtin_layout()
 
 
 # --- System health (a desktop "System" app: process + DB + activity + agent-surface health) -----------

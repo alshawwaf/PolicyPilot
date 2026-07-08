@@ -13,7 +13,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from . import __version__
 from .config import get_settings
 from .db import SessionLocal, init_db
-from .models import User
+from .models import ApiKey, User
 from .middleware import ActivityLogMiddleware, SecurityHeadersMiddleware
 
 
@@ -71,6 +71,31 @@ def _seed_admin(settings) -> None:
             print(banner, file=sys.stderr)
 
 
+def _seed_mcp_key() -> None:
+    """Bootstrap the MCP bearer key from the environment so a fresh deploy comes up with a working /mcp
+    endpoint (the n8n PolicyPilot agent authenticates with ``Authorization: Bearer $PILOT_MCP_TOKEN``)
+    WITHOUT an admin minting a key by hand. If ``PILOT_MCP_TOKEN`` is set, ensure an ACTIVE mcp-scope
+    API key whose secret is that token exists — the /mcp guard accepts any active mcp-scope key
+    (api_keys.verify), so this key makes the endpoint authenticate the env token. Idempotent: keyed on the
+    token's SHA-256, it skips if a key with that hash already exists (so a restart or a manually-minted
+    matching key is a no-op). A no-op when the env var is absent, which preserves today's manual-key
+    behavior. The token itself is never logged."""
+    token = os.environ.get("PILOT_MCP_TOKEN", "").strip()
+    if not token:
+        return
+    from .services.api_keys import _hash, _bust
+    key_hash = _hash(token)
+    log = logging.getLogger("policypilot")
+    with SessionLocal() as db:
+        if db.scalar(select(ApiKey).where(ApiKey.key_hash == key_hash)) is not None:
+            return                          # a key with this exact secret already exists — nothing to do
+        db.add(ApiKey(name="MCP bootstrap key", scope="mcp", key_hash=key_hash, hint=token[-4:],
+                      can_write=True, created_by="env:PILOT_MCP_TOKEN"))
+        db.commit()
+    _bust()                                 # drop the verify cache so the new key authenticates immediately
+    log.info("Seeded mcp-scope API key from PILOT_MCP_TOKEN")
+
+
 async def _retention_loop():
     """Storage guardrail: periodically trim the Activity log to the admin-configured caps
     so a long-running demo can't fill the disk. Defensive — an iteration failure is logged and the loop
@@ -94,6 +119,7 @@ async def lifespan(app: FastAPI):
     settings = get_settings()
     init_db()
     _seed_admin(settings)
+    _seed_mcp_key()
     retention_task = asyncio.create_task(_retention_loop())
     from . import mcp_server                          # run the mounted /mcp app's session manager (no-op
     try:                                              # if MCP isn't mounted)

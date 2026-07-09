@@ -639,8 +639,15 @@ def revert_change(change_id: int, publish: bool = False, disable_instead_of_dele
             if state != "disabled":
                 return {"ok": False, "error": f"reenable turns a DISABLED rule back on, but change "
                                               f"{change_id} is {state}"}
-            ops = [{"op": "set-access-rule", "uid": inv0.get("uid"), "layer": inv0.get("layer"),
-                    "enabled": True}]
+            # When the recorded inverse IS a re-enable (a removal/cleanup disable records the full restore —
+            # enabled + prior comments/custom-fields), replay it for a faithful undo; an ADDED rule rolled
+            # back by disabling records a delete-inverse, so fall back to the minimal enable op there.
+            # (Mirrors routers/access_automation.aa_revert.)
+            if all(o.get("op") == "set-access-rule" and o.get("enabled") is True for o in inv):
+                ops = inv
+            else:
+                ops = [{"op": "set-access-rule", "uid": inv0.get("uid"), "layer": inv0.get("layer"),
+                        "enabled": True}]
             disable_added = False
             # Re-enabling a rule a REMOVAL disabled restores the original access → terminal. Re-enabling an
             # ADDED rule we'd disabled restores the created rule → back to ACTIVE (rollable again).

@@ -745,7 +745,11 @@ def _policy_token(session: "MgmtSession") -> str:
     return f"{top.get('uid', '')}:{stamp or ''}"
 
 
-def _raw_pull(session: "MgmtSession", layer: str, package, max_rules: int) -> dict:
+def _raw_pull(session: "MgmtSession", layer: str, package, max_rules: int, *,
+              hits: bool = False) -> dict:
+    """Page a layer's full access rulebase + object dictionary. With ``hits=True`` also requests per-rule
+    hit counts (``show-hits`` + a wide ``hits-settings.from-date`` — R80.10 requires an explicit date),
+    which the Policy Cleanup scan needs; the default False path is the plain viewer/export pull."""
     items: list[dict] = []
     objdict: dict = {}
     total, offset = 0, 0
@@ -755,6 +759,9 @@ def _raw_pull(session: "MgmtSession", layer: str, package, max_rules: int) -> di
                    # Expand group members to full objects so the engine can resolve a group cell to IPs
                    # (an unresolved group reads as "extent unknown" and routes every overlap to REVIEW).
                    "dereference-group-members": True}
+        if hits:
+            payload["show-hits"] = True
+            payload["hits-settings"] = {"from-date": "1970-01-02"}
         if package:
             payload["package"] = package
         page = session.call("show-access-rulebase", payload)

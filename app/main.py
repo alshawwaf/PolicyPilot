@@ -34,7 +34,7 @@ def _setup_logging() -> None:
     log.setLevel(lvl)
 from .routers import (
     access_automation, activity, api_docs, api_v1, dynamic_layers, exports, gateways,
-    gaia_mock, iac_exporter, mgmt, notifications, policy_manager,
+    gaia_mock, iac_exporter, mgmt, notifications, policy_cleanup, policy_manager,
     settings as settings_router, ui, users,
 )
 # Connections (/management) now configures servers; Policy Manager (/policy-manager) browses/edits the live
@@ -174,6 +174,7 @@ def create_app() -> FastAPI:
     app.include_router(activity.router)
     app.include_router(mgmt.router)
     app.include_router(policy_manager.router)   # /policy-manager — browse + edit the live rulebase
+    app.include_router(policy_cleanup.router)   # /policy-cleanup — hit-count rule cleanup (PolicyCleanUp port)
     app.include_router(iac_exporter.router)     # /iac-export — policy + Gaia config → Terraform/Ansible/clish
     app.include_router(access_automation.router)
     app.include_router(settings_router.router)

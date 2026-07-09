@@ -509,7 +509,7 @@ def update_profile(
 # --- Desktop layout (OS-style Home): which apps are on the dock + which icons sit on the desktop ------
 # Server-side allowlist of app keys (anything else in a saved layout is dropped — no junk/injection).
 DESKTOP_APP_KEYS = {"access", "handbook", "decisionmap", "decisiontree", "changelog", "webhook", "layers",
-                    "management", "policymanager", "iacexporter", "gateways", "agents", "apiexplorer",
+                    "management", "policymanager", "policycleanup", "iacexporter", "gateways", "agents", "apiexplorer",
                     "apidocs", "settings", "activity", "account", "system", "users", "fieldsupport"}
 # Toggleable desktop widgets (the right-hand rail on the OS Home). Each is backed by real, DB-side data.
 DESKTOP_WIDGET_KEYS = {"decisions", "activity", "last", "connections", "coverage",
@@ -520,7 +520,7 @@ DESKTOP_WIDGET_KEYS = {"decisions", "activity", "last", "connections", "coverage
 # apps ('settings', 'users') come last so a non-admin's desktop (which hides them) still renders gap-free.
 _DESKTOP_GRID = {"ox": 24, "oy": 18, "gx": 104, "gy": 116, "rows": 6}
 _DEFAULT_DESKTOP_ORDER = ["access", "handbook", "decisionmap", "decisiontree", "fieldsupport", "changelog",
-                          "layers", "management", "policymanager", "iacexporter", "gateways", "agents",
+                          "layers", "management", "policymanager", "policycleanup", "iacexporter", "gateways", "agents",
                           "apidocs", "webhook", "apiexplorer", "activity", "system", "account",
                           "settings", "users"]
 
@@ -531,7 +531,7 @@ def _default_desktop_icons() -> list[dict]:
             for i, k in enumerate(_DEFAULT_DESKTOP_ORDER)]
 
 
-DEFAULT_DESKTOP_LAYOUT = {"dock": ["access", "layers", "management", "policymanager", "iacexporter",
+DEFAULT_DESKTOP_LAYOUT = {"dock": ["access", "layers", "management", "policymanager", "policycleanup", "iacexporter",
                                    "gateways", "agents", "settings", "activity", "system"],
                           "desktop": _default_desktop_icons()}
 

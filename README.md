@@ -482,6 +482,7 @@ offline smoke test of the decision engine runs with `python3 -m app.services.acc
 - **[docs/live-validation.md](docs/live-validation.md)** — the 15-minute post-deploy smoke test for both rails against a real lab.
 - **[docs/access-automation-whitepaper.md](docs/access-automation-whitepaper.md)** — how the engine reasons about a rulebase.
 - **[docs/integrations/access-automation.md](docs/integrations/access-automation.md)** — the ticket-to-rule flow.
+- **[docs/integrations/policy-cleanup.md](docs/integrations/policy-cleanup.md)** — find and retire rules that hit count says are unused (the PolicyCleanUp port).
 - **[docs/integrations/management-export.md](docs/integrations/management-export.md)** — pull and export policy as Terraform / Ansible / `mgmt_cli`.
 - **[docs/integrations/gaia-export.md](docs/integrations/gaia-export.md)** — export a gateway's Gaia OS config.
 - **[docs/integrations/dynamic-layers.md](docs/integrations/dynamic-layers.md)** — the gateway-direct (dynamic-layer) rail.

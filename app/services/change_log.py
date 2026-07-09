@@ -55,6 +55,51 @@ def snapshot_request(req) -> dict:
             "vpn": getattr(req, "vpn", None)}
 
 
+def record_committed(db: Session, *, server, layer: str, action: str, outcome: str, summary: str,
+                     request: Optional[dict] = None, inverse: Optional[list] = None,
+                     objects: Optional[list] = None, package: Optional[str] = None,
+                     ticket_id: str = "", actor: str = "", resolution: str = "",
+                     emit_audit: bool = True) -> AppliedChange:
+    """Low-level recorder: persist ONE committed change with an explicit summary + inverse op list. The
+    access rails go through :func:`record` (which derives these from the engine result); op-shaped rails
+    (Policy Cleanup) call this directly. An empty ``inverse`` records a non-revertable change — kept for
+    the audit trail rather than vanishing. A non-empty ``resolution`` (e.g. ``"deleted"``) records the
+    change as already resolved (terminal — nothing to act on). ``emit_audit=False`` lets a batch caller
+    raise ONE governance event for the whole batch instead of one per row."""
+    row = AppliedChange(
+        created_by=actor or "",
+        server_id=getattr(server, "id", None),
+        server_name=getattr(server, "name", "") or "",
+        layer=layer or "",
+        package=package,
+        action=action,
+        outcome=outcome,
+        summary=summary,
+        ticket_id=(ticket_id or "").strip(),
+        request_json=request or {},
+        inverse_json=list(inverse or []),
+        objects_json=list(objects or []),
+    )
+    if resolution:
+        row.resolution = resolution
+        row.reverted_at = dt.datetime.now(dt.timezone.utc)
+        row.reverted_by = actor or ""
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    if emit_audit:
+        try:                                          # governance audit — metadata only, never breaks recording
+            from . import audit
+            tkt = f" · ticket {row.ticket_id}" if row.ticket_id else ""
+            audit.emit(f"{row.created_by or 'portal'} · {row.action} ({row.outcome}) on "
+                       f"{row.server_name or 'server'} / {row.layer or 'layer'}{tkt}",
+                       actor=row.created_by or "portal")
+        except Exception:  # noqa: BLE001
+            import logging
+            logging.getLogger("policypilot.change_log").exception("audit emit failed")
+    return row
+
+
 def record(db: Session, *, server, result: dict, request: dict, layer: str,
            package: Optional[str] = None, ticket_id: str = "", actor: str = "") -> Optional[AppliedChange]:
     """Persist a PUBLISHED change so it can be rolled back. No-op (returns None) unless the change actually
@@ -68,33 +113,10 @@ def record(db: Session, *, server, result: dict, request: dict, layer: str,
     action = result.get("action", "apply")           # remove_execute stamps action="remove"; apply omits it
     objs = [o for o in (result.get("source_object"), result.get("destination_object"),
                         result.get("service_object"), result.get("widen_object")) if o]
-    row = AppliedChange(
-        created_by=actor or "",
-        server_id=getattr(server, "id", None),
-        server_name=getattr(server, "name", "") or "",
-        layer=layer or "",
-        package=package,
-        action=action,
-        outcome=outcome,
-        summary=_summary(action, outcome, request),
-        ticket_id=(ticket_id or "").strip(),
-        request_json=request,
-        inverse_json=list(result.get("inverse") or []),
-        objects_json=objs,
-    )
-    db.add(row)
-    db.commit()
-    db.refresh(row)
-    try:                                              # governance audit — metadata only, never breaks recording
-        from . import audit
-        tkt = f" · ticket {row.ticket_id}" if row.ticket_id else ""
-        audit.emit(f"{row.created_by or 'portal'} · {row.action} ({row.outcome}) on "
-                   f"{row.server_name or 'server'} / {row.layer or 'layer'}{tkt}",
-                   actor=row.created_by or "portal")
-    except Exception:  # noqa: BLE001
-        import logging
-        logging.getLogger("policypilot.change_log").exception("audit emit failed")
-    return row
+    return record_committed(db, server=server, layer=layer, action=action, outcome=outcome,
+                            summary=_summary(action, outcome, request), request=request,
+                            inverse=list(result.get("inverse") or []), objects=objs,
+                            package=package, ticket_id=ticket_id, actor=actor)
 
 
 def recent(db: Session, limit: int = 50) -> list[AppliedChange]:

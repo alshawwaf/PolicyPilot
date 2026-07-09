@@ -3,6 +3,37 @@
 All notable changes to **PolicyPilot** are documented here. This project follows
 [Semantic Versioning](https://semver.org/).
 
+## Unreleased
+
+### Policy Cleanup — a new app: retire rules that hit count says are dead weight
+- New top-level **Policy Cleanup** (nav + `/policy-cleanup`): a port of Check Point's open-source
+  [PolicyCleanUp](https://github.com/CheckPointSW/PolicyCleanUp) tool (MIT), wired onto the same `web_api`
+  client, session pool, and publish/discard machinery as every other rail. Pick a management server and an
+  access layer, set the **disable-after** (default 180d) and **delete-after** (default 60d) thresholds, and
+  **Run plan** — a read-only scan that pulls the rulebase *with hit counts* and buckets rules into
+  **disable** (enabled, unused past the threshold), **delete** (disabled by the tool past the threshold),
+  and **skipped** (with a reason). Review, uncheck anything to keep, then **dry-run** (validate + discard)
+  or **publish** (commit, with an explicit confirm). A disable stamps the disable time into custom-field
+  `field-3` and appends a marker comment; per-rule overrides via `field-1` / `field-2` (and `-1` = never
+  touch) use the **same custom-field convention as the standalone script**, so a policy stays interoperable
+  between PolicyPilot, the CLI tool, and SmartConsole. Every published cleanup raises the same governance
+  audit event (metadata only — counts + target) as the other rails. No new dependencies. See
+  [docs/integrations/policy-cleanup.md](docs/integrations/policy-cleanup.md). Full install-target /
+  hit-count validation from the upstream tool is the next roadmap step; this first version classifies on
+  the rulebase's own hit data and is human-in-the-loop (plan is read-only, applies default to dry-run).
+- **Rollback + live re-check.** Every apply first **re-fetches and re-classifies each selected rule against
+  the live policy** — a rule that took hits, was re-enabled, gained a never-touch pin, or vanished since the
+  plan is skipped and reported, never acted on (a stale plan left open in a tab can't clobber newer edits:
+  ops and inverses are built from the fresh state). A **published** cleanup then records **one revertable
+  change-history entry per rule** (the same `AppliedChange` rollback panel as the other rails, shared
+  `cleanup-<timestamp>` batch id): a **disable** carries a precomputed inverse that re-enables the rule and
+  restores its exact prior comments + custom-fields (explicitly blanking the `field-3` stamp); a **delete**
+  is recorded terminal with the full pre-delete rule snapshot, so what was removed is never lost. Per-rule
+  audit notifications are suppressed in favour of one batch governance event. Under the hood the shared
+  revert machinery gained two small generalizations: `custom-fields` joined the strictly-whitelisted
+  metadata a rollback may restore, and the panel's *Re-enable* action now replays the recorded full inverse
+  when it is one (falling back to the minimal enable op for added-rule entries).
+
 ## 1.1.0 — 2026-07-02
 
 Adds multi-user RBAC, full access-rule column + UserCheck / Action Settings support, the discovery /
@@ -184,7 +215,6 @@ and no confirmed majors; the verified items were closed:
   (rulebase over `web_api`, cells resolved to names, sections / negation / disabled shown) and edit a rule
   (action, track, name, comments, enabled) with a **dry-run** or **publish**, flowing through the same change
   log + governance audit.
-
 ### Governance & audit — a work-note after every committed change
 - Every COMMITTED change — an agent/REST/webhook publish to a live SMS (Rail A) or a real dynamic-layer push
   to a gateway (Rail B) — now raises a **governance event**: an in-app notification to every portal user (the

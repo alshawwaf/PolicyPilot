@@ -4176,18 +4176,22 @@ def amend_execute(server, secret, *, uid: str, layer: str, name=None, comment=No
 # ROLLBACK / undo  (replay an AppliedChange's recorded inverse op-list)
 # --------------------------------------------------------------------------- #
 _REVERT_FIELDS = {"source", "destination", "service"}
-_AMEND_REVERT_FIELDS = {"new-name", "comments", "tags", "track"}   # metadata an amend-revert may restore (write fields)
+_AMEND_REVERT_FIELDS = {"new-name", "comments", "tags", "track", "custom-fields"}   # metadata a revert may restore
 
 
 def _amend_meta_ok(k, v) -> bool:
-    """A recorded amend-revert metadata field is replayable iff it's whitelisted AND non-blank for the
-    fields the SMS rejects empty (a rule name, a track type) — so a stranded blank can never fail a rollback."""
+    """A recorded revert metadata field is replayable iff it's whitelisted AND non-blank for the
+    fields the SMS rejects empty (a rule name, a track type) — so a stranded blank can never fail a rollback.
+    ``custom-fields`` (the field-1/2/3 threshold-override/stamp fields Policy Cleanup restores) must be a
+    flat dict of scalars — still metadata, never a match column."""
     if k not in _AMEND_REVERT_FIELDS:
         return False
     if k == "new-name":
         return bool(str(v).strip())
     if k == "track":
         return isinstance(v, dict) and bool(str(v.get("type") or "").strip())
+    if k == "custom-fields":
+        return isinstance(v, dict) and all(isinstance(x, (str, int, float, bool)) for x in v.values())
     return True
 
 
@@ -4226,9 +4230,14 @@ def _apply_inverse_op(session, op: dict) -> str:
                             f"delete-access-rule {uid}")
     if kind == "set-access-rule":
         if "enabled" in op:
+            # An enable/disable op may carry a whitelisted metadata restore alongside (Policy Cleanup's
+            # disable-inverse re-enables AND puts back the prior comments/custom-fields in one atomic call).
+            meta = {k: v for k, v in (op.get("set") or {}).items() if _amend_meta_ok(k, v)} \
+                if isinstance(op.get("set"), dict) else {}
             return _revert_call(session, "set-access-rule",
-                                {"uid": uid, "layer": layer, "enabled": bool(op["enabled"])},
-                                f"set-access-rule {uid} enabled={bool(op['enabled'])}")
+                                {"uid": uid, "layer": layer, "enabled": bool(op["enabled"]), **meta},
+                                f"set-access-rule {uid} enabled={bool(op['enabled'])}"
+                                + ("," + ",".join(sorted(meta)) if meta else ""))
         # Metadata restore (undo an amend): set the OLD name / comments / tags back. STRICTLY limited to
         # those three fields — never a match column — so reverting an edit can only relabel, never re-open
         # or alter what the rule matches.

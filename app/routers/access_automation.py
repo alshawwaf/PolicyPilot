@@ -495,7 +495,15 @@ def aa_revert(sid: int, cid: int, body: RevertBody, request: Request, db: Sessio
     elif body.reenable:
         if state != "disabled":
             return JSONResponse({"error": "Re-enable applies only to a disabled rule."}, status_code=400)
-        ops = [{"op": "set-access-rule", "uid": inv0.get("uid"), "layer": inv0.get("layer"), "enabled": True}]
+        # When the recorded inverse IS a re-enable (a removal/cleanup disable records the full restore —
+        # enabled + prior comments/custom-fields), replay it for a faithful undo. An ADDED rule rolled back
+        # by disabling records a delete-inverse — replaying that would delete, so fall back to the minimal
+        # enable op there.
+        inv_ops = list(change.inverse_json or [])
+        if inv_ops and all(o.get("op") == "set-access-rule" and o.get("enabled") is True for o in inv_ops):
+            ops = inv_ops
+        else:
+            ops = [{"op": "set-access-rule", "uid": inv0.get("uid"), "layer": inv0.get("layer"), "enabled": True}]
         disable_added = False
         # undoing a REMOVAL that disabled a rule restores the access -> terminal; re-enabling an ADDED rule
         # we'd disabled restores the created rule -> back to ACTIVE (it can be rolled back again).

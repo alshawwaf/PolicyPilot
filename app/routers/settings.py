@@ -2,14 +2,18 @@
 (session reuse + revision-based policy cache). Auth-gated; values persist via ``services.app_settings``
 (DB-backed ``AppState``) so an admin controls the behaviour from the portal, never from code or env."""
 import datetime as dt
+import json
 
 from fastapi import APIRouter, Depends, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from ..config import get_settings
 from ..db import get_db
+from ..models import ManagementServer
 from ..security import get_user_or_none
-from ..services import api_keys, app_settings, permissions, table_prefs
+from ..services import api_keys, app_settings, permissions, servicenow_provision, table_prefs
 from .ui import _flash, _pop_flash, templates
 
 router = APIRouter(include_in_schema=False)
@@ -74,6 +78,16 @@ def _detected_base_url(request: Request) -> str:
     proto = (h.get("x-forwarded-proto") or request.url.scheme or "https").split(",")[0].strip()
     host = (h.get("x-forwarded-host") or h.get("host") or request.url.netloc or "").split(",")[0].strip()
     return f"{proto}://{host}".rstrip("/") if host else ""
+
+
+def _public_webhook_url(request: Request) -> str:
+    """The public URL ServiceNow should POST tickets to: the configured base_url, falling back to the URL
+    this request arrived on when base_url is unset/localhost (so a cloud ServiceNow tenant gets a reachable
+    address, not localhost)."""
+    base = app_settings.base_url()
+    if (not base) or "localhost" in base or "127.0.0.1" in base:
+        base = _detected_base_url(request) or base
+    return (base or "").rstrip("/") + "/access-automation/webhook"
 
 
 # --- Settings: one macOS System-Settings style page — a fixed category sidebar + a detail pane that swaps
@@ -152,8 +166,13 @@ def settings_page(request: Request, db: Session = Depends(get_db)):
     panes = [{"key": k, "label": l, "icon": i, "color": c, "blurb": b,
               "items": grouped.get(g, []) if g else []}
              for (k, l, g, i, c, b) in SECTIONS]
+    servers = db.scalars(
+        select(ManagementServer).where(ManagementServer.owner_id == user.id)
+        .order_by(ManagementServer.created_at.desc())
+    ).all()
     return templates.TemplateResponse(request, "settings.html", {
         "panes": panes, "vals": vals, "active_mode": _active_mode(vals),
+        "servers": servers, "webhook_public_url": _public_webhook_url(request),
         "secrets": secrets, "crypto_ok": app_settings.secret_available(),
         "detected_base_url": _detected_base_url(request),
         "summaries": _section_summaries(vals, secrets, len(api_keys.list_keys())),
@@ -230,6 +249,43 @@ def settings_reset(request: Request, db: Session = Depends(get_db)):
     app_settings.save(app_settings.defaults())
     _flash(request, "Settings restored to defaults.")
     return RedirectResponse("/settings", status_code=303)
+
+
+@router.post("/settings/servicenow/provision")
+async def servicenow_provision_stream(request: Request, db: Session = Depends(get_db)):
+    """Configure the ServiceNow side of the webhook (system properties + Business Rule + optional custom
+    fields + optional sample incident), streaming one newline-delimited JSON progress event per backend
+    step so the Settings modal can show it live. Administrator-only. Reuses the ServiceNow instance +
+    credentials stored in Ticket write-back and the inbound webhook token -- no re-entry of secrets."""
+    user, redir = _require_admin(request, db)
+    if redir:
+        return JSONResponse({"error": "Administrators only."}, status_code=403)
+    form = await request.form()
+    try:
+        server_id = int((form.get("server_id") or "0").strip() or "0")
+    except ValueError:
+        server_id = 0
+    layer = (form.get("layer") or "Network").strip() or "Network"
+    do_apply = bool(form.get("apply"))
+    create_fields = bool(form.get("fields"))
+    create_sample = bool(form.get("sample"))
+
+    s = get_settings()
+    instance = app_settings.get_or_env("servicenow_instance", s.servicenow_instance)
+    sn_user = app_settings.get_or_env("servicenow_user", s.servicenow_user)
+    password = app_settings.get_secret_or_env("servicenow_password", s.servicenow_password)
+    token = app_settings.get_secret_or_env("webhook_token", s.webhook_token)
+    webhook_url = _public_webhook_url(request)
+
+    def stream():
+        for ev in servicenow_provision.provision(
+                instance=instance, user=sn_user, password=password, webhook_url=webhook_url,
+                token=token, server_id=server_id, layer=layer, apply=do_apply,
+                create_fields=create_fields, create_sample=create_sample):
+            yield json.dumps(ev) + "\n"
+
+    return StreamingResponse(stream(), media_type="application/x-ndjson",
+                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
 
 @router.post("/settings/api-keys")

@@ -120,6 +120,29 @@
   #settings-app .kform label input, #settings-app .kform label select { display:block; margin-top:5px; }
   #settings-app .reveal { background:linear-gradient(135deg, var(--accent-soft), transparent); border:1px solid var(--accent);
     border-radius:13px; padding:15px 17px; margin-bottom:15px; }
+  #settings-app .sn-prov { background:linear-gradient(135deg, var(--accent-soft), transparent); border:1px solid var(--accent);
+    border-radius:13px; padding:16px 18px; margin-bottom:16px; }
+  #settings-app .sn-prov h3 { margin:0 0 4px; font-size:14.5px; display:flex; align-items:center; gap:8px; }
+  #settings-app .sn-prov p.sn-sub { font-size:12.5px; color:var(--muted); margin:0 0 13px; max-width:620px; line-height:1.5; }
+  #settings-app .sn-grid { display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end; margin-bottom:11px; }
+  #settings-app .sn-grid label { font-size:12px; font-weight:600; color:var(--muted); display:flex; flex-direction:column; gap:5px; }
+  #settings-app .sn-opts { display:flex; gap:18px; flex-wrap:wrap; margin-bottom:14px; }
+  #settings-app .sn-opts label { display:flex; align-items:center; gap:7px; font-size:12.5px; color:var(--text); font-weight:500; }
+  #settings-app .sn-opts input { width:auto; }
+  #settings-app .sn-note { font-size:11.5px; color:var(--faint); margin:10px 0 0; line-height:1.5; }
+  #settings-app .sn-note code { font-family:ui-monospace,monospace; color:var(--muted); }
+  #settings-app .sn-warn { font-size:12.5px; color:var(--warn); margin:0; }
+  /* progress log lives inside the PPWin body (appended to <body>, so NOT under #settings-app) */
+  .sn-log { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:12px; line-height:1.55;
+    padding:12px 14px; max-height:52vh; overflow:auto; }
+  .sn-line { display:flex; gap:9px; align-items:flex-start; padding:2px 0; color:var(--text-2); }
+  .sn-line .sn-ic { flex:none; width:15px; text-align:center; color:var(--faint); }
+  .sn-line.ok .sn-ic, .sn-line.exists .sn-ic { color:var(--ok); }
+  .sn-line.error { color:var(--danger); }
+  .sn-line.error .sn-ic { color:var(--danger); }
+  .sn-line.running .sn-ic { color:var(--accent); }
+  .sn-line.done { color:var(--text); font-weight:650; border-top:1px solid var(--line); margin-top:6px; padding-top:8px; }
+  .sn-line.done .sn-ic { color:var(--accent); }
 </style>
 
 <div id="settings-app">
@@ -235,6 +258,31 @@
           {% if p.key == 'agent' %}
           <p class="gv" style="margin:-6px 0 14px;">Set the broad posture in one move from <a href="#overview" class="ss-jump" data-t="overview">Overview</a> — these are the individual gates behind it. A <b>read-only</b> API key can never publish, whatever they say.</p>
           {% endif %}
+          {% if p.key == 'writeback' %}
+          <div class="sn-prov">
+            <h3>{{ icon(p.icon, 15) }} Auto-configure ServiceNow</h3>
+            <p class="sn-sub">One click sets up the ServiceNow side of the webhook — system properties, a Business Rule on <b>incident</b>, and the request fields — reusing the instance &amp; credentials saved below. Each backend step streams live.</p>
+            {% if servers %}
+            <div class="sn-grid">
+              <label>Management server
+                <select id="sn-server" class="tin">{% for s in servers %}<option value="{{ s.id }}">{{ s.name }} · #{{ s.id }}</option>{% endfor %}</select>
+              </label>
+              <label>Access layer
+                <input id="sn-layer" class="tin" value="Network" spellcheck="false" autocomplete="off">
+              </label>
+            </div>
+            <div class="sn-opts">
+              <label><input type="checkbox" id="sn-fields" checked> Create incident request fields</label>
+              <label><input type="checkbox" id="sn-sample"> Create a sample incident</label>
+              <label title="Off = tickets only preview. On = tickets publish to the SMS."><input type="checkbox" id="sn-apply"> Enable auto-publish</label>
+            </div>
+            <button type="button" class="btn" id="sn-provision-btn">Configure ServiceNow</button>
+            <p class="sn-note">Posts tickets to <code>{{ webhook_public_url }}</code>. The stored ServiceNow account needs admin rights to create the rule/properties. Auto-publish off keeps every ticket preview-only.</p>
+            {% else %}
+            <p class="sn-warn">Add a Management Server first (Access Automation → add a server) so a ticket has a target to evaluate against.</p>
+            {% endif %}
+          </div>
+          {% endif %}
           <form method="post" action="/settings">
             <input type="hidden" name="section" value="{{ p.key }}">
             <div class="grp">{% for s in p['items'] %}{{ msrow(s, vals, secrets, crypto_ok, detected_base_url) }}{% endfor %}</div>
@@ -327,6 +375,56 @@
       rows.forEach(function (r) { r.style.opacity = custom ? '' : '.6'; r.style.pointerEvents = custom ? '' : 'none'; });
     }
     sel.addEventListener('change', sync); sync();
+  }
+
+  var snBtn = document.getElementById('sn-provision-btn');
+  if (snBtn) {
+    var snWin = null;
+    snBtn.addEventListener('click', function () {
+      var server = document.getElementById('sn-server');
+      if (!server || !server.value) return;
+      var applyOn = document.getElementById('sn-apply').checked;
+      if (applyOn && !confirm('Auto-publish is ON — incidents created in ServiceNow will publish rules to your SMS for real. Continue?')) return;
+      var params = new URLSearchParams();
+      params.set('server_id', server.value);
+      params.set('layer', (document.getElementById('sn-layer').value || 'Network').trim());
+      if (document.getElementById('sn-fields').checked) params.set('fields', '1');
+      if (document.getElementById('sn-sample').checked) params.set('sample', '1');
+      if (applyOn) params.set('apply', '1');
+      if (!snWin) snWin = window.PPWin.create({ title: 'Configuring ServiceNow', width: '580px' });
+      snWin.body.innerHTML = '<div class="sn-log" id="sn-log"></div>';
+      snWin.show();
+      snBtn.disabled = true; snBtn.textContent = 'Configuring…';
+      var log = document.getElementById('sn-log'), rows = {};
+      function render(ev) {
+        var row = rows[ev.step];
+        if (!row) { row = document.createElement('div'); log.appendChild(row); rows[ev.step] = row; }
+        row.className = 'sn-line ' + (ev.status || '');
+        var ic = (ev.status === 'ok' || ev.status === 'exists') ? '\u2713' : ev.status === 'error' ? '\u2717' : ev.status === 'done' ? '\u25cf' : '\u2026';
+        row.textContent = '';
+        var s1 = document.createElement('span'); s1.className = 'sn-ic'; s1.textContent = ic;
+        var s2 = document.createElement('span'); s2.className = 'sn-step'; s2.textContent = ev.step + (ev.detail ? ' \u2014 ' + ev.detail : '');
+        row.appendChild(s1); row.appendChild(s2);
+        log.scrollTop = log.scrollHeight;
+      }
+      function done() { snBtn.disabled = false; snBtn.textContent = 'Configure ServiceNow'; }
+      fetch('/settings/servicenow/provision', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: params.toString() })
+        .then(function (r) {
+          if (!r.ok || !r.body) { render({ step: 'Request failed', detail: 'HTTP ' + r.status, status: 'error' }); done(); return; }
+          var reader = r.body.getReader(), dec = new TextDecoder(), buf = '';
+          function pump() {
+            return reader.read().then(function (res) {
+              if (res.done) { done(); return; }
+              buf += dec.decode(res.value, { stream: true });
+              var parts = buf.split('\n'); buf = parts.pop();
+              parts.forEach(function (p) { p = p.trim(); if (p) { try { render(JSON.parse(p)); } catch (e) {} } });
+              return pump();
+            });
+          }
+          return pump();
+        })
+        .catch(function (e) { render({ step: 'Connection failed', detail: String(e), status: 'error' }); done(); });
+    });
   }
 })();
 </script>

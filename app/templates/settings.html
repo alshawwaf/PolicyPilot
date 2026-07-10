@@ -136,7 +136,7 @@
   #settings-app .sn-status.err { background:var(--danger-bg); color:var(--danger); }
   #settings-app .sn-opts { display:flex; gap:18px; flex-wrap:wrap; margin-bottom:14px; }
   #settings-app .sn-opts label { display:flex; align-items:center; gap:7px; font-size:12.5px; color:var(--text); font-weight:500; }
-  #settings-app .sn-opts input { width:auto; }
+  #settings-app .sn-opts input[type="checkbox"] { width:17px; }
   #settings-app .sn-note { font-size:11.5px; color:var(--faint); margin:10px 0 0; line-height:1.5; }
   #settings-app .sn-note code { font-family:ui-monospace,monospace; color:var(--muted); }
   #settings-app .sn-warn { font-size:12.5px; color:var(--warn); margin:0; }
@@ -153,9 +153,23 @@
   .sn-line.done .sn-ic { color:var(--accent); }
   .sn-line.skip { color:var(--faint); }
   .sn-line.skip .sn-ic { color:var(--faint); }
+  .sn-prog { height:6px; background:var(--line); border-radius:6px; overflow:hidden; margin:12px 14px 2px; }
+  .sn-prog-fill { display:block; height:100%; width:0; background:var(--accent); border-radius:6px; transition:width .25s ease; }
+  #settings-app .sn-status.clickable { cursor:pointer; }
+  #settings-app .sn-status.clickable:hover { filter:brightness(1.15); }
+  .sn-detail { padding:12px 14px; display:flex; flex-direction:column; gap:9px; max-height:60vh; overflow:auto; }
+  .sn-detail-loading { color:var(--muted); font-size:13px; padding:8px 0; }
+  .sn-detail-item { border:1px solid var(--line); border-radius:10px; padding:10px 12px; background:var(--surface-2); }
+  .sn-detail-k { font-size:10.5px; font-weight:700; letter-spacing:.4px; text-transform:uppercase; color:var(--faint); }
+  .sn-detail-l { font-size:13px; color:var(--text); font-family:ui-monospace,monospace; margin:3px 0 8px; word-break:break-all; }
+  .sn-detail-act { display:flex; gap:8px; align-items:center; }
+  .sn-detail-open { font-size:12px; color:var(--accent); text-decoration:none; font-weight:600; }
+  .sn-detail-open:hover { text-decoration:underline; }
+  .sn-detail-copy { font-size:12px; background:var(--ss-ctrl); border:1px solid var(--line); color:var(--text); border-radius:7px; padding:5px 11px; cursor:pointer; font-family:inherit; }
+  .sn-detail-copy:hover { border-color:var(--accent); }
   #settings-app .sn-actions { display:flex; align-items:center; gap:12px 14px; flex-wrap:wrap; margin-top:14px; padding-top:14px; border-top:1px solid var(--line); }
   #settings-app .sn-actions .sn-remove-opt { display:flex; align-items:center; gap:7px; font-size:12px; color:var(--muted); }
-  #settings-app .sn-actions .sn-remove-opt input { width:auto; }
+  #settings-app .sn-actions .sn-remove-opt input[type="checkbox"] { width:17px; }
   #settings-app .sn-actions-hint { font-size:11.5px; color:var(--faint); flex-basis:100%; }
   #settings-app .sn-actions-hint code { font-family:ui-monospace,monospace; }
 </style>
@@ -417,19 +431,50 @@
   if (snServer) { snServer.addEventListener('change', snLoadLayers); snLoadLayers(); }
 
   var snStatus = document.getElementById('sn-status');
-  function snSetStatus(cls, text, title) { if (snStatus) { snStatus.className = 'sn-status ' + cls; snStatus.textContent = text; snStatus.title = title || ''; } }
+  var snState = '';
+  function snSetStatus(cls, text, title) { if (snStatus) { var clickable = (cls === 'ok' || cls === 'warn'); snStatus.className = 'sn-status ' + cls + (clickable ? ' clickable' : ''); snStatus.textContent = text; snStatus.title = title || (clickable ? 'Click to see what was configured' : ''); } }
   function snRefreshStatus() {
     if (!snStatus) return;
-    snSetStatus('checking', 'checking\u2026', '');
+    snSetStatus('checking', 'checking…', ' ');
     fetch('/settings/servicenow/status', { credentials: 'same-origin' })
       .then(function (r) { return r.json(); })
       .then(function (d) {
+        snState = (d && d.state) || '';
         var M = { configured: ['ok', 'configured'], partial: ['warn', 'partial'], not_configured: ['off', 'not configured'], no_creds: ['off', 'write-back not set'], error: ['err', 'check failed'] };
-        var m = M[d && d.state] || ['off', 'unknown'];
-        snSetStatus(m[0], m[1], (d && d.detail) || (d && d.business_rule ? 'Business Rule present in ServiceNow' : ''));
+        var m = M[snState] || ['off', 'unknown'];
+        snSetStatus(m[0], m[1], (d && d.detail) || '');
       })
-      .catch(function () { snSetStatus('err', 'check failed', ''); });
+      .catch(function () { snState = 'error'; snSetStatus('err', 'check failed', ''); });
   }
+  var snDetailWin = null;
+  function snShowDetails() {
+    if (!snDetailWin) snDetailWin = window.PPWin.create({ title: 'ServiceNow configuration', width: '620px' });
+    snDetailWin.setTitle('ServiceNow configuration');
+    snDetailWin.body.innerHTML = '<div class="sn-detail" id="sn-detail"><div class="sn-detail-loading">Loading…</div></div>';
+    snDetailWin.show();
+    var box = document.getElementById('sn-detail');
+    fetch('/settings/servicenow/details', { credentials: 'same-origin' })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        box.innerHTML = '';
+        var items = (d && d.items) || [];
+        if (!items.length) { box.innerHTML = '<div class="sn-detail-loading">' + ((d && d.detail) ? d.detail : 'Nothing configured yet.') + '</div>'; return; }
+        items.forEach(function (it) {
+          var row = document.createElement('div'); row.className = 'sn-detail-item';
+          var h = document.createElement('div'); h.className = 'sn-detail-k'; h.textContent = it.kind;
+          var l = document.createElement('div'); l.className = 'sn-detail-l'; l.textContent = it.label + (it.value ? '  =  ' + it.value : '');
+          var act = document.createElement('div'); act.className = 'sn-detail-act';
+          var a = document.createElement('a'); a.href = it.url; a.target = '_blank'; a.rel = 'noopener'; a.className = 'sn-detail-open'; a.textContent = 'Open ↗';
+          var cp = document.createElement('button'); cp.type = 'button'; cp.className = 'sn-detail-copy'; cp.textContent = 'Copy link';
+          cp.addEventListener('click', function () { (navigator.clipboard ? navigator.clipboard.writeText(it.url) : Promise.reject()).then(function () { cp.textContent = 'Copied'; setTimeout(function () { cp.textContent = 'Copy link'; }, 1500); }, function () {}); });
+          act.appendChild(a); act.appendChild(cp);
+          row.appendChild(h); row.appendChild(l); row.appendChild(act);
+          box.appendChild(row);
+        });
+      })
+      .catch(function () { box.innerHTML = '<div class="sn-detail-loading">Failed to load configuration.</div>'; });
+  }
+  if (snStatus) snStatus.addEventListener('click', function () { if (snState === 'configured' || snState === 'partial') snShowDetails(); });
   snRefreshStatus();
 
   var snBtn = document.getElementById('sn-provision-btn');
@@ -448,10 +493,11 @@
       if (document.getElementById('sn-sample').checked) params.set('sample', '1');
       if (applyOn) params.set('apply', '1');
       if (!snWin) snWin = window.PPWin.create({ title: 'Configuring ServiceNow', width: '580px' });
-      snWin.body.innerHTML = '<div class="sn-log" id="sn-log"></div>';
+      snWin.body.innerHTML = '<div class="sn-prog"><span class="sn-prog-fill" id="sn-prog"></span></div><div class="sn-log" id="sn-log"></div>';
       snWin.show();
       snBtn.disabled = true; snBtn.textContent = 'Configuring…';
       var log = document.getElementById('sn-log'), rows = {};
+      (function () { var bar = document.getElementById('sn-prog'); var total = 1 + 5 + (document.getElementById('sn-fields').checked ? 17 : 0) + 1 + (document.getElementById('sn-sample').checked ? 1 : 0); new MutationObserver(function () { if (log.querySelector('.sn-line.done')) { bar.style.width = '100%'; return; } var n = log.querySelectorAll('.sn-line.ok, .sn-line.exists, .sn-line.skip, .sn-line.error').length; bar.style.width = Math.min(100, Math.round(n / total * 100)) + '%'; }).observe(log, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] }); })();
       function render(ev) {
         var row = rows[ev.step];
         if (!row) { row = document.createElement('div'); log.appendChild(row); rows[ev.step] = row; }
@@ -495,10 +541,11 @@
       var params = new URLSearchParams();
       if (rmFields) params.set('fields', '1');
       if (!snRmWin) snRmWin = window.PPWin.create({ title: 'Removing ServiceNow config', width: '580px' });
-      snRmWin.body.innerHTML = '<div class="sn-log" id="sn-rmlog"></div>';
+      snRmWin.body.innerHTML = '<div class="sn-prog"><span class="sn-prog-fill" id="sn-rmprog"></span></div><div class="sn-log" id="sn-rmlog"></div>';
       snRmWin.show();
       snRemoveBtn.disabled = true; var orig = snRemoveBtn.textContent; snRemoveBtn.textContent = 'Removing…';
       var log = document.getElementById('sn-rmlog'), rows = {};
+      (function () { var bar = document.getElementById('sn-rmprog'); var rfEl = document.getElementById('sn-remove-fields'); var total = 1 + 1 + 5 + (rfEl && rfEl.checked ? 17 : 1); new MutationObserver(function () { if (log.querySelector('.sn-line.done')) { bar.style.width = '100%'; return; } var n = log.querySelectorAll('.sn-line.ok, .sn-line.exists, .sn-line.skip, .sn-line.error').length; bar.style.width = Math.min(100, Math.round(n / total * 100)) + '%'; }).observe(log, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] }); })();
       function render(ev) {
         var row = rows[ev.step];
         if (!row) { row = document.createElement('div'); log.appendChild(row); rows[ev.step] = row; }

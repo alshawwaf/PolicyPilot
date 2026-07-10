@@ -328,6 +328,20 @@ def servicenow_status(request: Request, db: Session = Depends(get_db)):
     return JSONResponse(servicenow_provision.status(instance=instance, user=sn_user, password=password))
 
 
+@router.get("/settings/servicenow/details")
+def servicenow_details(request: Request, db: Session = Depends(get_db)):
+    """JSON: the ServiceNow objects the integration created/uses, each with a deep link, for the
+    'view configuration' modal on the Ticket write-back card. Administrator-only."""
+    user, redir = _require_admin(request, db)
+    if redir:
+        return JSONResponse({"state": "error", "detail": "Administrators only.", "items": []}, status_code=403)
+    s = get_settings()
+    instance = app_settings.get_or_env("servicenow_instance", s.servicenow_instance)
+    sn_user = app_settings.get_or_env("servicenow_user", s.servicenow_user)
+    password = app_settings.get_secret_or_env("servicenow_password", s.servicenow_password)
+    return JSONResponse(servicenow_provision.details(instance=instance, user=sn_user, password=password))
+
+
 @router.post("/settings/api-keys")
 async def api_key_create(request: Request, db: Session = Depends(get_db)):
     """Generate a new API key. The plaintext is shown ONCE via a one-time session entry (never written

@@ -357,3 +357,37 @@ def status(*, instance: str, user: str, password: str) -> dict:
         return {"state": "error", "detail": _http_reason(exc)}
     finally:
         snow.close()
+
+
+def details(*, instance: str, user: str, password: str) -> dict:
+    """List the ServiceNow objects the integration created/uses, each with a deep link, for the
+    'view configuration' modal. Read-only; the webhook token value is masked."""
+    if not (instance and user and password):
+        return {"state": "no_creds", "items": []}
+    snow = _Snow(instance, user, password)
+    base = snow.base
+    items: list = []
+    try:
+        br = snow.find("sys_script", f"name={BR_NAME}^collection=incident")
+        has_br = br is not None
+        if has_br:
+            items.append({"kind": "Business Rule", "label": BR_NAME,
+                          "url": f"{base}/sys_script.do?sys_id={br['sys_id']}"})
+        props_present = 0
+        for name in ("webhook.url", "webhook.token", "server_id", "layer", "apply"):
+            key = PROP_PREFIX + name
+            p = snow.find("sys_properties", f"name={key}", fields="sys_id,value")
+            if p:
+                props_present += 1
+                val = "••••••••" if name == "webhook.token" else (p.get("value") or "")
+                items.append({"kind": "Property", "label": key, "value": val,
+                              "url": f"{base}/sys_properties.do?sys_id={p['sys_id']}"})
+        if snow.find("sys_dictionary", "name=incident^elementSTARTSWITHu_source"):
+            items.append({"kind": "Custom fields", "label": "incident u_* request columns",
+                          "url": f"{base}/sys_dictionary_list.do?sysparm_query=name=incident^elementSTARTSWITHu_"})
+        state = "configured" if (has_br and props_present) else ("partial" if (has_br or props_present) else "not_configured")
+        return {"state": state, "instance": base, "items": items}
+    except httpx.HTTPError as exc:
+        return {"state": "error", "detail": _http_reason(exc), "items": []}
+    finally:
+        snow.close()

@@ -288,6 +288,31 @@ async def servicenow_provision_stream(request: Request, db: Session = Depends(ge
                              headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
 
+@router.post("/settings/servicenow/deprovision")
+async def servicenow_deprovision_stream(request: Request, db: Session = Depends(get_db)):
+    """Remove the ServiceNow side of the webhook (Business Rule + system properties, and optionally the
+    custom incident fields), streaming one NDJSON progress event per backend step for the Settings modal.
+    Administrator-only. Reuses the stored Ticket write-back credentials. Incidents are never touched."""
+    user, redir = _require_admin(request, db)
+    if redir:
+        return JSONResponse({"error": "Administrators only."}, status_code=403)
+    form = await request.form()
+    remove_fields = bool(form.get("fields"))
+
+    s = get_settings()
+    instance = app_settings.get_or_env("servicenow_instance", s.servicenow_instance)
+    sn_user = app_settings.get_or_env("servicenow_user", s.servicenow_user)
+    password = app_settings.get_secret_or_env("servicenow_password", s.servicenow_password)
+
+    def stream():
+        for ev in servicenow_provision.deprovision(
+                instance=instance, user=sn_user, password=password, remove_fields=remove_fields):
+            yield json.dumps(ev) + "\n"
+
+    return StreamingResponse(stream(), media_type="application/x-ndjson",
+                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
 @router.post("/settings/api-keys")
 async def api_key_create(request: Request, db: Session = Depends(get_db)):
     """Generate a new API key. The plaintext is shown ONCE via a one-time session entry (never written

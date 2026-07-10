@@ -143,6 +143,13 @@
   .sn-line.running .sn-ic { color:var(--accent); }
   .sn-line.done { color:var(--text); font-weight:650; border-top:1px solid var(--line); margin-top:6px; padding-top:8px; }
   .sn-line.done .sn-ic { color:var(--accent); }
+  .sn-line.skip { color:var(--faint); }
+  .sn-line.skip .sn-ic { color:var(--faint); }
+  #settings-app .sn-actions { display:flex; align-items:center; gap:12px 14px; flex-wrap:wrap; margin-top:14px; padding-top:14px; border-top:1px solid var(--line); }
+  #settings-app .sn-actions .sn-remove-opt { display:flex; align-items:center; gap:7px; font-size:12px; color:var(--muted); }
+  #settings-app .sn-actions .sn-remove-opt input { width:auto; }
+  #settings-app .sn-actions-hint { font-size:11.5px; color:var(--faint); flex-basis:100%; }
+  #settings-app .sn-actions-hint code { font-family:ui-monospace,monospace; }
 </style>
 
 <div id="settings-app">
@@ -281,6 +288,11 @@
             {% else %}
             <p class="sn-warn">Add a Management Server first (Access Automation → add a server) so a ticket has a target to evaluate against.</p>
             {% endif %}
+            <div class="sn-actions">
+              <button type="button" class="btn secondary" id="sn-remove-btn">Remove integration</button>
+              <label class="sn-remove-opt"><input type="checkbox" id="sn-remove-fields"> also remove the custom fields</label>
+              <span class="sn-actions-hint">Deletes the Business Rule + <code>policypilot.*</code> properties from ServiceNow. Incidents are kept.</span>
+            </div>
           </div>
           {% endif %}
           <form method="post" action="/settings">
@@ -417,6 +429,51 @@
               if (res.done) { done(); return; }
               buf += dec.decode(res.value, { stream: true });
               var parts = buf.split('\n'); buf = parts.pop();
+              parts.forEach(function (p) { p = p.trim(); if (p) { try { render(JSON.parse(p)); } catch (e) {} } });
+              return pump();
+            });
+          }
+          return pump();
+        })
+        .catch(function (e) { render({ step: 'Connection failed', detail: String(e), status: 'error' }); done(); });
+    });
+  }
+
+  var snRemoveBtn = document.getElementById('sn-remove-btn');
+  if (snRemoveBtn) {
+    var snRmWin = null;
+    snRemoveBtn.addEventListener('click', function () {
+      var rf = document.getElementById('sn-remove-fields');
+      var rmFields = rf && rf.checked;
+      if (!confirm('Remove the PolicyPilot Business Rule and system properties from ServiceNow' + (rmFields ? ', including the custom incident fields (this drops those columns and their data)' : '') + '?\\nIncidents are left untouched.')) return;
+      var params = new URLSearchParams();
+      if (rmFields) params.set('fields', '1');
+      if (!snRmWin) snRmWin = window.PPWin.create({ title: 'Removing ServiceNow config', width: '580px' });
+      snRmWin.body.innerHTML = '<div class="sn-log" id="sn-rmlog"></div>';
+      snRmWin.show();
+      snRemoveBtn.disabled = true; var orig = snRemoveBtn.textContent; snRemoveBtn.textContent = 'Removing…';
+      var log = document.getElementById('sn-rmlog'), rows = {};
+      function render(ev) {
+        var row = rows[ev.step];
+        if (!row) { row = document.createElement('div'); log.appendChild(row); rows[ev.step] = row; }
+        row.className = 'sn-line ' + (ev.status || '');
+        var ic = (ev.status === 'ok' || ev.status === 'exists') ? '✓' : ev.status === 'error' ? '✗' : ev.status === 'done' ? '●' : ev.status === 'skip' ? '–' : '…';
+        row.textContent = '';
+        var s1 = document.createElement('span'); s1.className = 'sn-ic'; s1.textContent = ic;
+        var s2 = document.createElement('span'); s2.className = 'sn-step'; s2.textContent = ev.step + (ev.detail ? ' — ' + ev.detail : '');
+        row.appendChild(s1); row.appendChild(s2);
+        log.scrollTop = log.scrollHeight;
+      }
+      function done() { snRemoveBtn.disabled = false; snRemoveBtn.textContent = orig; }
+      fetch('/settings/servicenow/deprovision', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: params.toString() })
+        .then(function (r) {
+          if (!r.ok || !r.body) { render({ step: 'Request failed', detail: 'HTTP ' + r.status, status: 'error' }); done(); return; }
+          var reader = r.body.getReader(), dec = new TextDecoder(), buf = '';
+          function pump() {
+            return reader.read().then(function (res) {
+              if (res.done) { done(); return; }
+              buf += dec.decode(res.value, { stream: true });
+              var parts = buf.split('\\n'); buf = parts.pop();
               parts.forEach(function (p) { p = p.trim(); if (p) { try { render(JSON.parse(p)); } catch (e) {} } });
               return pump();
             });

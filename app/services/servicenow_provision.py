@@ -143,6 +143,10 @@ class _Snow:
         r.raise_for_status()
         return r.json().get("result") or {}
 
+    def delete(self, table: str, sys_id: str) -> None:
+        r = self._client.delete(f"{self.base}/api/now/table/{table}/{sys_id}")
+        r.raise_for_status()
+
 
 def _http_reason(exc: httpx.HTTPError) -> str:
     """A short, safe reason from an httpx error (status code for an HTTP error, else the transport reason).
@@ -249,5 +253,83 @@ def provision(*, instance: str, user: str, password: str, webhook_url: str, toke
             yield _event("Done", "done", f"completed with {errors} error(s) — see the steps above")
         else:
             yield _event("Done", "done", "ServiceNow is configured — create an incident to drive PolicyPilot")
+    finally:
+        snow.close()
+
+
+def deprovision(*, instance: str, user: str, password: str, remove_fields: bool = False) -> Iterator[dict]:
+    """Remove everything ``provision()`` created: the Business Rule (the POST-to-webhook) and the
+    ``policypilot.*`` system properties, and -- only when ``remove_fields`` is set -- the custom incident
+    columns (destructive: drops the column + its data). Incidents are NEVER touched. Yields a progress
+    event per step and never raises (a failed step yields ``error`` and continues to the terminal ``done``)."""
+    if not (instance and user and password):
+        yield _event("Check ServiceNow credentials", "error",
+                     "Set the ServiceNow instance, user and password in Ticket write-back first.")
+        yield _event("Done", "done", "aborted — missing ServiceNow credentials")
+        return
+
+    snow = _Snow(instance, user, password)
+    errors = 0
+    try:
+        yield _event("Connect to ServiceNow", "running", snow.base)
+        try:
+            snow.ping()
+            yield _event("Connect to ServiceNow", "ok", snow.base)
+        except httpx.HTTPError as exc:
+            yield _event("Connect to ServiceNow", "error", _http_reason(exc))
+            yield _event("Done", "done", "aborted — could not reach ServiceNow")
+            return
+
+        # Business Rule(s) -- delete every match (an older build could have created duplicates).
+        yield _event("Remove Business Rule", "running", BR_NAME)
+        try:
+            n = 0
+            for _ in range(50):
+                br = snow.find("sys_script", f"name={BR_NAME}^collection=incident")
+                if not br:
+                    break
+                snow.delete("sys_script", br["sys_id"])
+                n += 1
+            yield _event("Remove Business Rule", "ok" if n else "skip",
+                         f"deleted {n} rule(s)" if n else "none found")
+        except httpx.HTTPError as exc:
+            errors += 1
+            yield _event("Remove Business Rule", "error", _http_reason(exc))
+
+        # System properties.
+        for name in ("webhook.url", "webhook.token", "server_id", "layer", "apply"):
+            key = PROP_PREFIX + name
+            try:
+                prop = snow.find("sys_properties", f"name={key}")
+                if prop:
+                    snow.delete("sys_properties", prop["sys_id"])
+                    yield _event(f"Remove property {key}", "ok", "deleted")
+                else:
+                    yield _event(f"Remove property {key}", "skip", "not present")
+            except httpx.HTTPError as exc:
+                errors += 1
+                yield _event(f"Remove property {key}", "error", _http_reason(exc))
+
+        # Custom fields -- optional, and destructive (drops the incident column + any data in it).
+        if remove_fields:
+            for element, _label, _length in CUSTOM_FIELDS:
+                try:
+                    fld = snow.find("sys_dictionary", f"name=incident^element={element}")
+                    if fld:
+                        snow.delete("sys_dictionary", fld["sys_id"])
+                        yield _event(f"Remove field incident.{element}", "ok", "deleted")
+                    else:
+                        yield _event(f"Remove field incident.{element}", "skip", "not present")
+                except httpx.HTTPError as exc:
+                    errors += 1
+                    yield _event(f"Remove field incident.{element}", "error", _http_reason(exc))
+        else:
+            yield _event("Custom fields", "skip", "left in place (tick 'also remove fields' to drop them)")
+
+        tail = "Incidents were left untouched — close or delete them in ServiceNow if you want."
+        if errors:
+            yield _event("Done", "done", f"completed with {errors} error(s) — see the steps above")
+        else:
+            yield _event("Done", "done", f"ServiceNow integration removed. {tail}")
     finally:
         snow.close()

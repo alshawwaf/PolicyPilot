@@ -5,6 +5,25 @@ All notable changes to **PolicyPilot** are documented here. This project follows
 
 ## Unreleased
 
+### Needs-reinstall status — is your published policy actually enforcing?
+- New read-only check (inspired by CheckPointSW/ChangedPolicies): compares each policy package's
+  last-modify-time against the install date on the gateways running it to answer "published but not yet
+  installed / changed since last install". Surfaced three ways: a lazy **badge on every Policy Manager
+  server card** (`policy installed` / `N need install`), a new MCP tool **`packages_needing_install`**
+  (management group — the agent surface now has **30 tools**), and **`GET /dbapi/v1/packages/install-status`**
+  (api-scope). Pairs with the change history to see *what* changed. Service: `app/services/changed_policies.py`.
+
+### Destination reputation enrichment — warn before allowing traffic to a risky destination
+- Opt-in (`reputation_enrich`, default off; needs a `reputation_api_key` secret): an access **decision**
+  whose destination is a public IP or domain is enriched with Check Point's hosted reputation
+  (`rep.checkpoint.com`) — the `decide_access` / `apply_access` result (MCP + REST), the ticket webhook, and
+  the preview UI gain a `reputation` block with classification/severity/confidence and a human **advisory**
+  (high-risk destinations flagged prominently). **Best-effort + fail-open**: a lookup failure, missing key,
+  or disabled setting never blocks or breaks the decision — it only adds an advisory, and only for
+  allow-shaped requests. Weekly token cached, per-resource results cached (quota), TLS always verified; only
+  the destination indicator leaves the portal, to Check Point's own service. New **Threat intelligence**
+  settings group. Service: `app/services/reputation.py`.
+
 ### Policy Cleanup — a new app: retire rules that hit count says are dead weight
 - New top-level **Policy Cleanup** (nav + `/policy-cleanup`): a port of Check Point's open-source
   [PolicyCleanUp](https://github.com/CheckPointSW/PolicyCleanUp) tool (MIT), wired onto the same `web_api`

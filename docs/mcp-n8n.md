@@ -1,6 +1,6 @@
 # MCP server — connect PolicyPilot to n8n / an LLM agent
 
-PolicyPilot exposes its access-automation brain as **29 MCP tools** an LLM agent (via n8n's *MCP Client
+PolicyPilot exposes its access-automation brain as **30 MCP tools** an LLM agent (via n8n's *MCP Client
 Tool* node, or any MCP client) can call over a single endpoint, `/mcp`. The tools cover **two rails**:
 
 - **Management access policy** (21 tools) — decide/apply changes on an SMS via the Management web_api
@@ -102,7 +102,7 @@ In the **AI Agent** → add an **MCP Client Tool** node:
 
 n8n discovers the tools automatically (`tools/list`). The agent can then call them by name. Both rails
 live on the **same** `/mcp` endpoint and the same mcp-scope key — a single MCP Client Tool node sees all
-29 tools.
+30 tools.
 
 **Starter workflows** — import either of the two ready-made n8n agents from `docs/` (each is one rail with
 a tuned system prompt, the MCP Client Tool node, and a chat trigger), then point its credential at your
@@ -114,7 +114,7 @@ a tuned system prompt, the MCP Client Tool node, and a chat trigger), then point
 
 ## 3. Tools
 
-29 tools across two rails. The **Writes?** column notes which gate (if any) controls live writes — the two
+30 tools across two rails. The **Writes?** column notes which gate (if any) controls live writes — the two
 rails have **separate** gates (see §4).
 
 ### Management access policy (21 tools — SMS via the Management web_api)
@@ -137,6 +137,7 @@ rails have **separate** gates (see §4).
 | `summarize_layer(server_id, layer)` | rule counts, Accept/Drop split, Any-dimension counts, inline layers, cleanup-drop presence | no |
 | `analyze_policy(server_id, layer)` | summary + shadowed rules (covered by an earlier broader Accept/Drop) + overly-permissive Accepts | no |
 | `coverage_lookup(api, name?, version?)` | object/field support across API / Terraform / Ansible | no |
+| `packages_needing_install(server_id)` | which policy packages are published-but-not-installed / changed since last install (per-gateway install state + reason) | no |
 | `apply_access(server_id, …, action?/content?/time_objects?/install_on?/vpn?/user_check?…, publish)` | create/widen with any access-rule column; `publish=false` **dry-run** (validate + discard); `publish=true` **commit**. **Also the way to _block_** (`action=Drop/Reject`; `service` defaults to `Any` for a serviceless block; add `user_check` for a block message) | gated — `mcp_allow_publish` |
 | `remove_access(server_id, …, publish)` | **revoke an existing allow** — disable an exact-grant rule, or drop-above a broader one. *Not* how you block new traffic (that's `apply_access` with `action=Drop`) | gated — `mcp_allow_publish` |
 | `amend_access_rule(change_id \| rule_uid+layer, name?/comment?/tags?/track?, publish)` | edit a rule's **metadata only** (name/comment/tags/track-logging) — never its match columns | gated — `mcp_allow_publish` |

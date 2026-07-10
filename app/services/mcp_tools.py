@@ -153,6 +153,37 @@ def list_access_layers(server_id: str) -> dict:
         return {"error": str(exc)}
 
 
+def packages_needing_install(server_id: str) -> dict:
+    """Which policy packages on a server are published-but-not-installed, or CHANGED since their last
+    install — i.e. a policy install is pending. Read-only.
+
+    After a publish, the management database is ahead of what's enforcing on the gateways until you install
+    policy. This compares each package's last-modify-time to the install date on the gateways running it and
+    returns, per package: ``needs_install`` (bool), a ``reason``, and the per-gateway install state
+    (installed? / installed_at / stale?). Also a ``summary`` with the count + the names needing install.
+
+    Use it to answer "does anything need reinstalling?" / "is my published change actually enforcing yet?"
+    — and pair it with the change history (list_changes) to see WHAT changed. ``server_id`` is a real
+    server's id, name, or host (from list_management_servers) — never a guess."""
+    db = SessionLocal()
+    try:
+        ms, secret = _server_secret(db, server_id)
+    except ValueError as exc:
+        return {"error": str(exc)}
+    finally:
+        db.close()
+    from . import changed_policies
+    from .mgmt_api import MgmtError
+    try:
+        out = changed_policies.install_status(ms, secret)
+        return {"ok": True, "server_id": ms.id, "server_name": ms.name, **out}
+    except MgmtError as exc:
+        return {"ok": False, "error": str(exc)}
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("packages_needing_install failed (server_id=%s)", server_id)
+        return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
+
+
 def _build(source, destination, service, port, protocol, application,
            source_kind="ip", destination_kind="ip", action="Accept", inline_layer="",
            action_limit="", captive_portal=False, content=None, content_direction="any",

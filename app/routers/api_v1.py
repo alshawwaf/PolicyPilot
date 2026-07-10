@@ -115,6 +115,11 @@ def api_layer_analyze(server_id: int, layer: str, _=_API):
     return _respond(mcp_tools.analyze_policy(server_id, layer))
 
 
+@router.get("/packages/install-status", summary="Which packages are published-but-not-installed / stale")
+def api_packages_install_status(server_id: int, _=_API):
+    return _respond(mcp_tools.packages_needing_install(server_id))
+
+
 @router.get("/coverage", summary="Terraform/Ansible coverage for a CP object")
 def api_coverage(api: str = "management", name: str = "", version: str = "", _=_API):
     return _respond(mcp_tools.coverage_lookup(api, name, version))

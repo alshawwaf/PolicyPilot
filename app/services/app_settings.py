@@ -290,6 +290,26 @@ SETTINGS: list[Setting] = [
             "encrypted at rest.",
             group="Governance & audit"),
 
+    # --- Threat intelligence (reputation enrichment) -------------------------------------------------
+    # When on, an access DECISION whose destination is a public IP / domain is enriched with Check Point's
+    # hosted reputation (rep.checkpoint.com) — an advisory on the decide/apply result + UI, so an operator or
+    # agent sees "you're about to allow traffic to a known-malicious destination". Best-effort + fail-open:
+    # a lookup failure never blocks or breaks the decision. Only the destination indicator leaves the portal,
+    # to Check Point's own service, TLS-verified.
+    Setting("reputation_enrich", "bool", False,
+            "Enrich access decisions with destination reputation",
+            "Look up the reputation of an access request's destination (a public IP or domain) via Check "
+            "Point's reputation service and attach an advisory to the decision — a high-risk destination is "
+            "flagged on the preview, the apply result, and the MCP/REST response. Read-only enrichment; it "
+            "never changes or blocks the decision on its own. Needs a reputation API key below.",
+            group="Threat intelligence"),
+    Setting("reputation_api_key", "secret", "",
+            "Reputation service API key (Client-Key)",
+            "The Check Point reputation service Client-Key (request one from TCAPI_SUPPORT@checkpoint.com). "
+            "Used to fetch a weekly bearer token; both are sent on each lookup. Stored encrypted at rest. "
+            "Falls back to PILOT_REPUTATION_API_KEY. Leave blank to disable enrichment even if the toggle is on.",
+            group="Threat intelligence"),
+
     # --- Ticketing webhook ---------------------------------------------------------------------------
     # The inbound POST /access-automation/webhook (ServiceNow / Jira / custom portal). Setting the token
     # here ENABLES it with no redeploy; clearing it disables it. The token grants policy publish on every

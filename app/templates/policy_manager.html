@@ -49,6 +49,7 @@
     <div class="pm-meta"><code>{{ r.ms.host }}:{{ r.ms.port }}</code>{% if r.ms.domain %} · domain <b>{{ r.ms.domain }}</b>{% endif %}</div>
     <div class="pm-meta">
       {% if r.has_secret %}<span class="pill ok">credential saved</span>{% else %}<span class="pill faint">no credential — policy can't be pulled</span>{% endif %}
+      {% if r.has_secret %}<span class="pill faint pm-install" data-sid="{{ r.ms.id }}" title="Checking whether a policy install is pending…">install status…</span>{% endif %}
     </div>
     <div class="pm-actions">
       {% if r.has_secret %}
@@ -65,4 +66,30 @@
   <p class="muted" style="margin:0;">No management servers yet. <a href="/management/new" data-modal-form="/management/new" data-modal-title="Add management server">Add a Management Server</a> (host + a least-privilege API account), then come back to browse and edit its policy.</p>
 </div>
 {% endif %}
+
+<script>
+// Lazily fill each server card's "install status" badge — a live read per card, so the landing paints
+// instantly and only queries the SMS for servers that have a credential.
+(function () {
+  function esc(s) { var d = document.createElement('div'); d.textContent = (s == null ? '' : String(s)); return d.innerHTML; }
+  document.querySelectorAll('.pm-install').forEach(function (el) {
+    var sid = el.getAttribute('data-sid');
+    fetch('/policy-manager/' + sid + '/install-status', {credentials: 'same-origin'})
+      .then(function (r) { return r.json().then(function (d) { return {ok: r.ok, d: d}; }); })
+      .then(function (res) {
+        var d = res.d;
+        if (!res.ok || d.error) { el.className = 'pill faint'; el.textContent = 'install status n/a'; el.title = (d && d.error) || 'unavailable'; return; }
+        var need = (d.summary && d.summary.needs_install) || 0;
+        if (need === 0) {
+          el.className = 'pill ok'; el.textContent = 'policy installed';
+          el.title = 'All ' + ((d.summary && d.summary.total) || 0) + ' package(s) are installed and up to date.';
+        } else {
+          el.className = 'pill warn'; el.textContent = need + ' need install';
+          el.title = 'Published but not yet enforcing (install pending): ' + esc((d.summary.names || []).join(', '));
+        }
+      })
+      .catch(function () { el.className = 'pill faint'; el.textContent = 'install status n/a'; });
+  });
+})();
+</script>
 {% endblock %}

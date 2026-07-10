@@ -3755,6 +3755,20 @@ def _dynamic_layer_block(session, layer: str) -> Optional[dict]:
     return None
 
 
+def _enrich_reputation(req: AccessRequest, result: dict) -> None:
+    """Attach a destination-reputation advisory to a decision result when the reputation_enrich setting is
+    on (see services.reputation). Best-effort + fail-open — an import or lookup failure must never affect
+    the decision. Only enriches an ALLOW-shaped request (a Drop/Reject block is not 'allowing traffic to a
+    bad destination', so it carries no reputation risk to warn about)."""
+    try:
+        if canonical_action(getattr(req, "action", "Accept")) not in ("Accept", "Ask", "Inform", "Apply Layer"):
+            return
+        from . import reputation
+        reputation.attach(req, result)
+    except Exception:  # noqa: BLE001
+        logger.debug("reputation enrichment skipped", exc_info=True)
+
+
 def preview(server, secret, req: AccessRequest, layer: str, *, package: Optional[str] = None) -> dict:
     """Read-only: correlate app -> load (cached) -> decide -> describe."""
     try:
@@ -3770,7 +3784,9 @@ def preview(server, secret, req: AccessRequest, layer: str, *, package: Optional
             decision = decide(req, rules, _decide_options(server, layer))
             out = build_preview(s, decision, req, rules)
             extra = {"layer_note": layer_note} if layer_note else {}
-            return {"ok": True, **out, "cached": cached, "trace": s.trace, **res, **extra}
+            result = {"ok": True, **out, "cached": cached, "trace": s.trace, **res, **extra}
+            _enrich_reputation(req, result)   # opt-in destination-reputation advisory (fail-open)
+            return result
     except MgmtError as exc:
         return {"ok": False, "error": str(exc)}
     except Exception as exc:  # noqa: BLE001 — never let a non-MgmtError (connection/TLS reset, a degraded
@@ -3837,8 +3853,10 @@ def execute(server, secret, req: AccessRequest, layer: str, *, package: Optional
                 if isinstance(exc, MgmtError):
                     raise                      # let the outer handler classify (lock vs generic)
                 return {"ok": False, "error": f"apply failed: {exc}", "trace": s.trace}
-            return {"ok": True, "applied": True, "published": publish,
-                    "validated": not publish, **base, **applied, "trace": s.trace}
+            result = {"ok": True, "applied": True, "published": publish,
+                      "validated": not publish, **base, **applied, "trace": s.trace}
+            _enrich_reputation(req, result)   # opt-in destination-reputation advisory (fail-open)
+            return result
     except MgmtError as exc:
         msg = str(exc)
         out = {"ok": False, "error": msg}

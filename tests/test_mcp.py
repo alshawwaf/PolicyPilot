@@ -517,7 +517,7 @@ def test_tool_catalog_lists_all_tools_with_summaries():
 def test_tool_catalog_groups_badges_and_blocks():
     # The /mcp-guide catalog view renders groups + read/write badges + structured blocks from this shape.
     cat = mcp_server.tool_catalog()
-    assert sum(1 for c in cat if c["group"] == "management") == 22
+    assert sum(1 for c in cat if c["group"] == "management") == 23
     assert sum(1 for c in cat if c["group"] == "dynamic") == 8
     writes = {c["name"] for c in cat if c["writes"]}
     assert writes == {"apply_access", "remove_access", "amend_access_rule", "revert_change",

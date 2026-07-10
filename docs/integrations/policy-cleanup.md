@@ -67,11 +67,12 @@ rollback panel as the other rails, under the server's Access automation page), t
   (including clearing the `field-3` stamp — so a restored rule can never be mistaken later for one the
   tool disabled). The panel offers *Re-enable* (undo) or *Delete* (finalize) — the cleanup lifecycle,
   driveable per rule from the history.
-- **A delete is recorded as terminal** (`resolution: deleted`) and is not one-click revertable — the rule
-  is gone from the SMS — but the entry keeps the **full pre-delete rule snapshot** (cells, action,
-  comments, custom-fields, hit data) in `request_json`, so exactly what was removed is never lost and can
-  be recreated manually. Recreate-on-revert (`add-access-rule` with position anchoring) is the planned
-  next step.
+- **A delete is one-click revertable too.** Its entry carries an `add-access-rule` inverse built from the
+  rule's **full pre-delete snapshot**, anchored to the rule it sat above. Reverting recreates it —
+  deliberately **disabled** (a rollback never re-opens traffic) with the `field-3` stamp cleared (so the
+  next scan won't immediately re-flag it), and at the bottom if the anchor rule has since moved. A delete
+  captured without a snapshot (e.g. a hand-crafted API call) falls back to a terminal, non-revertable
+  record so nothing ever vanishes silently.
 
 The per-rule entries suppress their individual audit notifications; the batch raises **one** governance
 event ("disabled 40, deleted 12, skipped 3") so a large cleanup doesn't flood the bell.
@@ -80,10 +81,11 @@ event ("disabled 40, deleted 12, skipped 3") so a large cleanup doesn't flood th
 
 - **Human-in-the-loop.** Nothing is committed without an explicit confirm; the default action is a
   read-only plan and applies default to dry-run.
-- **Confirm hit count is on.** The plan is advisory. A rule whose gateway has hit count disabled reads as
-  "never hit" and would look like a disable candidate — verify hit count is enabled on the relevant
-  gateways before you rely on a plan. (The upstream tool's full install-target / hit-count validation is a
-  roadmap item; this first version classifies purely on the rulebase's own hit data.)
+- **Hit-count validation is built in.** The plan checks the environment and warns when Hit Count is
+  disabled in the domain's global properties or on a specific gateway, and when a package has an
+  uninstalled target — so an untrustworthy plan announces itself. An enabled rule modified after its last
+  policy install is skipped (its zero hits aren't real yet). Still confirm the warnings are clear before a
+  publish; the checks use the generic-object API and degrade silently if the schema differs.
 - **TLS is always verified** — against the server's pinned certificate (trust-on-first-use) or system
   trust; never a skip-verify path.
 - **Reversible.** A disable is trivially reversible — re-enable the rule from **Policy Manager**. A delete
@@ -99,8 +101,9 @@ event ("disabled 40, deleted 12, skipped 3") so a large cleanup doesn't flood th
 | Package-centric (`show-packages`) | Layer-centric (`show-access-layers`) |
 | `plan` / `apply` / `apply_without_publish` | **Plan** (read-only) + **Dry-run** / **Publish** apply |
 | Plan written to / read from a file | Plan reviewed in the browser, selected rows posted to apply |
-| Full install-target + hit-count validation | Hit-based classification only (target validation on roadmap) |
+| Full install-target + hit-count validation | **Yes** — domain/gateway Hit Count checks + modified-after-install skip, surfaced as plan warnings |
 | Custom-fields `field-1/2/3` convention | **Identical** — policies stay interoperable |
+| Unused-object cleanup (separate tool) | **Scan unused objects** panel + `list_unused_objects` MCP tool (listing; removal is roadmap) |
 
 When it disables a rule, the op preserves the rule's existing `field-1` / `field-2` overrides and adds
 only `field-3` — `set-access-rule` replaces the whole custom-fields object, so a naive `{field-3}` would
@@ -108,15 +111,14 @@ wipe a `field-2="-1"` never-delete pin.
 
 ## Roadmap
 
-Deliberately scoped and human-in-the-loop. Shipped so far: per-rule **rollback & history** (revertable
-disables with full metadata restore; deletes recorded with their pre-delete snapshot) and **apply-time
-re-classification** (the live re-check described above). Planned next steps:
+Deliberately scoped and human-in-the-loop. Shipped: per-rule **rollback & history**, **apply-time
+re-classification**, **hit-count / install validation**, **recreate-on-revert for deletes**, and
+**unused-object discovery** (read-only listing + `list_unused_objects`). Planned next steps:
 
-- **Install-target / hit-count validation** — port the upstream tool's check that hit count is actually
-  collecting on every install target (and skip a rule modified after its policy was last installed), so the
-  plan can't be skewed by a gateway with hit count off.
-- **Recreate-on-revert for deletes** — rebuild a deleted rule from its recorded snapshot
-  (`add-access-rule` with neighbor-anchored position), turning the terminal delete entry into a
-  one-click restore.
-- **Agent surface** — expose plan/apply as MCP + REST tools (the service is surface-agnostic and already
-  owns the re-check, recording, and audit, so a future tool inherits all three).
+- **Unused-object cleanup (mutating).** Turn the read-only unused list into action: bulk-**tag** candidates
+  (`cleanup-candidate-<date>`), **delete after a grace period** with a `where-used` re-check, and
+  **replace-then-delete** (re-point every reference from object A→B first — the upstream ReplaceReference
+  flow). Needs a per-type object-command map and live-SMS validation; object mutation isn't cleanly
+  revertable, so it gets its own careful pass.
+- **Agent surface for plan/apply** — expose the disable/delete plan + apply as MCP + REST tools (the
+  service is surface-agnostic and already owns the re-check, recording, and audit).

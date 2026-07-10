@@ -404,6 +404,29 @@ def test_record_batch_rows(monkeypatch):
     assert x.ticket_id == d.ticket_id                              # same batch id
 
 
+def test_record_batch_delete_with_snapshot_is_revertable(monkeypatch):
+    import app.db as appdb
+    eng = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(eng)
+    monkeypatch.setattr(appdb, "SessionLocal", sessionmaker(bind=eng))
+    from app.services import audit
+    monkeypatch.setattr(audit, "emit", lambda *a, **k: None)
+
+    dele = _fresh_row("x1", number=2, name="dead", reason="disabled by the tool")
+    dele["raw_rule"] = {"uid": "x1", "type": "access-rule", "name": "dead", "enabled": False,
+                        "source": ["h-1"], "action": "Accept", "custom-fields": {}}
+    dele["position_anchor"] = {"above": "n1"}
+    pc._record_batch(types.SimpleNamespace(id=7, name="HQ"), fresh_disable=[], fresh_delete=[dele],
+                     inverses={}, actor="user:alice", now=NOW)
+    from app.models import AppliedChange
+    with sessionmaker(bind=eng)() as db:
+        x = db.query(AppliedChange).filter_by(outcome="delete").one()
+    # A snapshot → a RECREATE inverse and an OPEN (revertable) row, not a terminal one.
+    assert x.resolution == "" and x.reverted_at is None
+    assert x.inverse_json and x.inverse_json[0]["op"] == "add-access-rule"
+    assert x.inverse_json[0]["rule"]["enabled"] is False
+
+
 def test_record_committed_emits_audit_by_default(monkeypatch):
     eng = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     Base.metadata.create_all(eng)
@@ -629,3 +652,148 @@ def test_plan_route_rejects_nonpositive_threshold():
         pass
     else:
         raise AssertionError("disable_after=0 should be rejected")
+
+
+# --- stage 2: install-freshness validation (workstream A) ------------------------------------
+
+def test_modified_after_install_is_skipped():
+    # Enabled, zero hits, old enough to disable — BUT modified after the last install → skip (not enforcing).
+    r = _rule(uid="u", hits={"value": 0}, modify_days_ago=5)
+    installed = NOW - dt.timedelta(days=20)          # last install predates the modification
+    v, reason = pc.classify_rule(r, disable_after=180, delete_after=60, now=NOW, installed_at=installed)
+    assert v == "skip" and "modified after the last policy install" in reason
+
+
+def test_modified_before_install_still_disables():
+    r = _rule(uid="u", hits={"value": 0}, modify_days_ago=400)
+    installed = NOW - dt.timedelta(days=10)          # installed AFTER the (old) modification → check passes
+    v, _ = pc.classify_rule(r, disable_after=180, delete_after=60, now=NOW, installed_at=installed)
+    assert v == "disable"
+
+
+def test_hitcount_environment_flags_domain_off(monkeypatch):
+    class _S:
+        def call(self, cmd, payload=None, **k):
+            if cmd == "show-generic-objects":
+                return {"objects": [{"enableHitCount": 0}]}
+            return {}
+        def call_paged(self, cmd, key="objects", **k):
+            return []
+    env = pc.hitcount_environment(_S())
+    assert env["domain_hitcount_on"] is False and any("DISABLED" in w for w in env["warnings"])
+
+
+def test_hitcount_environment_flags_gateway_off(monkeypatch):
+    class _S:
+        def call(self, cmd, payload=None, **k):
+            if cmd == "show-generic-objects":
+                return {"objects": [{"enableHitCount": 1}]}
+            if cmd == "show-generic-object":
+                return {"firewallSetting": {"hitCountFw1Enable": False}}
+            return {}
+        def call_paged(self, cmd, key="objects", **k):
+            return [{"uid": "g1", "name": "edge-gw", "network-security-blades": {"firewall": True}}]
+    env = pc.hitcount_environment(_S())
+    assert env["domain_hitcount_on"] is True and env["targets_hitcount_off"] == ["edge-gw"]
+
+
+def test_install_context_maps_layers_to_oldest_install():
+    import datetime as _dt
+    def _d(days):
+        return {"posix": int((NOW - _dt.timedelta(days=days)).timestamp() * 1000)}
+
+    class _S:
+        def call_paged(self, cmd, key="objects", **k):
+            if cmd == "show-packages":
+                return [{"name": "Standard", "access-layers": [{"name": "Network", "uid": "L1"}]}]
+            if cmd == "show-gateways-and-servers":
+                return [{"name": "gw", "policy": {"access-policy-name": "Standard",
+                        "access-policy-installed": True, "access-policy-installation-date": _d(3)}}]
+            return []
+    ctx = pc.install_context(_S())
+    assert "Network" in ctx["layers"] and ctx["layers"]["Network"] is not None
+
+
+# --- stage 2: recreate-on-revert for deletes (workstream B) ----------------------------------
+
+def test_recreate_inverse_shape_disabled_and_unstamped():
+    row = {"uid": "d1", "layer": "L", "number": 9, "name": "dead",
+           "raw_rule": {"uid": "d1", "type": "access-rule", "rule-number": 9, "name": "dead",
+                        "enabled": False, "source": ["h-1"], "action": "Accept",
+                        "custom-fields": {"field-3": "2026-01-01 00:00:00", "field-1": "90"}},
+           "position_anchor": {"above": "next-uid"}}
+    inv = pc._recreate_inverse(row)
+    assert inv["op"] == "add-access-rule" and inv["layer"] == "L"
+    assert inv["position"] == {"above": "next-uid"}
+    assert inv["rule"]["enabled"] is False                       # never re-open traffic on revert
+    assert inv["rule"]["custom-fields"]["field-3"] == ""         # stamp cleared → not re-flagged
+    assert inv["rule"]["custom-fields"]["field-1"] == "90"       # other overrides preserved
+    assert "uid" not in inv["rule"] and "rule-number" not in inv["rule"]
+
+
+def test_recreate_inverse_none_without_snapshot():
+    assert pc._recreate_inverse({"uid": "d1", "layer": "L"}) is None
+
+
+def test_apply_inverse_op_recreates_rule_disabled_at_anchor():
+    from app.services.access_automation import _apply_inverse_op
+
+    class _Sess:
+        def __init__(self): self.calls = []
+        def call(self, command, payload):
+            self.calls.append((command, payload)); return {}
+
+    s = _Sess()
+    inv = {"op": "add-access-rule", "layer": "L", "position": {"above": "n1"},
+           "rule": {"name": "dead", "source": ["h-1"], "action": "Accept", "enabled": True,
+                    "source-negate": False, "bogus-field": "x"}}
+    _apply_inverse_op(s, inv)
+    cmd, payload = s.calls[0]
+    assert cmd == "add-access-rule" and payload["layer"] == "L" and payload["position"] == {"above": "n1"}
+    assert payload["enabled"] is False                           # forced disabled regardless of stored value
+    assert payload["name"] == "dead" and payload["action"] == "Accept"
+    assert "bogus-field" not in payload                          # non-whitelisted field dropped
+
+
+def test_apply_inverse_op_recreate_falls_back_to_bottom_when_anchor_gone():
+    from app.services.access_automation import _apply_inverse_op, MgmtError
+
+    class _Sess:
+        def __init__(self): self.calls = []
+        def call(self, command, payload):
+            self.calls.append(payload)
+            if payload.get("position") == {"above": "gone"}:
+                raise MgmtError("Requested object [gone] not found")
+            return {}
+
+    s = _Sess()
+    inv = {"op": "add-access-rule", "layer": "L", "position": {"above": "gone"},
+           "rule": {"name": "x", "action": "Drop"}}
+    note = _apply_inverse_op(s, inv)
+    assert "bottom" in note and s.calls[-1]["position"] == "bottom"
+
+
+# --- stage 2: unused objects (workstream C) --------------------------------------------------
+
+def test_scan_unused_groups_and_skips_predefined():
+    from app.services import unused_objects
+
+    class _S:
+        trace = []
+        def call_paged(self, cmd, key="objects", **k):
+            assert cmd == "show-unused-objects"
+            return [{"uid": "1", "name": "old-host", "type": "host"},
+                    {"uid": "2", "name": "stale-net", "type": "network"},
+                    {"uid": "3", "name": "h2", "type": "host"},
+                    {"uid": "4", "name": "Any", "type": "CpmiAnyObject"}]   # predefined → skipped
+    out = unused_objects.scan_unused(_S())
+    assert out["total"] == 3 and out["by_type"] == {"host": 2, "network": 1}
+    assert all(o["type"] != "CpmiAnyObject" for o in out["objects"])
+
+
+def test_unused_mcp_tool_registered_and_bad_server():
+    from app import mcp_server
+    from app.services import mcp_tools
+    assert "list_unused_objects" in mcp_server._TOOLS
+    resp = mcp_tools.list_unused_objects("no-such-server-xyz")
+    assert "error" in resp and resp.get("ok") is not True

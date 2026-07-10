@@ -113,9 +113,13 @@
     <div class="pc-field">
       <button type="button" class="btn" id="pc-run">Run plan</button>
     </div>
+    <div class="pc-field">
+      <button type="button" class="btn secondary" id="pc-unused-btn" title="List objects nothing references">Scan unused objects</button>
+    </div>
   </div>
   <p class="pc-note" style="margin:10px 0 0;">The plan is read-only and advisory. Confirm hit count is enabled on the relevant gateways before you rely on it — a rule with hit count off reads as “never hit”.</p>
   <div id="pc-msg" class="pc-msg"></div>
+  <div id="pc-unused" class="pc-msg" hidden></div>
   {% endif %}
 </div>
 
@@ -258,16 +262,40 @@
     document.getElementById('pc-apply-bar').hidden = (disableRows.length + deleteRows.length) === 0;
     results.hidden = false;
 
-    // Surface per-layer failures (e.g. a layer over the rule cap, or a permission error) so a failed
-    // layer is never mistaken for a clean one — the count alone doesn't say which layer or why.
-    var failed = (plan.layers || []).filter(function (L) { return L.error; });
-    if (failed.length) {
-      note(msg, 'Could not scan ' + failed.length + ' layer(s): ' +
-        failed.map(function (L) { return esc(L.layer) + ' — ' + esc(L.error); }).join('; '), 'error');
-    } else {
-      note(msg, '', 'info');
-    }
+    // Surface environment warnings (hit count off / never-installed packages) and per-layer failures so
+    // an untrustworthy or partial plan is never mistaken for a clean one.
+    var issues = (plan.warnings || []).map(function (w) { return '⚠ ' + esc(w); });
+    (plan.layers || []).forEach(function (L) {
+      if (L.error) issues.push('Could not scan ' + esc(L.layer) + ' — ' + esc(L.error));
+    });
+    note(msg, issues.length ? issues.join('<br>') : '', 'error');
   }
+
+  var unusedBox = document.getElementById('pc-unused');
+  document.getElementById('pc-unused-btn').addEventListener('click', function () {
+    var btn = this;
+    btn.disabled = true;
+    unusedBox.hidden = false;
+    unusedBox.innerHTML = '<div class="pc-banner info">Scanning for unused objects…</div>';
+    fetch('/policy-cleanup/' + sid + '/unused', {credentials: 'same-origin'})
+      .then(function (r) { return r.json().then(function (d) { return {ok: r.ok, d: d}; }); })
+      .then(function (res) {
+        btn.disabled = false;
+        var d = res.d;
+        if (!res.ok || d.error) { unusedBox.innerHTML = '<div class="pc-banner error">' + esc(d.error || 'Scan failed.') + '</div>'; return; }
+        if (!d.total) { unusedBox.innerHTML = '<div class="pc-banner success">No unused objects — nothing to clean up.</div>'; return; }
+        var byType = Object.keys(d.by_type || {}).map(function (t) { return esc(t) + ' (' + d.by_type[t] + ')'; }).join(', ');
+        var rows = (d.objects || []).slice(0, 500).map(function (o) {
+          return '<tr><td>' + esc(o.name) + '</td><td class="cells">' + esc(o.type) + '</td></tr>';
+        }).join('');
+        var more = d.total > 500 ? '<p class="pc-note">Showing first 500 of ' + d.total + '.</p>' : '';
+        unusedBox.innerHTML =
+          '<div class="pc-banner info"><b>' + d.total + '</b> unused object(s)' + (d.truncated ? ' (capped)' : '') +
+          ' — ' + byType + '. <span class="pc-note">Read-only; removal is a separate publish-gated step (roadmap).</span></div>' +
+          '<table class="pc-tbl"><thead><tr><th>Name</th><th>Type</th></tr></thead><tbody>' + rows + '</tbody></table>' + more;
+      })
+      .catch(function (e) { btn.disabled = false; unusedBox.innerHTML = '<div class="pc-banner error">Scan failed: ' + esc(e) + '</div>'; });
+  });
 
   document.getElementById('pc-run').addEventListener('click', function () {
     var layer = layerSel.value;

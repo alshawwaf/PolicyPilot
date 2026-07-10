@@ -120,6 +120,11 @@ def api_packages_install_status(server_id: int, _=_API):
     return _respond(mcp_tools.packages_needing_install(server_id))
 
 
+@router.get("/objects/unused", summary="Objects nothing references (cleanup candidates), grouped by type")
+def api_unused_objects(server_id: int, _=_API):
+    return _respond(mcp_tools.list_unused_objects(server_id))
+
+
 @router.get("/coverage", summary="Terraform/Ansible coverage for a CP object")
 def api_coverage(api: str = "management", name: str = "", version: str = "", _=_API):
     return _respond(mcp_tools.coverage_lookup(api, name, version))

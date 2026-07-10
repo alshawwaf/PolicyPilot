@@ -4241,6 +4241,31 @@ def _apply_inverse_op(session, op: dict) -> str:
     op-list comes from our own DB, but validating the shape here keeps a tampered/garbled row from turning
     into an arbitrary management call."""
     kind, uid, layer = op.get("op"), op.get("uid"), op.get("layer")
+    if kind == "add-access-rule":
+        # Recreate a rule the cleanup DELETED, from its recorded pre-delete snapshot. STRICTLY whitelisted
+        # fields only (match columns included — this is a faithful restore of a rule WE removed, not an
+        # edit of a live one), and two safety invariants enforced here regardless of the stored row:
+        # the rule comes back DISABLED, and at the recorded anchor (falling back to bottom if the anchor
+        # rule has since moved/gone).
+        if not layer:
+            raise MgmtError(f"malformed rollback op (missing layer): {op!r}")
+        allowed = {"name", "comments", "source", "destination", "service", "action", "track",
+                   "custom-fields", "source-negate", "destination-negate", "service-negate",
+                   "vpn", "time", "content", "content-negate", "content-direction", "install-on",
+                   "action-settings", "user-check", "inline-layer"}
+        rule = op.get("rule") or {}
+        payload = {k: v for k, v in rule.items() if k in allowed and v not in (None, [], {}, "")}
+        payload["layer"] = layer
+        payload["enabled"] = False                      # a rollback never silently re-opens traffic
+        anchor = op.get("position") or "bottom"
+        try:
+            session.call("add-access-rule", {**payload, "position": anchor})
+            return f"add-access-rule (recreate, position {anchor})"
+        except MgmtError:
+            if anchor == "bottom":
+                raise
+            session.call("add-access-rule", {**payload, "position": "bottom"})   # anchor rule moved/gone
+            return "add-access-rule (recreate, anchor gone — placed at bottom)"
     if not uid or not layer:
         raise MgmtError(f"malformed rollback op (missing uid/layer): {op!r}")
     if kind == "delete-access-rule":

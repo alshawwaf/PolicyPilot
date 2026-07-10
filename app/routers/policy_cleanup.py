@@ -99,6 +99,23 @@ def policy_cleanup_server(sid: int, request: Request, db: Session = Depends(get_
                                        "flash": _pop_flash(request)})
 
 
+@router.get("/policy-cleanup/{sid}/unused")
+def policy_cleanup_unused(sid: int, request: Request, db: Session = Depends(get_db)):
+    """JSON: the objects nothing references on this server (read-only), grouped by type."""
+    user = get_user_or_none(request, db)
+    if user is None:
+        return JSONResponse({"error": "Not authenticated"}, status_code=401)
+    ms = _owned(db, sid, user)
+    secret, err = _secret_or_error(db, ms)
+    if err:
+        return err
+    from ..services import unused_objects
+    try:
+        return JSONResponse(unused_objects.list_unused(ms, secret))
+    except policy_cleanup.mgmt_api.MgmtError as exc:
+        return JSONResponse({"error": str(exc)}, status_code=400)
+
+
 @router.post("/policy-cleanup/{sid}/plan")
 def policy_cleanup_plan(sid: int, request: Request, req: PlanReq, db: Session = Depends(get_db)):
     """JSON: run a read-only cleanup plan (scan) over the chosen layer(s)."""

@@ -184,6 +184,32 @@ def packages_needing_install(server_id: str) -> dict:
         return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
 
 
+def list_unused_objects(server_id: str) -> dict:
+    """The objects on a server that NOTHING references — cleanup candidates — grouped by type. Read-only.
+
+    Returns ``objects`` (each with uid / name / type) and ``by_type`` (a count per object type), so an
+    agent can answer "what unused objects can I clean up?" and summarize the cruft. Surfacing them is
+    read-only and safe; actually removing them is a separate, publish-gated step (not exposed here yet).
+    ``server_id`` is a real server's id, name, or host (from list_management_servers)."""
+    db = SessionLocal()
+    try:
+        ms, secret = _server_secret(db, server_id)
+    except ValueError as exc:
+        return {"error": str(exc)}
+    finally:
+        db.close()
+    from . import unused_objects
+    from .mgmt_api import MgmtError
+    try:
+        out = unused_objects.list_unused(ms, secret)
+        return {"ok": True, "server_id": ms.id, "server_name": ms.name, **out}
+    except MgmtError as exc:
+        return {"ok": False, "error": str(exc)}
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("list_unused_objects failed (server_id=%s)", server_id)
+        return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
+
+
 def _build(source, destination, service, port, protocol, application,
            source_kind="ip", destination_kind="ip", action="Accept", inline_layer="",
            action_limit="", captive_portal=False, content=None, content_direction="any",

@@ -132,12 +132,20 @@ def _final_threshold(rule: dict, field: str, global_threshold: int) -> int | Non
 
 # --- classification --------------------------------------------------------------------------
 
-def classify_rule(rule: dict, *, disable_after: int, delete_after: int, now: dt.datetime) -> tuple[str, str]:
+def classify_rule(rule: dict, *, disable_after: int, delete_after: int, now: dt.datetime,
+                  installed_at: dt.datetime | None = None) -> tuple[str, str]:
     """Decide what should happen to one rule. Returns ``(verdict, reason)`` where verdict is one of
     ``"disable"``, ``"delete"``, ``"skip"`` or ``"keep"``. Pure — no I/O — so it is unit-testable with a
-    plain rule dict."""
+    plain rule dict. ``installed_at`` is the OLDEST install time of the layer's package across its targets
+    (when known): an ENABLED rule modified after that was never enforced, so its zero hits are meaningless —
+    skip it rather than flag it (the upstream tool's validate_rule check)."""
     enabled = rule.get("enabled", True)
     if enabled:
+        if installed_at is not None:
+            modified = _to_datetime((rule.get("meta-info") or {}).get("last-modify-time"))
+            if modified is not None and modified > installed_at:
+                return "skip", "modified after the last policy install — the change isn't enforcing yet, " \
+                               "so its hit count can't be trusted"
         try:
             threshold = _final_threshold(rule, FIELD_DISABLE_OVERRIDE, disable_after)
         except _Skip as s:
@@ -167,6 +175,82 @@ def classify_rule(rule: dict, *, disable_after: int, delete_after: int, now: dt.
         return "delete", f"disabled by the tool on {disabled_at.strftime(DATETIME_FORMAT)}; " \
                          f"older than {threshold} days"
     return "keep", "disabled recently"
+
+
+# --- environment validation (ported from PolicyCleanUp's target/hit-count checks) -------------
+
+def hitcount_environment(session) -> dict:
+    """Best-effort check that hit counts are actually being COLLECTED — the plan's ground truth.
+    Returns ``{"domain_hitcount_on": bool|None, "targets_hitcount_off": [names], "warnings": [str]}``.
+    Uses the generic-object API exactly like the upstream tool (documented there as schema-fragile), so any
+    failure degrades to ``None``/empty with no warning-noise — the plan still runs, just unvalidated."""
+    out = {"domain_hitcount_on": None, "targets_hitcount_off": [], "warnings": []}
+    try:
+        props = session.call("show-generic-objects",
+                             {"class-name": "com.checkpoint.objects.classes.dummy.CpmiFirewallProperties",
+                              "details-level": "full"}).get("objects") or []
+        flags = [o.get("enableHitCount") for o in props if "enableHitCount" in o]
+        if flags:
+            on = all(bool(f) for f in flags)
+            out["domain_hitcount_on"] = on
+            if not on:
+                out["warnings"].append(
+                    "Hit Count is DISABLED in this domain's global properties — every rule reads as "
+                    "“never hit”, so this plan cannot be trusted. Enable Hit Count and re-plan.")
+    except Exception:  # noqa: BLE001 — generic API drift must never break the scan
+        pass
+    try:
+        gws = session.call_paged("show-gateways-and-servers", key="objects")
+        for gw in gws:
+            if not (gw.get("network-security-blades") or {}).get("firewall"):
+                continue                              # not an enforcement target
+            try:
+                g = session.call("show-generic-object", {"uid": gw.get("uid"), "details-level": "full"})
+                if (g.get("firewallSetting") or {}).get("hitCountFw1Enable") is False:
+                    out["targets_hitcount_off"].append(gw.get("name") or gw.get("uid"))
+            except Exception:  # noqa: BLE001
+                continue
+        if out["targets_hitcount_off"]:
+            out["warnings"].append(
+                "Hit Count is off on gateway(s): " + ", ".join(out["targets_hitcount_off"]) +
+                " — rules enforced only there read as “never hit”.")
+    except Exception:  # noqa: BLE001
+        pass
+    return out
+
+
+def install_context(session) -> dict:
+    """Map each access LAYER (by name and uid) to the oldest install time of the package containing it —
+    the reference point for the modified-after-install skip. A layer whose package has an uninstalled/
+    unassigned target maps to None-with-warning (rules can't be validated against an install that never
+    happened). Returns ``{"layers": {name_or_uid: datetime|None}, "warnings": [str]}``."""
+    from . import changed_policies as cp
+    out: dict = {"layers": {}, "warnings": []}
+    try:
+        packages = session.call_paged("show-packages", key="packages")
+        gateways = session.call_paged("show-gateways-and-servers", key="objects")
+    except Exception:  # noqa: BLE001 — no package context -> scan proceeds without the install check
+        return out
+    for pkg in packages:
+        running = cp._targets_running(pkg.get("name") or "", gateways)
+        installs = []
+        incomplete = False
+        for gw in running:
+            pol = gw.get("policy") or {}
+            inst = cp._posix_dt(pol.get("access-policy-installation-date"))
+            if not pol.get("access-policy-installed") or inst is None:
+                incomplete = True
+            else:
+                installs.append(inst)
+        oldest = min(installs) if installs and not incomplete else None
+        if running and oldest is None:
+            out["warnings"].append(f"package “{pkg.get('name')}” has target(s) without an "
+                                   "installed policy — its rules' hit data can't be fully validated")
+        for layer in pkg.get("access-layers") or []:
+            for key in (layer.get("name"), layer.get("uid")):
+                if key:
+                    out["layers"][key] = oldest
+    return out
 
 
 # --- rulebase pull with hit counts -----------------------------------------------------------
@@ -221,7 +305,8 @@ def _rule_summary(rule: dict, layer: str, objdict: dict, verdict: str, reason: s
 
 
 def scan_layer(session, layer: str, *, disable_after: int, delete_after: int,
-               now: dt.datetime, max_rules: int = 50000) -> dict:
+               now: dt.datetime, max_rules: int = 50000,
+               installed_at: dt.datetime | None = None) -> dict:
     """Scan ONE layer (over an already-open read session) and bucket its rules. Returns
     ``{layer, disable, delete, skipped, counts}`` (or ``{layer, error}`` if the pull failed)."""
     try:
@@ -232,7 +317,7 @@ def scan_layer(session, layer: str, *, disable_after: int, delete_after: int,
     disable, delete, skipped = [], [], []
     for rule in rules:
         verdict, reason = classify_rule(rule, disable_after=disable_after,
-                                        delete_after=delete_after, now=now)
+                                        delete_after=delete_after, now=now, installed_at=installed_at)
         if verdict == "disable":
             disable.append(_rule_summary(rule, layer, objdict, verdict, reason))
         elif verdict == "delete":
@@ -257,16 +342,22 @@ def scan(server, secret: str, *, layers: list[str] | None = None,
     now = now or dt.datetime.now().replace(microsecond=0)
     disable_after = int(disable_after)
     delete_after = int(delete_after)
-    if layers:
-        target_layers = list(layers)
-    else:
-        with mgmt_api.read_session(server, secret) as s:
+    # Environment validation first (one short session): is hit count actually being collected, and when
+    # was each layer's package last installed? Both are best-effort — the scan proceeds either way, the
+    # findings become plan warnings + per-rule skips instead of hard failures.
+    with mgmt_api.read_session(server, secret) as s:
+        env = hitcount_environment(s)
+        ctx = install_context(s)
+        if layers:
+            target_layers = list(layers)
+        else:
             target_layers = [l.get("name") for l in s.list_access_layers() if l.get("name")]
     results = []
     for name in target_layers:
         with mgmt_api.read_session(server, secret) as s:
             results.append(scan_layer(s, name, disable_after=disable_after, delete_after=delete_after,
-                                      now=now, max_rules=max_rules))
+                                      now=now, max_rules=max_rules,
+                                      installed_at=ctx["layers"].get(name)))
     totals = {"disable": 0, "delete": 0, "skipped": 0, "scanned": 0, "layer_errors": 0}
     for r in results:
         if r.get("error"):
@@ -275,7 +366,10 @@ def scan(server, secret: str, *, layers: list[str] | None = None,
         for k in ("disable", "delete", "skipped", "scanned"):
             totals[k] += r.get("counts", {}).get(k, 0)
     return {"thresholds": {"disable_after": disable_after, "delete_after": delete_after},
-            "layers": results, "totals": totals}
+            "layers": results, "totals": totals,
+            "warnings": env["warnings"] + ctx["warnings"],
+            "validation": {"domain_hitcount_on": env["domain_hitcount_on"],
+                           "targets_hitcount_off": env["targets_hitcount_off"]}}
 
 
 # --- apply -----------------------------------------------------------------------------------
@@ -337,17 +431,21 @@ def _reclassify(server, secret: str, rows: list[tuple[dict, str]], *, disable_af
     plan-time snapshot), and skips for rules that vanished or whose verdict changed (got hits, was
     re-enabled, or gained a never-touch pin). Raises MgmtError if a layer can't be pulled — a partial
     re-check must fail loud, not silently apply the un-checked remainder."""
+    with mgmt_api.read_session(server, secret) as s:
+        ctx = install_context(s)          # same modified-after-install guard the plan applies
     by_layer: dict[str, dict] = {}
     for layer in {row.get("layer") for row, _ in rows if row.get("layer")}:
         with mgmt_api.read_session(server, secret) as s:
             raw = mgmt_api._raw_pull(s, layer, None, max_rules, hits=True)
-        by_layer[layer] = {"rules": {r.get("uid"): r for r in _flatten(raw["items"])},
+        ordered = _flatten(raw["items"])
+        by_layer[layer] = {"rules": {r.get("uid"): r for r in ordered},
+                           "order": [r.get("uid") for r in ordered],
                            "objdict": raw["objdict"]}
 
     fresh_disable, fresh_delete, skipped = [], [], []
     for row, want in rows:
         uid, layer = row.get("uid"), row.get("layer")
-        pulled = by_layer.get(layer) or {"rules": {}, "objdict": {}}
+        pulled = by_layer.get(layer) or {"rules": {}, "order": [], "objdict": {}}
         fresh = pulled["rules"].get(uid)
         if fresh is None:
             skipped.append({"uid": uid, "layer": layer, "number": row.get("number"),
@@ -355,9 +453,20 @@ def _reclassify(server, secret: str, rows: list[tuple[dict, str]], *, disable_af
                             "reason": "rule no longer exists in this layer"})
             continue
         verdict, reason = classify_rule(fresh, disable_after=disable_after,
-                                        delete_after=delete_after, now=now)
+                                        delete_after=delete_after, now=now,
+                                        installed_at=ctx["layers"].get(layer))
         summary = _rule_summary(fresh, layer, pulled["objdict"], verdict, reason)
         if verdict == want:
+            if want == "delete":
+                # Recreate-on-revert needs the FULL pre-delete rule + where it sat: keep the raw rule
+                # (minus the volatile hit/meta blobs) and anchor the position to the rule that FOLLOWS it,
+                # so a revert can put it back in place even after other rules shift.
+                raw_rule = {k: v for k, v in fresh.items() if k not in ("hits", "meta-info")}
+                order = pulled["order"]
+                idx = order.index(uid) if uid in order else -1
+                summary["raw_rule"] = raw_rule
+                summary["position_anchor"] = ({"above": order[idx + 1]}
+                                              if 0 <= idx < len(order) - 1 else "bottom")
             (fresh_disable if want == "disable" else fresh_delete).append(summary)
         else:
             skipped.append({"uid": uid, "layer": layer, "number": summary["number"],
@@ -366,13 +475,35 @@ def _reclassify(server, secret: str, rows: list[tuple[dict, str]], *, disable_af
     return fresh_disable, fresh_delete, skipped
 
 
+def _recreate_inverse(fresh_row: dict) -> dict | None:
+    """The precomputed inverse of a cleanup DELETE: recreate the rule from its pre-delete snapshot,
+    anchored where it sat. Deliberate safety choices baked into the op:
+      * the rule is recreated **disabled** (it WAS disabled — cleanup only deletes tool-disabled rules) —
+        a rollback never silently re-opens traffic;
+      * the ``field-3`` disable stamp is CLEARED so the recreated rule reads "disabled, but not by this
+        tool" — the next scan won't immediately re-flag it for deletion; a human decides its fate.
+    Returns None when the apply didn't capture a snapshot (a hand-crafted API row) — then the delete is
+    recorded non-revertable, exactly as before."""
+    raw = fresh_row.get("raw_rule")
+    if not isinstance(raw, dict) or not raw:
+        return None
+    rule = {k: v for k, v in raw.items() if k not in ("uid", "type", "rule-number")}
+    cf = dict(rule.get("custom-fields") or {})
+    cf[FIELD_DISABLED_TIME] = ""
+    rule["custom-fields"] = cf
+    rule["enabled"] = False
+    return {"op": "add-access-rule", "layer": fresh_row["layer"],
+            "position": fresh_row.get("position_anchor") or "bottom", "rule": rule}
+
+
 def _record_batch(server, *, fresh_disable: list[dict], fresh_delete: list[dict],
                   inverses: dict, actor: str, now: dt.datetime) -> int:
-    """Persist one revertable AppliedChange row per committed rule (disables carry the full-fidelity
-    inverse; deletes are recorded terminal — resolution 'deleted' — with the full pre-delete snapshot in
-    request_json so what was removed is never lost). Rows share a cleanup batch id (ticket_id) and
-    suppress the per-row audit emit — the caller raises ONE governance event for the batch. Best-effort:
-    a bookkeeping failure must never turn the committed change into a reported error."""
+    """Persist one revertable AppliedChange row per committed rule. Disables carry the full-fidelity
+    re-enable inverse; deletes carry a RECREATE inverse (add-access-rule from the pre-delete snapshot,
+    recreated disabled + unstamped) — rows without a snapshot fall back to a terminal, non-revertable
+    record so nothing vanishes silently. Rows share a cleanup batch id (ticket_id) and suppress the
+    per-row audit emit — the caller raises ONE governance event for the batch. Best-effort: a bookkeeping
+    failure must never turn the committed change into a reported error."""
     from ..db import SessionLocal
     from . import change_log
     batch_id = f"cleanup-{now.strftime('%Y%m%d-%H%M%S')}"
@@ -386,11 +517,16 @@ def _record_batch(server, *, fresh_disable: list[dict], fresh_delete: list[dict]
                 emit_audit=False)
             recorded += 1
         for r in fresh_delete:
+            recreate = _recreate_inverse(r)
+            request_snapshot = {k: v for k, v in r.items() if k != "raw_rule"}
+            request_snapshot["raw_rule"] = r.get("raw_rule")   # keep the full snapshot in the record
             change_log.record_committed(
                 db, server=server, layer=r["layer"], action="cleanup", outcome="delete",
                 summary=f"cleanup: delete rule {r.get('number') or '?'} “{r.get('name') or r['uid']}” — {r['reason']}",
-                request=r, inverse=[], ticket_id=batch_id, actor=actor,
-                resolution="deleted", emit_audit=False)
+                request=request_snapshot,
+                inverse=[recreate] if recreate else [],
+                ticket_id=batch_id, actor=actor,
+                resolution="" if recreate else "deleted", emit_audit=False)
             recorded += 1
     return recorded
 

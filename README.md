@@ -11,7 +11,7 @@ LLM agent over MCP.*
 ![Version](https://img.shields.io/badge/version-1.1.0-3b82f6)
 ![Validated](https://img.shields.io/badge/validated-R82.10-7b3ff2)
 ![Tests](https://img.shields.io/badge/tests-842%20passing-34d399)
-![MCP tools](https://img.shields.io/badge/MCP%20tools-30-7b3ff2)
+![MCP tools](https://img.shields.io/badge/MCP%20tools-31-7b3ff2)
 ![Python](https://img.shields.io/badge/python-3.12%2B-3b82f6)
 ![TLS](https://img.shields.io/badge/TLS-always%20verified-15935a)
 ![License](https://img.shields.io/badge/license-proprietary-5b6678)
@@ -84,7 +84,7 @@ flowchart LR
     C["Ticket webhook<br/>ServiceNow / Jira"]
     D[Portal UI]
   end
-  A -->|"/mcp: 30 tools"| E
+  A -->|"/mcp: 31 tools"| E
   B -->|/dbapi/v1| E
   C -->|X-PolicyPilot-Token| E
   D --> E
@@ -96,7 +96,7 @@ flowchart LR
 ```
 
 The same brain drives **two ways to apply a change** — both fully agent-drivable over the same `/mcp`
-endpoint (30 tools total: 22 management + 8 dynamic-layer, mcp-scope key as `Authorization: Bearer`):
+endpoint (31 tools total: 23 management + 8 dynamic-layer, mcp-scope key as `Authorization: Bearer`):
 
 | Rail | What it does | How | Publish gate |
 |---|---|---|---|
@@ -215,9 +215,9 @@ so the new condition actually takes effect under first-match (never a false reus
 
 ## Interfaces
 
-### MCP server — 30 tools
+### MCP server — 31 tools
 
-Both rails are exposed as **30 tools** an LLM agent (n8n, Claude Desktop, Cursor, VS Code, any MCP client)
+Both rails are exposed as **31 tools** an LLM agent (n8n, Claude Desktop, Cursor, VS Code, any MCP client)
 calls over `/mcp` with an mcp-scope key. Two ready-made n8n workflows ship in `docs/`:
 the **[management access agent](docs/policypilot-management-agent.json)** and the
 **[dynamic-layer agent](docs/policypilot-dynamic-layer-agent.json)**. With the **Autopilot** preset, one

@@ -5,6 +5,25 @@ All notable changes to **PolicyPilot** are documented here. This project follows
 
 ## Unreleased
 
+### Policy Cleanup stage 2 — trustworthy plans, revertable deletes, unused-object discovery
+- **Hit-count / install validation.** A plan now checks the environment first and surfaces it as warnings:
+  Hit Count disabled in the domain's global properties (every rule reads "never hit" → plan untrustworthy),
+  per-gateway Hit Count off, and packages with an uninstalled target. Individually, an ENABLED rule
+  **modified after its layer's last policy install** is now *skipped* (its zero hits aren't real — the change
+  isn't enforcing yet) — the upstream tool's `validate_rule` check, applied at both plan and apply time.
+- **Recreate-on-revert for deleted rules.** A committed cleanup delete now records an `add-access-rule`
+  inverse built from the rule's full pre-delete snapshot, anchored to the rule it sat above — so a delete is
+  **one-click revertable** from the rollback panel, not terminal. Safety invariants baked into the op: the
+  rule comes back **disabled** (a rollback never re-opens traffic) with its `field-3` stamp cleared (the next
+  scan won't immediately re-flag it), the position falls back to bottom if the anchor rule has since moved,
+  and a delete captured without a snapshot still records non-revertable (nothing vanishes). The shared revert
+  executor gained a strictly-whitelisted `add-access-rule` branch.
+- **Unused-object discovery.** New **Scan unused objects** in the Policy Cleanup workspace (read-only):
+  lists the objects nothing references, grouped by type, via `show-unused-objects`. Also an MCP tool
+  **`list_unused_objects`** (agent surface now **31 tools**) and **`GET /dbapi/v1/objects/unused`**. The
+  mutating follow-ups (bulk-tag as cleanup candidates, delete after a grace period, re-point references
+  before delete) are the next step — they need per-type object commands and live validation.
+
 ### Needs-reinstall status — is your published policy actually enforcing?
 - New read-only check (inspired by CheckPointSW/ChangedPolicies): compares each policy package's
   last-modify-time against the install date on the gateways running it to answer "published but not yet

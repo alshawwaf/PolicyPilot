@@ -313,6 +313,21 @@ async def servicenow_deprovision_stream(request: Request, db: Session = Depends(
                              headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
 
+@router.get("/settings/servicenow/status")
+def servicenow_status(request: Request, db: Session = Depends(get_db)):
+    """JSON: whether the ServiceNow side is configured (Business Rule + properties present). Drives the
+    status badge on the Ticket write-back card. Administrator-only; a live but cheap two-read check.
+    Sync def so FastAPI runs the blocking ServiceNow calls in a threadpool."""
+    user, redir = _require_admin(request, db)
+    if redir:
+        return JSONResponse({"state": "error", "detail": "Administrators only."}, status_code=403)
+    s = get_settings()
+    instance = app_settings.get_or_env("servicenow_instance", s.servicenow_instance)
+    sn_user = app_settings.get_or_env("servicenow_user", s.servicenow_user)
+    password = app_settings.get_secret_or_env("servicenow_password", s.servicenow_password)
+    return JSONResponse(servicenow_provision.status(instance=instance, user=sn_user, password=password))
+
+
 @router.post("/settings/api-keys")
 async def api_key_create(request: Request, db: Session = Depends(get_db)):
     """Generate a new API key. The plaintext is shown ONCE via a one-time session entry (never written

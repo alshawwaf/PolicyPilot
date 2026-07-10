@@ -125,7 +125,15 @@
   #settings-app .sn-prov h3 { margin:0 0 4px; font-size:14.5px; display:flex; align-items:center; gap:8px; }
   #settings-app .sn-prov p.sn-sub { font-size:12.5px; color:var(--muted); margin:0 0 13px; max-width:620px; line-height:1.5; }
   #settings-app .sn-grid { display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end; margin-bottom:11px; }
-  #settings-app .sn-grid label { font-size:12px; font-weight:600; color:var(--muted); display:flex; flex-direction:column; gap:5px; }
+  #settings-app .sn-grid label { font-size:12px; font-weight:600; color:var(--muted); display:flex; flex-direction:column; gap:5px; min-width:230px; }
+  #settings-app .sn-grid select.tin, #settings-app .sn-grid input.tin { width:100%; box-sizing:border-box; }
+  #settings-app .sn-status { font-size:10px; font-weight:700; letter-spacing:.4px; text-transform:uppercase; padding:2px 9px;
+    border-radius:20px; background:var(--chip-bg); color:var(--muted); vertical-align:middle; }
+  #settings-app .sn-status.checking { color:var(--faint); }
+  #settings-app .sn-status.ok { background:var(--ok-bg); color:var(--ok); }
+  #settings-app .sn-status.warn { background:var(--warn-bg); color:var(--warn); }
+  #settings-app .sn-status.off { background:var(--chip-bg); color:var(--muted); }
+  #settings-app .sn-status.err { background:var(--danger-bg); color:var(--danger); }
   #settings-app .sn-opts { display:flex; gap:18px; flex-wrap:wrap; margin-bottom:14px; }
   #settings-app .sn-opts label { display:flex; align-items:center; gap:7px; font-size:12.5px; color:var(--text); font-weight:500; }
   #settings-app .sn-opts input { width:auto; }
@@ -267,7 +275,7 @@
           {% endif %}
           {% if p.key == 'writeback' %}
           <div class="sn-prov">
-            <h3>{{ icon(p.icon, 15) }} Auto-configure ServiceNow</h3>
+            <h3>{{ icon(p.icon, 15) }} Auto-configure ServiceNow <span id="sn-status" class="sn-status checking">checking…</span></h3>
             <p class="sn-sub">One click sets up the ServiceNow side of the webhook — system properties, a Business Rule on <b>incident</b>, and the request fields — reusing the instance &amp; credentials saved below. Each backend step streams live.</p>
             {% if servers %}
             <div class="sn-grid">
@@ -275,7 +283,7 @@
                 <select id="sn-server" class="tin">{% for s in servers %}<option value="{{ s.id }}">{{ s.name }} · #{{ s.id }}</option>{% endfor %}</select>
               </label>
               <label>Access layer
-                <input id="sn-layer" class="tin" value="Network" spellcheck="false" autocomplete="off">
+                <select id="sn-layer" class="tin"><option value="Network">Network</option></select>
               </label>
             </div>
             <div class="sn-opts">
@@ -389,6 +397,41 @@
     sel.addEventListener('change', sync); sync();
   }
 
+  // ServiceNow card: layer picker (pulled from the selected SMS), configured-status badge, confirm modals.
+  var snServer = document.getElementById('sn-server');
+  var snLayer = document.getElementById('sn-layer');
+  function snLoadLayers() {
+    if (!snServer || !snLayer || !snServer.value) return;
+    snLayer.innerHTML = ''; snLayer.add(new Option('Loading\u2026', '')); snLayer.disabled = true;
+    fetch('/management/' + snServer.value + '/layers', { credentials: 'same-origin' })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        snLayer.innerHTML = '';
+        var layers = (d && d.layers) || [];
+        if ((d && d.error) || !layers.length) { snLayer.add(new Option('Network', 'Network')); snLayer.disabled = false; return; }
+        layers.forEach(function (l) { var o = new Option(l.name, l.name); if (l.name === 'Network') o.selected = true; snLayer.add(o); });
+        snLayer.disabled = false;
+      })
+      .catch(function () { snLayer.innerHTML = ''; snLayer.add(new Option('Network', 'Network')); snLayer.disabled = false; });
+  }
+  if (snServer) { snServer.addEventListener('change', snLoadLayers); snLoadLayers(); }
+
+  var snStatus = document.getElementById('sn-status');
+  function snSetStatus(cls, text, title) { if (snStatus) { snStatus.className = 'sn-status ' + cls; snStatus.textContent = text; snStatus.title = title || ''; } }
+  function snRefreshStatus() {
+    if (!snStatus) return;
+    snSetStatus('checking', 'checking\u2026', '');
+    fetch('/settings/servicenow/status', { credentials: 'same-origin' })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        var M = { configured: ['ok', 'configured'], partial: ['warn', 'partial'], not_configured: ['off', 'not configured'], no_creds: ['off', 'write-back not set'], error: ['err', 'check failed'] };
+        var m = M[d && d.state] || ['off', 'unknown'];
+        snSetStatus(m[0], m[1], (d && d.detail) || (d && d.business_rule ? 'Business Rule present in ServiceNow' : ''));
+      })
+      .catch(function () { snSetStatus('err', 'check failed', ''); });
+  }
+  snRefreshStatus();
+
   var snBtn = document.getElementById('sn-provision-btn');
   if (snBtn) {
     var snWin = null;
@@ -396,7 +439,8 @@
       var server = document.getElementById('sn-server');
       if (!server || !server.value) return;
       var applyOn = document.getElementById('sn-apply').checked;
-      if (applyOn && !confirm('Auto-publish is ON — incidents created in ServiceNow will publish rules to your SMS for real. Continue?')) return;
+      (applyOn ? window.appConfirm('Auto-publish is ON — incidents created in ServiceNow will publish rules to your SMS for real. Continue?', { title: 'Enable auto-publish', okText: 'Continue', danger: true }) : Promise.resolve(true)).then(function (ok) {
+      if (!ok) return;
       var params = new URLSearchParams();
       params.set('server_id', server.value);
       params.set('layer', (document.getElementById('sn-layer').value || 'Network').trim());
@@ -419,7 +463,7 @@
         row.appendChild(s1); row.appendChild(s2);
         log.scrollTop = log.scrollHeight;
       }
-      function done() { snBtn.disabled = false; snBtn.textContent = 'Configure ServiceNow'; }
+      function done() { snBtn.disabled = false; snBtn.textContent = 'Configure ServiceNow'; snRefreshStatus(); }
       fetch('/settings/servicenow/provision', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: params.toString() })
         .then(function (r) {
           if (!r.ok || !r.body) { render({ step: 'Request failed', detail: 'HTTP ' + r.status, status: 'error' }); done(); return; }
@@ -436,6 +480,7 @@
           return pump();
         })
         .catch(function (e) { render({ step: 'Connection failed', detail: String(e), status: 'error' }); done(); });
+      });
     });
   }
 
@@ -445,7 +490,8 @@
     snRemoveBtn.addEventListener('click', function () {
       var rf = document.getElementById('sn-remove-fields');
       var rmFields = rf && rf.checked;
-      if (!confirm('Remove the PolicyPilot Business Rule and system properties from ServiceNow' + (rmFields ? ', including the custom incident fields (this drops those columns and their data)' : '') + '? Incidents are left untouched.')) return;
+      window.appConfirm('Remove the PolicyPilot Business Rule and system properties from ServiceNow' + (rmFields ? ', including the custom incident fields (this drops those columns and their data)' : '') + '? Incidents are left untouched.', { title: 'Remove ServiceNow integration', okText: 'Remove', danger: true }).then(function (ok) {
+      if (!ok) return;
       var params = new URLSearchParams();
       if (rmFields) params.set('fields', '1');
       if (!snRmWin) snRmWin = window.PPWin.create({ title: 'Removing ServiceNow config', width: '580px' });
@@ -464,7 +510,7 @@
         row.appendChild(s1); row.appendChild(s2);
         log.scrollTop = log.scrollHeight;
       }
-      function done() { snRemoveBtn.disabled = false; snRemoveBtn.textContent = orig; }
+      function done() { snRemoveBtn.disabled = false; snRemoveBtn.textContent = orig; snRefreshStatus(); }
       fetch('/settings/servicenow/deprovision', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: params.toString() })
         .then(function (r) {
           if (!r.ok || !r.body) { render({ step: 'Request failed', detail: 'HTTP ' + r.status, status: 'error' }); done(); return; }
@@ -481,6 +527,7 @@
           return pump();
         })
         .catch(function (e) { render({ step: 'Connection failed', detail: String(e), status: 'error' }); done(); });
+      });
     });
   }
 })();

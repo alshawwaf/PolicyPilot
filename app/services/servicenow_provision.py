@@ -333,3 +333,27 @@ def deprovision(*, instance: str, user: str, password: str, remove_fields: bool 
             yield _event("Done", "done", f"ServiceNow integration removed. {tail}")
     finally:
         snow.close()
+
+
+def status(*, instance: str, user: str, password: str) -> dict:
+    """A quick 'is the integration configured on ServiceNow?' check for the Settings badge. Two cheap
+    reads (the Business Rule + the webhook.url property). Returns a small dict with a ``state``:
+      no_creds -> write-back credentials not set; not_configured -> neither piece present;
+      partial -> only one present; configured -> both present; error -> a ServiceNow/HTTP problem."""
+    if not (instance and user and password):
+        return {"state": "no_creds"}
+    snow = _Snow(instance, user, password)
+    try:
+        has_br = snow.find("sys_script", f"name={BR_NAME}^collection=incident") is not None
+        has_prop = snow.find("sys_properties", f"name={PROP_PREFIX}webhook.url") is not None
+        if has_br and has_prop:
+            state = "configured"
+        elif has_br or has_prop:
+            state = "partial"
+        else:
+            state = "not_configured"
+        return {"state": state, "business_rule": has_br, "properties": has_prop}
+    except httpx.HTTPError as exc:
+        return {"state": "error", "detail": _http_reason(exc)}
+    finally:
+        snow.close()

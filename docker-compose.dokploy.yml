@@ -1,0 +1,20 @@
+# Dokploy (pure-git) deployment: Dokploy clones this repo and builds the app image
+# from the repo's Dockerfile. No bundled reverse proxy — Dokploy/Traefik terminates
+# TLS and routes the domain to the service's internal port 8000 (create_domain).
+# The installer injects a rendered .env with the PILOT_* secrets below.
+services:
+  policypilot:
+    build: .
+    environment:
+      - PILOT_BASE_URL=${PILOT_BASE_URL}
+      - PILOT_SESSION_SECRET=${PILOT_SESSION_SECRET}
+      - PILOT_ENCRYPTION_KEY=${PILOT_ENCRYPTION_KEY}
+      - PILOT_ADMIN_USERNAME=${PILOT_ADMIN_USERNAME:-admin}
+      - PILOT_ADMIN_PASSWORD=${PILOT_ADMIN_PASSWORD}
+      - PILOT_DATABASE_URL=sqlite:////data/policypilot.db
+      - PILOT_TRUSTED_PROXY_HOPS=1
+    volumes:
+      - policypilot-data:/data
+    restart: unless-stopped
+volumes:
+  policypilot-data:

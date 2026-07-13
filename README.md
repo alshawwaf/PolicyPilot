@@ -10,11 +10,14 @@ LLM agent over MCP.*
 
 ![Version](https://img.shields.io/badge/version-1.1.0-3b82f6)
 ![Validated](https://img.shields.io/badge/validated-R82.10-7b3ff2)
-![Tests](https://img.shields.io/badge/tests-842%20passing-34d399)
+![Tests](https://img.shields.io/badge/tests-939%20passing-34d399)
 ![MCP tools](https://img.shields.io/badge/MCP%20tools-31-7b3ff2)
 ![Python](https://img.shields.io/badge/python-3.12%2B-3b82f6)
 ![TLS](https://img.shields.io/badge/TLS-always%20verified-15935a)
 ![License](https://img.shields.io/badge/license-proprietary-5b6678)
+
+**Part of the [Dev Hub](https://github.com/alshawwaf/dev-hub) ecosystem — deploy the whole suite with
+[ubuntu-dokploy-ai](https://github.com/alshawwaf/ubuntu-dokploy-ai).**
 
 </div>
 
@@ -225,9 +228,9 @@ sentence ending *"…and publish the changes"* resolves, applies, and publishes 
 management rail. In-app onboarding lives at `/mcp-guide`.
 
 <details>
-<summary><b>The full tool catalog</b> (21 management + 8 dynamic-layer)</summary>
+<summary><b>The full tool catalog</b> (23 management + 8 dynamic-layer)</summary>
 
-**Management / SMS rail (21)**
+**Management / SMS rail (23)**
 
 | Tool | Purpose |
 |---|---|
@@ -252,6 +255,8 @@ management rail. In-app onboarding lives at `/mcp-guide`.
 | `summarize_layer` | High-level summary of an access layer |
 | `analyze_policy` | Shadowed / overly-permissive insights (conservative) |
 | `coverage_lookup` | Terraform / Ansible coverage for a CP object |
+| `packages_needing_install` | Policy packages published-but-not-installed / changed since last install |
+| `list_unused_objects` | Objects nothing references — cleanup candidates, grouped by type |
 
 **Dynamic-layer rail (8)**
 
@@ -373,6 +378,11 @@ Environment variables bootstrap the deployment; **most secrets are also settable
 
 ## Deployment
 
+As part of the [Dev Hub](https://github.com/alshawwaf/dev-hub) ecosystem, PolicyPilot deploys automatically
+via [ubuntu-dokploy-ai](https://github.com/alshawwaf/ubuntu-dokploy-ai) at **`policypilot.<your-domain>`** —
+Dokploy clones this repo (pure-git) and builds it from `docker-compose.dokploy.yml`, with Traefik terminating
+TLS. To run it standalone, use one of the methods below.
+
 PolicyPilot is a **single container**: it listens on port **8000** (plain HTTP), stores state in SQLite under
 **`/data`**, reads config from `PILOT_*` variables, and expects a **TLS-terminating reverse proxy** in front.
 It runs anywhere Docker does — pick whichever method you prefer.
@@ -416,9 +426,12 @@ already points it at `/data/policypilot.db`.
 <details>
 <summary><b>Dokploy / a build-from-Dockerfile PaaS (Coolify, Render, Fly.io, …)</b></summary>
 
-Create an application from this repo (or a pushed image); build type **Dockerfile** (context `.`); exposed
-port **8000**; add your domain (the platform provisions the TLS certificate via its ingress); and mount a
-persistent volume at **`/data`**. Set the bootstrap environment:
+This is how the ecosystem installer deploys it. The repo ships **`docker-compose.dokploy.yml`** for a pure-git
+Dokploy deploy (Dokploy clones the repo and builds the image from the `Dockerfile`; no bundled reverse
+proxy — Traefik terminates TLS and routes the domain to port **8000**). To wire it up by hand on any
+build-from-Dockerfile platform: create an application from this repo (or a pushed image); build type
+**Dockerfile** (context `.`); exposed port **8000**; add your domain (the platform provisions the TLS
+certificate via its ingress); and mount a persistent volume at **`/data`**. Set the bootstrap environment:
 
 ```
 PILOT_BASE_URL=https://policypilot.example.com   # must equal the domain you added
@@ -464,7 +477,7 @@ Full guide (the complete `PILOT_*` reference, the single-worker note, per-platfo
 ## Testing
 
 ```bash
-pytest -q          # 842 tests, all green
+pytest -q          # 939 tests, all green
 ```
 
 The suite covers the relation algebra and decision outcomes, placement, every access-rule column, the

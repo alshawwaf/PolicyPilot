@@ -4,7 +4,10 @@
 # The installer injects a rendered .env with the PILOT_* secrets below.
 services:
   policypilot:
-    build: .
+    image: ghcr.io/alshawwaf/policypilot:latest
+    pull_policy: always
+    # build disabled: prebuilt + published by .github/workflows/publish-image.yml; uncomment to build locally.
+    # build: .
     environment:
       - PILOT_BASE_URL=${PILOT_BASE_URL}
       - PILOT_SESSION_SECRET=${PILOT_SESSION_SECRET}

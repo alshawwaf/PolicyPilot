@@ -549,7 +549,7 @@ def write_session(server, secret: str):
     (logged out + closed) so a dirty/locked session is never handed to the next apply."""
     from . import app_settings
     timeout = write_session_timeout()
-    desc = "DC-Sim access automation (apply)"
+    desc = "PolicyPilot access automation (apply)"
     if not app_settings.get("mgmt_write_session_reuse"):
         with MgmtSession(server, secret, session_timeout=timeout, session_description=desc) as s:
             yield s
@@ -974,7 +974,7 @@ def take_over_session(server, secret: str, uid: str) -> dict:
         return {"ok": False, "error": "No session id to take over."}
     try:
         with MgmtSession(server, secret, session_timeout=write_session_timeout(),
-                         session_description="DC-Sim portal (take over + release locks)") as s:
+                         session_description="PolicyPilot portal (take over + release locks)") as s:
             # disconnect-active-session lets us take over a session still attached to a live GUI client.
             s.call("take-over-session", {"uid": uid, "disconnect-active-session": True})
             s.discard()
@@ -1015,7 +1015,7 @@ def apply_changes(server, secret: str, ops: list[dict], *, publish: bool) -> dic
     results: list[dict] = []
     try:
         with MgmtSession(server, secret, session_timeout=write_session_timeout(),
-                         session_description="DC-Sim portal (apply changes)") as s:
+                         session_description="PolicyPilot portal (apply changes)") as s:
             try:
                 for op in ops:
                     s.call(op["command"], op.get("payload") or {})

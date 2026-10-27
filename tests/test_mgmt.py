@@ -317,13 +317,13 @@ def test_login_sends_read_only_and_session_timeout():
 
 def test_login_readonly_omits_session_description():
     # CP rejects session-name/-comments/-description in read-only mode (HTTP 400) -> must NOT be sent
-    c = _capture_login(read_only=True, session_timeout=3600, session_description="DC-Sim portal (read-only)")
+    c = _capture_login(read_only=True, session_timeout=3600, session_description="PolicyPilot portal (read-only)")
     assert c.get("read-only") is True and "session-description" not in c
 
 
 def test_login_readwrite_includes_session_description():
-    c = _capture_login(session_description="DC-Sim portal (apply)")
-    assert "read-only" not in c and c.get("session-description") == "DC-Sim portal (apply)"
+    c = _capture_login(session_description="PolicyPilot portal (apply)")
+    assert "read-only" not in c and c.get("session-description") == "PolicyPilot portal (apply)"
 
 
 def test_read_session_pools_one_login_across_calls(monkeypatch):

@@ -349,8 +349,8 @@ def parse_payload(data: dict) -> TicketRequest:
 def summarize(result: dict, ticket_id: str = "") -> str:
     """A compact work-note line from an execute()/preview() result."""
     if not result.get("ok"):
-        return f"[DC-Sim] access automation FAILED: {result.get('error', 'unknown error')}"
-    bits = [f"[DC-Sim] outcome={result.get('outcome', '?')}", result.get("reason", "")]
+        return f"[PolicyPilot] access automation FAILED: {result.get('error', 'unknown error')}"
+    bits = [f"[PolicyPilot] outcome={result.get('outcome', '?')}", result.get("reason", "")]
     for key, label in (("source_object", "source"), ("destination_object", "destination"),
                        ("service_object", "service"), ("position", "position")):
         if result.get(key):

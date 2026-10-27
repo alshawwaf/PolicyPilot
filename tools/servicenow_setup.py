@@ -81,7 +81,7 @@ BUSINESS_RULE_SCRIPT = """(function executeRule(current, previous /*null when as
       ticket_id:         current.number.toString(),
       server_id:         parseInt(gs.getProperty('policypilot.server_id', '1'), 10),
       layer:             gs.getProperty('policypilot.layer', 'Network'),
-      package:           v('u_package'),
+      'package':           v('u_package'),
       source:            v('u_source'),
       source_kind:       v('u_source_kind') || 'ip',        // ip | domain | access-role | dynamic-object | updatable-object | security-zone
       destination:       v('u_destination'),
